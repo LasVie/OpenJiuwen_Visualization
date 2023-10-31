@@ -30,6 +30,7 @@ from .development_execution import (
     DevelopmentExecutionError,
     DevelopmentExecutionStore,
 )
+from .environment_reconciler import ManagedEnvironmentReconciler
 from .git_changes import GitChangeError, GitChangeInspector, GitChangeOptions
 from .github_pull_requests import (
     GitHubPullRequestError,
@@ -43,6 +44,7 @@ from .jiuwenswarm_runtime import (
     JiuwenSwarmRuntimeError,
 )
 from .managed_environments import (
+    MANAGED_ENVIRONMENT_API_VERSION,
     ManagedEnvironmentError,
     ManagedEnvironmentRegistry,
 )
@@ -159,6 +161,9 @@ SWARM_CORE_DEPENDENCY_INSPECTION_ROUTE = (
     "/api/v1/settings/repositories/jiuwenswarm/inspect-core-dependency"
 )
 MANAGED_ENVIRONMENT_REFRESH_ROUTE = "/api/v1/environments/refresh"
+MANAGED_ENVIRONMENT_RECONCILE_ROUTE = re.compile(
+    r"^/api/v1/environments/(core-env|swarm-core-env)/reconcile$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +223,7 @@ class LocalRepositoryApi:
         plugin_host_enabled: bool = True,
         repository_connections: RepositoryConnectionStore | None = None,
         environment_registry: ManagedEnvironmentRegistry | None = None,
+        environment_reconciler: ManagedEnvironmentReconciler | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -363,6 +369,10 @@ class LocalRepositoryApi:
             self.repository_connections,
         )
         self._refresh_environment_specs()
+        self.environment_reconciler = (
+            environment_reconciler
+            or ManagedEnvironmentReconciler(self.environment_registry)
+        )
 
     def dispatch(
         self,
@@ -591,11 +601,13 @@ class LocalRepositoryApi:
                     "invalid_swarm_dependency_inspection",
                     "Swarm dependency inspection does not accept request fields.",
                 )
+            inspection = self.repository_connections.inspect_swarm_core_dependency()
+            self._refresh_environment_specs()
             return ApiResponse(
                 HTTPStatus.OK,
                 {
                     "apiVersion": REPOSITORY_CONNECTION_API_VERSION,
-                    "inspection": self.repository_connections.inspect_swarm_core_dependency(),
+                    "inspection": inspection,
                 },
             )
         if method == "POST" and route == MANAGED_ENVIRONMENT_REFRESH_ROUTE:
@@ -612,6 +624,37 @@ class LocalRepositoryApi:
                 )
             except ManagedEnvironmentError as exc:
                 return _error(exc.status, exc.code, str(exc))
+        environment_reconcile_match = MANAGED_ENVIRONMENT_RECONCILE_ROUTE.fullmatch(
+            route
+        )
+        if method == "POST" and environment_reconcile_match:
+            if body:
+                return _error(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_environment_reconcile",
+                    "Environment reconciliation does not accept request fields.",
+                )
+            with self._provider_control_lock:
+                if self._active_provider_invocations():
+                    return _error(
+                        HTTPStatus.CONFLICT,
+                        "runtime_busy",
+                        "Stop active model and Agent runs before reconciling environments.",
+                    )
+                try:
+                    result = self.environment_reconciler.reconcile(
+                        environment_reconcile_match.group(1)
+                    )
+                except ManagedEnvironmentError as exc:
+                    return _error(exc.status, exc.code, str(exc))
+                return ApiResponse(
+                    HTTPStatus.OK,
+                    {
+                        "apiVersion": MANAGED_ENVIRONMENT_API_VERSION,
+                        "result": result,
+                        "environments": self.environment_registry.descriptor(),
+                    },
+                )
         repository_sync_match = REPOSITORY_CONNECTION_SYNC_ROUTE.fullmatch(route)
         if method == "POST" and repository_sync_match:
             return self._sync_repository_connection(repository_sync_match.group(1))

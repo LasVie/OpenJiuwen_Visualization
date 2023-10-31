@@ -36,6 +36,16 @@ Local Companion 把 Visualization Web、仓库访问边界、运行归档、Prov
 
 GitHub V1 不支持私有仓库，不接受嵌入凭据、query token、任意 Git 参数或自定义 remote。克隆和同步使用固定 argv、禁用交互式凭据提示，并把 checkout 限制在 Companion 管理目录内。
 
+### Core 与 Swarm 运行环境
+
+- Agent Core 与 Subagent 共享独立的 `core-env`；它只跟随 Agent Core slot。
+- JiuwenSwarm 与 SwarmFlow 共享独立的 `swarm-core-env`；它跟随 JiuwenSwarm slot 及其 `pyproject.toml` / `uv.lock` 声明的 Core，不被 standalone Core slot 覆盖。
+- 页面显示 desired/active 指纹、Python/uv 版本、consumer 和 drift 状态，并提供逐环境“检查并修复”。
+- Companion 只写 `.openjiuwen-visualization/environments`，使用 uv-managed CPython 3.11、frozen lock、依赖检查、固定 bridge probe 和原子 generation 切换；源码 checkout 始终只读。
+- 失败或取消的 staging 不会替换旧 active；每个环境只保留 active 与一个上一代。Python/依赖下载必须通过正常 TLS 校验，不提供不安全下载开关。
+
+详细合同见 [`managed-environments-v1.md`](managed-environments-v1.md)。
+
 ## 静态托管安全边界
 
 - 非 API 请求只能解析到受信任的 `dist`；拒绝路径穿越、反斜杠、symlink 与超大文件。

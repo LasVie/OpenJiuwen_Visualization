@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import stat
 import threading
 import tomllib
 import uuid
@@ -27,6 +29,19 @@ SPEC_FILE_MAX_BYTES = 2 * 1024 * 1024
 VERSION_SPECIFIER_PATTERN = re.compile(
     r"^\s*(~=|==|!=|<=|>=|<|>)\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?(\.\*)?\s*$"
 )
+FINGERPRINT_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+GENERATION_ID_LENGTH = 24
+GENERATION_ID_PATTERN = re.compile(r"^[0-9a-f]{24}$")
+
+
+def generation_id(fingerprint: str) -> str:
+    if not FINGERPRINT_PATTERN.fullmatch(fingerprint):
+        raise ManagedEnvironmentError(
+            "invalid_environment_fingerprint",
+            "Environment fingerprint must be a lowercase SHA-256 digest.",
+            status=HTTPStatus.BAD_REQUEST,
+        )
+    return fingerprint[:GENERATION_ID_LENGTH]
 
 
 class ManagedEnvironmentError(RuntimeError):
@@ -165,6 +180,11 @@ class EnvironmentSpecBuilder:
                 "frozen": True,
                 "projectRoot": connection.get("path"),
                 "python": TARGET_PYTHON,
+                "extras": [
+                    extra
+                    for extra in ("observability", "sqlite")
+                    if extra in project.get("optionalExtras", [])
+                ],
             },
             "resolution": resolution,
         }
@@ -209,6 +229,7 @@ class EnvironmentSpecBuilder:
                 "frozen": True,
                 "projectRoot": connection.get("path"),
                 "python": TARGET_PYTHON,
+                "extras": [],
             },
             "resolution": resolution,
         }
@@ -225,6 +246,7 @@ class EnvironmentSpecBuilder:
             if not isinstance(project, dict):
                 return self._unavailable_project("project_metadata_invalid")
             requires_python = project.get("requires-python")
+            optional_dependencies = project.get("optional-dependencies", {})
             lock_path = root / "uv.lock"
             lock_hash = self._file_hash(
                 root,
@@ -241,6 +263,11 @@ class EnvironmentSpecBuilder:
                     requires_python if isinstance(requires_python, str) else None
                 ),
                 "pythonVersionFile": python_pin,
+                "optionalExtras": (
+                    sorted(str(name) for name in optional_dependencies)
+                    if isinstance(optional_dependencies, dict)
+                    else []
+                ),
                 "pyproject": {
                     "path": str(root / "pyproject.toml"),
                     "sha256": pyproject_hash,
@@ -265,6 +292,7 @@ class EnvironmentSpecBuilder:
             "version": "",
             "requiresPython": None,
             "pythonVersionFile": None,
+            "optionalExtras": [],
             "pyproject": None,
             "lockfile": None,
         }
@@ -463,6 +491,232 @@ class ManagedEnvironmentRegistry:
         with self._lock:
             return self._descriptor(self._desired_specs())
 
+    def desired_spec(self, environment_id: str) -> dict[str, object]:
+        checked = self._validate_environment_id(environment_id)
+        with self._lock:
+            self.refresh()
+            return self._desired_specs()[checked]
+
+    def active_manifest(self, environment_id: str) -> dict[str, Any] | None:
+        checked = self._validate_environment_id(environment_id)
+        with self._lock:
+            path = self.root / checked / "active.json"
+            value = self._read_managed_manifest(path, checked)
+            if value is None:
+                return None
+            generation = Path(str(value.get("generationPath", ""))).resolve(
+                strict=False
+            )
+            expected_root = (self.root / checked / "generations").resolve(
+                strict=False
+            )
+            if (
+                not FINGERPRINT_PATTERN.fullmatch(str(value.get("fingerprint", "")))
+                or generation.parent != expected_root
+                or generation.name != generation_id(str(value.get("fingerprint")))
+            ):
+                return None
+            return value
+
+    def generation_manifest(
+        self,
+        environment_id: str,
+        fingerprint: str,
+    ) -> dict[str, Any] | None:
+        checked = self._validate_environment_id(environment_id)
+        checked_fingerprint = self._validate_fingerprint(fingerprint)
+        with self._lock:
+            path = (
+                self.root
+                / checked
+                / "generations"
+                / generation_id(checked_fingerprint)
+                / "generation.json"
+            )
+            return self._read_managed_manifest(path, checked, checked_fingerprint)
+
+    def create_staging_directory(
+        self,
+        environment_id: str,
+        fingerprint: str,
+    ) -> Path:
+        checked = self._validate_environment_id(environment_id)
+        checked_fingerprint = self._validate_fingerprint(fingerprint)
+        with self._lock:
+            generations = self._ensure_generations_root(checked)
+            staging = generations / f".s-{uuid.uuid4().hex[:8]}"
+            try:
+                staging.mkdir()
+                resolved = staging.resolve(strict=True)
+            except OSError as exc:
+                raise ManagedEnvironmentError(
+                    "environment_staging_failed",
+                    "A managed environment staging directory could not be created.",
+                    status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                ) from exc
+            if resolved.parent != generations or resolved.is_symlink():
+                self._remove_tree(resolved, generations)
+                raise ManagedEnvironmentError(
+                    "unsafe_environment_staging_path",
+                    "Managed environment staging escaped its generation root.",
+                    status=HTTPStatus.FORBIDDEN,
+                )
+            return resolved
+
+    def promote_generation(
+        self,
+        environment_id: str,
+        fingerprint: str,
+        staging: Path,
+        manifest: dict[str, object],
+    ) -> Path:
+        checked = self._validate_environment_id(environment_id)
+        checked_fingerprint = self._validate_fingerprint(fingerprint)
+        with self._lock:
+            generations = self._ensure_generations_root(checked)
+            resolved_staging = staging.resolve(strict=True)
+            if (
+                resolved_staging.parent != generations
+                or not resolved_staging.name.startswith(".s-")
+                or resolved_staging.is_symlink()
+            ):
+                raise ManagedEnvironmentError(
+                    "unsafe_environment_staging_path",
+                    "Only the expected managed staging directory can be promoted.",
+                    status=HTTPStatus.FORBIDDEN,
+                )
+            self._atomic_write(
+                resolved_staging / "generation.json",
+                manifest,
+            )
+            identifier = generation_id(checked_fingerprint)
+            target = generations / identifier
+            backup: Path | None = None
+            if target.exists():
+                resolved_target = target.resolve(strict=True)
+                is_junction = getattr(resolved_target, "is_junction", None)
+                if (
+                    resolved_target.parent != generations
+                    or resolved_target.is_symlink()
+                    or bool(is_junction and is_junction())
+                ):
+                    raise ManagedEnvironmentError(
+                        "unsafe_environment_generation",
+                        "Existing environment generation is not a safe managed directory.",
+                        status=HTTPStatus.FORBIDDEN,
+                    )
+                backup = generations / f".b-{uuid.uuid4().hex[:8]}"
+                try:
+                    os.replace(resolved_target, backup)
+                except OSError as exc:
+                    raise ManagedEnvironmentError(
+                        "environment_generation_backup_failed",
+                        "The stale environment generation could not be isolated safely.",
+                        status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    ) from exc
+            try:
+                os.replace(resolved_staging, target)
+            except OSError as exc:
+                if backup is not None and backup.exists() and not target.exists():
+                    try:
+                        os.replace(backup, target)
+                    except OSError:
+                        pass
+                raise ManagedEnvironmentError(
+                    "environment_generation_promotion_failed",
+                    "The verified environment generation could not be promoted atomically.",
+                    status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                ) from exc
+            if backup is not None and backup.exists():
+                try:
+                    self._remove_tree(backup, generations)
+                except ManagedEnvironmentError:
+                    pass
+            return target.resolve(strict=True)
+
+    def activate_generation(
+        self,
+        environment_id: str,
+        manifest: dict[str, object],
+    ) -> dict[str, object]:
+        checked = self._validate_environment_id(environment_id)
+        fingerprint = self._validate_fingerprint(str(manifest.get("fingerprint", "")))
+        with self._lock:
+            generation = (
+                self.root / checked / "generations" / generation_id(fingerprint)
+            ).resolve(strict=True)
+            if generation.parent != self._ensure_generations_root(checked):
+                raise ManagedEnvironmentError(
+                    "unsafe_environment_generation",
+                    "Environment generation is outside its managed root.",
+                    status=HTTPStatus.FORBIDDEN,
+                )
+            active = {
+                **manifest,
+                "environmentId": checked,
+                "generationPath": str(generation),
+                "activatedAt": _utc_now(),
+            }
+            self._atomic_write(self.root / checked / "active.json", active)
+            return active
+
+    def discard_tree(self, environment_id: str, path: Path) -> None:
+        checked = self._validate_environment_id(environment_id)
+        with self._lock:
+            generations = self._ensure_generations_root(checked)
+            self._remove_tree(path, generations)
+
+    def cleanup_generations(
+        self,
+        environment_id: str,
+        *,
+        retain: int = 2,
+    ) -> list[str]:
+        checked = self._validate_environment_id(environment_id)
+        keep_count = max(1, min(retain, 10))
+        with self._lock:
+            generations = self._ensure_generations_root(checked)
+            active = self.active_manifest(checked)
+            active_fingerprint = (
+                str(active.get("fingerprint")) if active is not None else None
+            )
+            candidates: list[tuple[str, str, Path]] = []
+            for path in generations.iterdir():
+                if not path.is_dir() or path.is_symlink() or path.name.startswith("."):
+                    continue
+                if not GENERATION_ID_PATTERN.fullmatch(path.name):
+                    continue
+                manifest = self._read_managed_manifest(
+                    path / "generation.json",
+                    checked,
+                    None,
+                )
+                if (
+                    manifest is None
+                    or generation_id(str(manifest.get("fingerprint", "")))
+                    != path.name
+                ):
+                    continue
+                candidates.append(
+                    (
+                        str(manifest.get("createdAt") or ""),
+                        str(manifest.get("fingerprint")),
+                        path,
+                    )
+                )
+            retained = {active_fingerprint} if active_fingerprint else set()
+            for _created, fingerprint, _path in sorted(candidates, reverse=True):
+                if len(retained) >= keep_count:
+                    break
+                retained.add(fingerprint)
+            removed: list[str] = []
+            for _created, fingerprint, path in candidates:
+                if fingerprint in retained:
+                    continue
+                self._remove_tree(path, generations)
+                removed.append(fingerprint)
+            return removed
+
     def _desired_specs(self) -> dict[str, dict[str, object]]:
         return self._builder.build_all(self._connections.descriptor())
 
@@ -505,10 +759,29 @@ class ManagedEnvironmentRegistry:
         blocked = (
             isinstance(resolution, dict) and resolution.get("status") == "blocked"
         )
-        state = "blocked" if blocked else "planned" if matches else "plan-drift"
+        active = self.active_manifest(environment_id)
+        active_matches = bool(
+            active is not None
+            and active.get("fingerprint") == desired.get("fingerprint")
+        )
+        state = (
+            "blocked"
+            if blocked
+            else "ready"
+            if matches and active_matches
+            else "drifted"
+            if active is not None
+            else "planned"
+            if matches
+            else "plan-drift"
+        )
         state_message = (
             str(resolution.get("message"))
             if blocked and isinstance(resolution, dict)
+            else "The verified active generation matches current repository and lock evidence."
+            if state == "ready"
+            else "The active generation does not match current repository or lock evidence."
+            if state == "drifted"
             else "Generated desired spec matches the active repository bindings."
             if matches
             else "Generated desired spec is missing or stale."
@@ -530,7 +803,7 @@ class ManagedEnvironmentRegistry:
                 if generated is not None
                 else None
             ),
-            "active": None,
+            "active": active,
             "paths": {
                 "spec": str(spec_path),
                 "generations": str(self.root / environment_id / "generations"),
@@ -539,6 +812,27 @@ class ManagedEnvironmentRegistry:
         }
 
     def _ensure_specs_root(self) -> Path:
+        resolved_root = self._ensure_managed_root()
+        specs_root = resolved_root / "specs"
+        try:
+            specs_root.mkdir(exist_ok=True)
+        except OSError as exc:
+            raise ManagedEnvironmentError(
+                "environment_spec_storage_unavailable",
+                "Environment spec directory is unavailable.",
+                status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            ) from exc
+        if specs_root.is_symlink() or not specs_root.resolve(strict=True).is_relative_to(
+            resolved_root
+        ):
+            raise ManagedEnvironmentError(
+                "unsafe_environment_spec_root",
+                "Environment spec directory escaped its managed root.",
+                status=HTTPStatus.FORBIDDEN,
+            )
+        return specs_root.resolve(strict=True)
+
+    def _ensure_managed_root(self) -> Path:
         try:
             self.root.mkdir(parents=True, exist_ok=True)
             resolved_root = self.root.resolve(strict=True)
@@ -562,24 +856,67 @@ class ManagedEnvironmentRegistry:
                 "Managed environment root must be a real directory inside an allowed root.",
                 status=HTTPStatus.FORBIDDEN,
             )
-        specs_root = resolved_root / "specs"
+        return resolved_root
+
+    def _ensure_generations_root(self, environment_id: str) -> Path:
+        managed_root = self._ensure_managed_root()
+        environment_root = managed_root / environment_id
+        generations = environment_root / "generations"
         try:
-            specs_root.mkdir(exist_ok=True)
+            generations.mkdir(parents=True, exist_ok=True)
+            resolved = generations.resolve(strict=True)
         except OSError as exc:
             raise ManagedEnvironmentError(
-                "environment_spec_storage_unavailable",
-                "Environment spec directory is unavailable.",
+                "environment_generation_storage_unavailable",
+                "Environment generation storage is unavailable.",
                 status=HTTPStatus.INTERNAL_SERVER_ERROR,
             ) from exc
-        if specs_root.is_symlink() or not specs_root.resolve(strict=True).is_relative_to(
-            resolved_root
+        if (
+            environment_root.is_symlink()
+            or generations.is_symlink()
+            or resolved.parent != environment_root.resolve(strict=True)
+            or resolved.parent.parent != managed_root
         ):
             raise ManagedEnvironmentError(
-                "unsafe_environment_spec_root",
-                "Environment spec directory escaped its managed root.",
+                "unsafe_environment_generation_root",
+                "Environment generation directory escaped its managed root.",
                 status=HTTPStatus.FORBIDDEN,
             )
-        return specs_root.resolve(strict=True)
+        return resolved
+
+    @staticmethod
+    def _validate_environment_id(environment_id: str) -> str:
+        if environment_id not in MANAGED_ENVIRONMENT_IDS:
+            raise ManagedEnvironmentError(
+                "invalid_environment_id",
+                "Environment id must be core-env or swarm-core-env.",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        return environment_id
+
+    @staticmethod
+    def _validate_fingerprint(fingerprint: str) -> str:
+        if not FINGERPRINT_PATTERN.fullmatch(fingerprint):
+            raise ManagedEnvironmentError(
+                "invalid_environment_fingerprint",
+                "Environment fingerprint must be a lowercase SHA-256 digest.",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        return fingerprint
+
+    @classmethod
+    def _read_managed_manifest(
+        cls,
+        path: Path,
+        environment_id: str,
+        fingerprint: str | None = None,
+    ) -> dict[str, Any] | None:
+        value = cls._read_spec(path)
+        if value is None or value.get("environmentId") != environment_id:
+            return None
+        if fingerprint is not None and value.get("fingerprint") != fingerprint:
+            return None
+        return value
 
     @staticmethod
     def _read_spec(path: Path) -> dict[str, Any] | None:
@@ -609,7 +946,7 @@ class ManagedEnvironmentRegistry:
             sort_keys=True,
             indent=2,
         ) + "\n"
-        temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+        temporary = path.parent / f".tmp-{uuid.uuid4().hex[:8]}"
         try:
             temporary.write_text(content, encoding="utf-8", newline="\n")
             os.replace(temporary, path)
@@ -621,5 +958,41 @@ class ManagedEnvironmentRegistry:
             raise ManagedEnvironmentError(
                 "environment_spec_write_failed",
                 "Managed environment desired state could not be written atomically.",
+                status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            ) from exc
+
+    @staticmethod
+    def _remove_tree(path: Path, generations_root: Path) -> None:
+        resolved = path.resolve(strict=True)
+        expected_root = generations_root.resolve(strict=True)
+        is_junction = getattr(resolved, "is_junction", None)
+        if (
+            resolved.parent != expected_root
+            or resolved == expected_root
+            or resolved.is_symlink()
+            or bool(is_junction and is_junction())
+        ):
+            raise ManagedEnvironmentError(
+                "unsafe_environment_cleanup_target",
+                "Only a direct managed generation can be removed.",
+                status=HTTPStatus.FORBIDDEN,
+            )
+
+        def remove_readonly(function: object, raw_path: str, _error: object) -> None:
+            try:
+                os.chmod(raw_path, stat.S_IWRITE)
+                function(raw_path)  # type: ignore[operator]
+            except OSError:
+                return
+
+        raw_path = str(resolved)
+        if os.name == "nt" and not raw_path.startswith("\\\\?\\"):
+            raw_path = "\\\\?\\" + raw_path
+        try:
+            shutil.rmtree(raw_path, onerror=remove_readonly)
+        except OSError as exc:
+            raise ManagedEnvironmentError(
+                "environment_cleanup_failed",
+                "A stale managed environment generation could not be removed.",
                 status=HTTPStatus.INTERNAL_SERVER_ERROR,
             ) from exc

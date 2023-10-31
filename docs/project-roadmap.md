@@ -40,6 +40,9 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | Development 分析 Session V1 | 已完成 | 独立 SQLite/WAL、自动保存、元数据列表、显式恢复/导出、完整删除、30 天 / 2 GiB 与 schema migration |
 | Development OpenRouter 只读增强 V1 | 已完成 | 逐次源码选择、完整外发 JSON/SHA-256、单次确认、独立 Runtime Trace 与紫色模型建议分支 |
 | Controlled Development Execution V1 | 已完成 | 临时 index 校验、独立审批画布、隔离 worktree/branch、测试白名单、本地 commit、审计与回滚 |
+| 网页代码连接与 Swarm Core 依赖检查 | 已完成 | Agent Core/JiuwenSwarm 本地或公开 GitHub 绑定、Swarm Config 解析、声明 ref 与锁定 Core revision 证据 |
+| 受管环境 Desired State | 已完成 | `core-env` / `swarm-core-env` 独立规格、Python/lock/source 指纹、阻塞与 drift 状态 |
+| 受管环境 Reconciliation | 已完成 | 网页一键 uv/CPython 3.11 构建、frozen sync、依赖与双 bridge probe、原子切换、失败保留与两代清理 |
 
 ## 当前已支持功能
 
@@ -121,6 +124,9 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - OpenRouter key 只通过 `openrouter.default` opaque handle 解析，浏览器、插件快照、Host 数据库和审计均看不到值；
 - Host 使用 SQLite/WAL 持久化生命周期和授权，最多保留 5,000 条不含 secret 或业务原文的本机审计；
 - Core、Swarm、Provider、Repository、Change、Tool、深入画布与执行器均按 feature/plugin/adapter 分层。
+- “连接”页面可绑定 Agent Core/JiuwenSwarm 本地或公开 GitHub 来源；JiuwenSwarm 卡片会解析 Swarm Config 与 `uv.lock`，显示它实际依赖的 Core ref/revision；
+- `core-env` 与 `swarm-core-env` 分别服务 Core/Subagent 和 Swarm/SwarmFlow，显示 desired/active 指纹与 drift，支持网页端创建、重验和修复；
+- 环境只在本机受管目录执行固定 uv argv；CPython 3.11、frozen lock、`uv pip check` 和两个 consumer probe 全部通过后才原子切换，失败不覆盖 active，并只保留两代。
 
 ## 当前明确限制
 
@@ -137,7 +143,9 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - Development 模型输入/输出由 Runtime Archive 持有，尚未与 Development Session 建立持久关联；恢复 Session 不会自动恢复或重放模型分支；
 - 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
 - Host V1 不提供页面安装/卸载/升级、第三方签名链、动态插件代码执行、进程沙箱或崩溃监督；内置 integrity 只是本地发布摘要；
-- OpenRouter 凭据仍由服务进程环境配置，尚无通用本机 vault/系统凭据录入 UI；
+- OpenRouter 已支持 Windows Credential Manager 的网页录入与环境变量回退；其他操作系统的通用 vault、私有 GitHub 凭据和组织级 secret policy 尚未实现；
+- 受管环境已经能在网页构建与验证，但四个 Runtime Executor 尚未切换为读取 active manifest，Trace 也尚未记录 env fingerprint；当前执行器仍以各自 Python 配置为运行 authority；
+- 首次下载 Python/依赖要求主机系统时间正确且 TLS 可验证；不会为了绕过证书错误自动启用 insecure host；
 - Tool Registry 已统一代码发现、Host 目录读取授权、Runtime 注册与调用证据；逐 Tool 执行授权和写 Tool 仍未开放；
 - 还没有协作权限或远端部署控制面。
 
@@ -219,8 +227,11 @@ OpenRouter 仍保持只读，不自动生成或应用 patch；V1 也不支持 di
 | 已完成 | Development 分析 Session | 本机自动保存、恢复、删除和完整导出开发证据链 | 独立 SQLite/WAL、完整本机 payload、30 天 / 2 GiB 与 schema migration 已落地 |
 | 已完成 | 可选 OpenRouter 辅助分析 | 在确定性证据上增强诊断与方案 | 逐次开启、完整外发预览、最小数据范围、独立 Trace 与零仓库写入已落地 |
 | 已完成 | 受控开发执行 | 完整 Diff、逐次审批、隔离 apply、固定测试、本地 commit、history 与 rollback 画布 | 安全基线已批准；V1 不 push、不创建远端 PR |
+| 已完成 | 网页代码连接与依赖解析 | 本地/公开 GitHub slot、Swarm Core 声明与锁定 revision | 两套环境身份保持独立 |
+| 已完成 | 受管环境构建与激活 | uv-managed Python 3.11、frozen sync、验证、原子 generation 与网页控制 | 不允许 insecure TLS；失败保留旧 active |
+| 进行中 | Executor 环境收敛 | 四个固定 bridge 使用 active manifest，Trace 记录环境 fingerprint | 保持每类执行器独立身份与现有取消/权限边界 |
 
-下一阶段需要在三条互不等价的方向中选择优先级：模型生成但仍需人工审查的 patch candidate、可取消/异步/更强隔离的测试执行，或 Development 分析 Session 与执行记录的稳定关联和对比。未完成产品决策前，不把其中任何一项写成已承诺功能。
+下一阶段先完成已经确定的 Executor 环境收敛：调用前自动刷新 desired state、只接受验证通过且匹配指纹的 active generation，把 Python/root/lock/env identity 固定写入 Runtime descriptor 与 Trace。完成后再回到 Development 的 patch candidate、异步测试或 Session/执行记录关联等产品决策。
 
 ## 阶段管理规则
 

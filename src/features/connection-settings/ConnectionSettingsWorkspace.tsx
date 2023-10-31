@@ -32,8 +32,11 @@ export function ConnectionSettingsWorkspace({
   const [selected, setSelected] = useState<ConnectionPanel>("openrouter");
   const credential = controller.snapshot?.settings.openRouter ?? null;
   const repositories = controller.snapshot?.settings.repositories ?? null;
+  const environments = controller.environments;
   const core = repositories?.slots.agentCore;
   const swarm = repositories?.slots.jiuwenSwarm;
+  const coreEnvironment = environments?.environments.coreEnv;
+  const swarmEnvironment = environments?.environments.swarmCoreEnv;
 
   return (
     <section className="connection-settings-workspace">
@@ -42,7 +45,7 @@ export function ConnectionSettingsWorkspace({
           <span aria-hidden="true"><Cable size={20} strokeWidth={2} /></span>
           <div><small>LOCAL CONNECTION CONTROL PLANE</small><h1>连接设置</h1></div>
         </div>
-        <p>在网页中统一配置模型凭据、Agent Core 与 JiuwenSwarm 代码来源。</p>
+        <p>在网页中统一配置模型凭据、代码来源与两套隔离运行环境。</p>
         <button type="button" onClick={() => void controller.refresh()} disabled={controller.phase === "loading" || controller.mutation !== null}>
           <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
           重新检查
@@ -55,12 +58,12 @@ export function ConnectionSettingsWorkspace({
           <div><strong>本地 Companion 未连接</strong><p>{controller.error}</p></div>
           <button type="button" onClick={() => void controller.refresh()}>重试连接</button>
         </div>
-      ) : controller.phase === "loading" && (!credential || !repositories) ? (
+      ) : controller.phase === "loading" && (!credential || !repositories || !environments) ? (
         <div className="connection-settings-loading" role="status">
           <LoaderCircle size={22} strokeWidth={1.8} aria-hidden="true" />
           <span><strong>正在读取本机设置</strong><small>连接仅使用 loopback 地址</small></span>
         </div>
-      ) : credential && repositories && core && swarm ? (
+      ) : credential && repositories && environments && core && swarm && coreEnvironment && swarmEnvironment ? (
         <>
           <section className="credential-route" aria-label="连接设置生效路径">
             <article>
@@ -77,8 +80,8 @@ export function ConnectionSettingsWorkspace({
               <span>{selected === "openrouter" ? <LockKeyhole size={16} strokeWidth={1.8} aria-hidden="true" /> : <FolderGit2 size={16} strokeWidth={1.8} aria-hidden="true" />}</span>
               <div>
                 <small>03 · LOCAL AUTHORITY</small>
-                <strong>{selected === "openrouter" ? secretStorageLabel(credential) : selected === "agent-core" ? "Agent Core 来源" : "JiuwenSwarm 来源"}</strong>
-                <p>{selected === "openrouter" ? "只返回是否已配置" : "允许根或受管 GitHub 检出"}</p>
+                <strong>{selected === "openrouter" ? secretStorageLabel(credential) : "uv 受管环境"}</strong>
+                <p>{selected === "openrouter" ? "只返回是否已配置" : "锁文件校验后原子切换"}</p>
               </div>
             </article>
           </section>
@@ -93,17 +96,17 @@ export function ConnectionSettingsWorkspace({
               </button>
               <button type="button" className={`connection-catalog-card connection-catalog-card--core ${selected === "agent-core" ? "connection-catalog-card--active" : ""}`} aria-current={selected === "agent-core" ? "page" : undefined} onClick={() => setSelected("agent-core")}>
                 <span><FolderGit2 size={18} strokeWidth={2} aria-hidden="true" /></span>
-                <div><small>CORE SOURCE</small><strong>Agent Core</strong><p>{core.mode === "github" ? core.github?.repository : "本地 Git 仓库"}</p></div>
-                <i className={core.configured ? "connection-state--ready" : "connection-state--missing"} aria-hidden="true" />
+                <div><small>CORE SOURCE</small><strong>Agent Core</strong><p>{coreEnvironment.state === "ready" ? "core-env · 已验证" : `${core.mode === "github" ? core.github?.repository : "本地 Git 仓库"} · ${coreEnvironment.state === "drifted" ? "需更新" : "待创建"}`}</p></div>
+                <i className={core.configured && coreEnvironment.state === "ready" ? "connection-state--ready" : "connection-state--missing"} aria-hidden="true" />
               </button>
               <button type="button" className={`connection-catalog-card connection-catalog-card--swarm ${selected === "jiuwenswarm" ? "connection-catalog-card--active" : ""}`} aria-current={selected === "jiuwenswarm" ? "page" : undefined} onClick={() => setSelected("jiuwenswarm")}>
                 <span><GitFork size={18} strokeWidth={2} aria-hidden="true" /></span>
-                <div><small>SWARM SOURCE</small><strong>JiuwenSwarm</strong><p>{swarm.mode === "github" ? swarm.github?.repository : "本地 Git 仓库"}</p></div>
-                <i className={swarm.configured ? "connection-state--ready" : "connection-state--missing"} aria-hidden="true" />
+                <div><small>SWARM SOURCE</small><strong>JiuwenSwarm</strong><p>{swarmEnvironment.state === "ready" ? "swarm-core-env · 已验证" : `${swarm.mode === "github" ? swarm.github?.repository : "本地 Git 仓库"} · ${swarmEnvironment.state === "drifted" ? "需更新" : "待创建"}`}</p></div>
+                <i className={swarm.configured && swarmEnvironment.state === "ready" ? "connection-state--ready" : "connection-state--missing"} aria-hidden="true" />
               </button>
               <section className="connection-catalog-policy">
                 <ShieldCheck size={16} strokeWidth={1.8} aria-hidden="true" />
-                <p><strong>本机控制边界</strong>密钥不回读；本地仓只读；GitHub 仅在显式绑定或同步时访问。</p>
+                <p><strong>本机控制边界</strong>密钥不回读；源码仓只读；环境只写入本机受管目录。</p>
               </section>
             </aside>
 

@@ -954,6 +954,206 @@
   font-weight: 700;
 }
 
+.managed-environment {
+  --environment-state-accent: var(--connection-accent);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  color: var(--environment-state-accent);
+  background: color-mix(in srgb, var(--connection-accent-soft) 48%, white);
+  border: 1px solid color-mix(in srgb, var(--connection-accent) 23%, white);
+  border-radius: 12px;
+}
+
+.managed-environment--ready {
+  --environment-state-accent: #276550;
+  background: #f5faf7;
+  border-color: #c9ddd2;
+}
+
+.managed-environment--drifted,
+.managed-environment--plan-drift,
+.managed-environment--planned {
+  --environment-state-accent: #8a572a;
+  background: #fbf8f3;
+  border-color: #e4d4c5;
+}
+
+.managed-environment--blocked {
+  --environment-state-accent: #8d3838;
+  background: #fcf5f3;
+  border-color: #e7cdc7;
+}
+
+.managed-environment > header,
+.managed-environment > header > div,
+.managed-environment > header > div > div,
+.managed-environment > header > em,
+.managed-environment > footer,
+.managed-environment > footer > span,
+.managed-environment > footer > button,
+.managed-environment__consumers {
+  display: flex;
+  align-items: center;
+}
+
+.managed-environment > header,
+.managed-environment > footer {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.managed-environment > header > div {
+  min-width: 0;
+  gap: 8px;
+}
+
+.managed-environment > header > div > span {
+  display: grid;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  background: color-mix(in srgb, currentColor 11%, white);
+  border-radius: 8px;
+}
+
+.managed-environment > header > div > div {
+  align-items: flex-start;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.managed-environment > header small,
+.managed-environment__evidence span,
+.managed-environment__evidence small {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.managed-environment > header strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managed-environment > header > em {
+  flex: 0 0 auto;
+  gap: 5px;
+  padding: 5px 8px;
+  color: currentColor;
+  background: color-mix(in srgb, currentColor 10%, white);
+  border-radius: 999px;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.managed-environment > p {
+  color: var(--ink-soft);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.managed-environment__evidence {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 15%, white);
+  border-radius: 9px;
+}
+
+.managed-environment__evidence > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 8px 9px;
+  background: rgb(255 255 255 / 0.82);
+}
+
+.managed-environment__evidence strong,
+.managed-environment__evidence code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managed-environment__evidence small {
+  overflow: hidden;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managed-environment__consumers {
+  flex-wrap: wrap;
+  gap: 6px;
+  color: currentColor;
+}
+
+.managed-environment__consumers > span {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.managed-environment__consumers code {
+  padding: 3px 6px;
+  color: currentColor;
+  background: color-mix(in srgb, currentColor 9%, white);
+  border-radius: 5px;
+  font-size: 7px;
+}
+
+.managed-environment > footer > span {
+  align-items: flex-start;
+  min-width: 0;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.managed-environment > footer > span svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.managed-environment > footer > button {
+  flex: 0 0 auto;
+  justify-content: center;
+  min-height: 36px;
+  gap: 6px;
+  padding: 0 11px;
+  color: #fff;
+  background: var(--environment-state-accent);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: 0 3px 9px color-mix(in srgb, var(--environment-state-accent) 20%, transparent);
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.managed-environment > footer > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.managed-environment > footer > button svg {
+  color: #fff;
+}
+
 .repository-form-actions {
   display: flex;
   align-items: center;

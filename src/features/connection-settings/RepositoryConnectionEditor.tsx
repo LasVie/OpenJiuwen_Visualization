@@ -16,6 +16,7 @@ import type {
   RepositoryConnectionStatus,
 } from "../../adapters/local-settings";
 import type { ConnectionSettingsController } from "./use-connection-settings";
+import { ManagedEnvironmentPanel } from "./ManagedEnvironmentPanel";
 import { SwarmCoreDependencyPanel } from "./SwarmCoreDependencyPanel";
 
 interface RepositoryConnectionEditorProps {
@@ -48,6 +49,10 @@ export function RepositoryConnectionEditor({
   const binding = controller.mutation === `${connection.slot}-binding`;
   const syncing = controller.mutation === `${connection.slot}-syncing`;
   const inspecting = controller.mutation === "jiuwenswarm-inspecting";
+  const environment = connection.slot === "agent-core"
+    ? controller.environments?.environments.coreEnv
+    : controller.environments?.environments.swarmCoreEnv;
+  const reconciling = controller.mutation === `${environment?.id}-reconciling`;
   const busy = controller.mutation !== null;
   const accentClass = connection.slot === "agent-core" ? "repository-detail--core" : "repository-detail--swarm";
 
@@ -177,6 +182,15 @@ export function RepositoryConnectionEditor({
             inspecting={inspecting}
             disabled={busy}
             onInspect={() => void controller.inspectSwarmCoreDependency()}
+          />
+        ) : null}
+
+        {environment ? (
+          <ManagedEnvironmentPanel
+            environment={environment}
+            reconciling={reconciling}
+            disabled={busy}
+            onReconcile={() => void controller.reconcileEnvironment(environment.id)}
           />
         ) : null}
 
