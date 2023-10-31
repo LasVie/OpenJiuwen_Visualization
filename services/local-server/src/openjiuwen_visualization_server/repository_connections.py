@@ -23,6 +23,7 @@ from .repository import (
     RepositoryResolutionError,
     RepositoryResolver,
 )
+from .swarm_core_dependency import SwarmCoreDependencyInspector
 
 
 REPOSITORY_CONNECTION_API_VERSION = "1.0.0"
@@ -326,6 +327,7 @@ class RepositoryConnectionStore:
         default_paths: dict[str, Path],
         database_path: Path | None = None,
         managed_repositories: ManagedGitHubRepositories | None = None,
+        swarm_dependency_inspector: SwarmCoreDependencyInspector | None = None,
     ) -> None:
         self._config = config
         self._resolver = resolver
@@ -349,6 +351,10 @@ class RepositoryConnectionStore:
         if not any(managed_root.is_relative_to(root) for root in config.allowed_roots):
             raise PathAccessError("Managed source root is outside allowed roots.")
         self._managed = managed_repositories or ManagedGitHubRepositories(managed_root)
+        self._swarm_dependency_inspector = (
+            swarm_dependency_inspector
+            or SwarmCoreDependencyInspector(config, resolver)
+        )
         self._lock = threading.RLock()
         self._initialize()
 
@@ -367,6 +373,7 @@ class RepositoryConnectionStore:
                     "githubAuthentication": False,
                     "synchronization": "manual",
                     "managedCheckoutRoot": str(self._managed.root),
+                    "swarmCoreGitHosts": ["github.com", "gitcode.com"],
                 },
                 "slots": {
                     "agentCore": self._describe_slot("agent-core"),
@@ -398,6 +405,14 @@ class RepositoryConnectionStore:
                 continue
             identities[identity.id] = identity
         return tuple(identities.values())
+
+    def inspect_swarm_core_dependency(self) -> dict[str, object]:
+        """Refresh read-only dependency evidence for the active Swarm binding."""
+
+        with self._lock:
+            return self._swarm_dependency_inspector.inspect(
+                self.effective_path("jiuwenswarm")
+            )
 
     def bind_local(self, slot: str, raw_path: object) -> dict[str, object]:
         checked = _validate_slot(slot)
@@ -525,7 +540,7 @@ class RepositoryConnectionStore:
             and binding.github_url is not None
             else None
         )
-        return {
+        description = {
             "slot": slot,
             "label": "Agent Core" if slot == "agent-core" else "JiuwenSwarm",
             "configured": validation["status"] == "ready",
@@ -541,7 +556,11 @@ class RepositoryConnectionStore:
             "createdAt": binding.created_at if binding is not None else None,
             "updatedAt": binding.updated_at if binding is not None else None,
             "lastSyncedAt": binding.last_synced_at if binding is not None else None,
+            "coreDependency": None,
         }
+        if slot == "jiuwenswarm":
+            description["coreDependency"] = self._swarm_dependency_inspector.inspect(path)
+        return description
 
     def _validated_identity(self, slot: str, raw_path: Path) -> RepositoryIdentity:
         try:

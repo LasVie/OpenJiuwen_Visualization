@@ -16,6 +16,7 @@ import type {
   RepositoryConnectionStatus,
 } from "../../adapters/local-settings";
 import type { ConnectionSettingsController } from "./use-connection-settings";
+import { SwarmCoreDependencyPanel } from "./SwarmCoreDependencyPanel";
 
 interface RepositoryConnectionEditorProps {
   connection: RepositoryConnectionStatus;
@@ -46,6 +47,7 @@ export function RepositoryConnectionEditor({
 
   const binding = controller.mutation === `${connection.slot}-binding`;
   const syncing = controller.mutation === `${connection.slot}-syncing`;
+  const inspecting = controller.mutation === "jiuwenswarm-inspecting";
   const busy = controller.mutation !== null;
   const accentClass = connection.slot === "agent-core" ? "repository-detail--core" : "repository-detail--swarm";
 
@@ -168,6 +170,15 @@ export function RepositoryConnectionEditor({
           {connection.github ? <div><span>REMOTE</span><code>{connection.github.repository}{connection.github.ref ? ` · ${connection.github.ref}` : " · default"}</code></div> : null}
           <div><span>BRANCH</span><code>{connection.repository?.branch ?? "unavailable"}{connection.repository?.dirty ? " · dirty" : ""}</code></div>
         </section>
+
+        {connection.slot === "jiuwenswarm" ? (
+          <SwarmCoreDependencyPanel
+            inspection={connection.coreDependency}
+            inspecting={inspecting}
+            disabled={busy}
+            onInspect={() => void controller.inspectSwarmCoreDependency()}
+          />
+        ) : null}
 
         {controller.feedbackTarget === connection.slot && controller.error ? <p className="credential-message credential-message--error" role="alert">{controller.error}</p> : null}
         {controller.feedbackTarget === connection.slot && controller.notice ? <p className="credential-message credential-message--success" role="status">{controller.notice}</p> : null}

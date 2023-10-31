@@ -30,6 +30,59 @@ export interface OpenRouterCredentialStatus {
 
 export type RepositoryConnectionSlot = "agent-core" | "jiuwenswarm";
 export type RepositoryConnectionMode = "local" | "github";
+export type SwarmCoreDependencyStatus = "ready" | "attention" | "unavailable";
+
+interface SwarmDependencyEvidenceFile {
+  path: string;
+  sha256: string;
+}
+
+export type SwarmCoreDependencySource =
+  | {
+    kind: "git";
+    package: "openjiuwen";
+    declaredRequirement: string;
+    url: string;
+    ref: {
+      kind: "branch" | "tag" | "rev" | "unspecified";
+      value: string | null;
+    };
+    lockedUrl: string | null;
+    lockedRevision: string | null;
+    lockStatus: "locked" | "unlocked" | "mismatch";
+  }
+  | {
+    kind: "path";
+    package: "openjiuwen";
+    declaredRequirement: string;
+    configuredPath: string;
+    path: string;
+    revision: string;
+    branch: string;
+    dirty: boolean;
+    lockStatus: "local";
+  }
+  | {
+    kind: "registry";
+    package: "openjiuwen";
+    declaredRequirement: string;
+    lockedVersion: string | null;
+    lockStatus: "locked" | "unlocked";
+  };
+
+export interface SwarmCoreDependencyInspection {
+  apiVersion: typeof LOCAL_SETTINGS_API_VERSION;
+  status: SwarmCoreDependencyStatus;
+  code: string;
+  message: string;
+  inspectedAt: string;
+  swarmRoot: string;
+  source: SwarmCoreDependencySource | null;
+  evidence: {
+    pyproject: SwarmDependencyEvidenceFile | null;
+    uvLock: SwarmDependencyEvidenceFile | null;
+  };
+}
 
 export interface ConnectedRepositoryIdentity {
   id: string;
@@ -64,6 +117,7 @@ export interface RepositoryConnectionStatus {
     code: string;
     message: string;
   };
+  coreDependency: SwarmCoreDependencyInspection | null;
   createdAt: string | null;
   updatedAt: string | null;
   lastSyncedAt: string | null;
@@ -82,6 +136,7 @@ export interface RepositoryConnectionsStatus {
     githubAuthentication: false;
     synchronization: "manual";
     managedCheckoutRoot: string;
+    swarmCoreGitHosts: ["github.com", "gitcode.com"];
   };
   slots: {
     agentCore: RepositoryConnectionStatus;
@@ -109,6 +164,11 @@ interface CredentialMutationResponse {
 interface RepositoryConnectionMutationResponse {
   apiVersion: typeof LOCAL_SETTINGS_API_VERSION;
   connection: RepositoryConnectionStatus;
+}
+
+interface SwarmCoreDependencyInspectionResponse {
+  apiVersion: typeof LOCAL_SETTINGS_API_VERSION;
+  inspection: SwarmCoreDependencyInspection;
 }
 
 interface ClientOptions {
@@ -171,6 +231,70 @@ function repositoryIdentity(value: unknown): value is ConnectedRepositoryIdentit
   );
 }
 
+function dependencyEvidenceFile(value: unknown): value is SwarmDependencyEvidenceFile {
+  return (
+    isRecord(value) &&
+    typeof value.path === "string" &&
+    typeof value.sha256 === "string" &&
+    /^[0-9a-f]{64}$/.test(value.sha256)
+  );
+}
+
+function swarmCoreDependencySource(value: unknown): value is SwarmCoreDependencySource {
+  if (
+    !isRecord(value) ||
+    value.package !== "openjiuwen" ||
+    typeof value.declaredRequirement !== "string" ||
+    !["git", "path", "registry"].includes(String(value.kind))
+  ) return false;
+  if (value.kind === "git") {
+    return (
+      typeof value.url === "string" &&
+      isRecord(value.ref) &&
+      ["branch", "tag", "rev", "unspecified"].includes(String(value.ref.kind)) &&
+      nullableText(value.ref.value) &&
+      nullableText(value.lockedUrl) &&
+      nullableText(value.lockedRevision) &&
+      ["locked", "unlocked", "mismatch"].includes(String(value.lockStatus))
+    );
+  }
+  if (value.kind === "path") {
+    return (
+      ["configuredPath", "path", "revision", "branch"].every(
+        (field) => typeof value[field] === "string",
+      ) &&
+      typeof value.dirty === "boolean" &&
+      value.lockStatus === "local"
+    );
+  }
+  return (
+    nullableText(value.lockedVersion) &&
+    ["locked", "unlocked"].includes(String(value.lockStatus))
+  );
+}
+
+function swarmCoreDependencyInspection(
+  value: unknown,
+): SwarmCoreDependencyInspection {
+  if (
+    !isRecord(value) ||
+    value.apiVersion !== LOCAL_SETTINGS_API_VERSION ||
+    !["ready", "attention", "unavailable"].includes(String(value.status)) ||
+    typeof value.code !== "string" ||
+    typeof value.message !== "string" ||
+    typeof value.inspectedAt !== "string" ||
+    typeof value.swarmRoot !== "string" ||
+    !(value.source === null || swarmCoreDependencySource(value.source)) ||
+    !isRecord(value.evidence) ||
+    !(value.evidence.pyproject === null || dependencyEvidenceFile(value.evidence.pyproject)) ||
+    !(value.evidence.uvLock === null || dependencyEvidenceFile(value.evidence.uvLock)) ||
+    (value.status === "ready" && value.source === null)
+  ) {
+    throw new TypeError("JiuwenSwarm Core 依赖检查结果格式无效。");
+  }
+  return value as unknown as SwarmCoreDependencyInspection;
+}
+
 function repositoryConnection(value: unknown): RepositoryConnectionStatus {
   if (
     !isRecord(value) ||
@@ -216,6 +340,11 @@ function repositoryConnection(value: unknown): RepositoryConnectionStatus {
   ) {
     throw new TypeError("代码来源能力与状态不一致。");
   }
+  if (value.slot === "jiuwenswarm") {
+    swarmCoreDependencyInspection(value.coreDependency);
+  } else if (value.coreDependency !== null) {
+    throw new TypeError("Agent Core 来源不能声明 Swarm 依赖检查结果。");
+  }
   return value as unknown as RepositoryConnectionStatus;
 }
 
@@ -234,6 +363,10 @@ function repositoryConnections(value: unknown): RepositoryConnectionsStatus {
     value.policy.githubAuthentication !== false ||
     value.policy.synchronization !== "manual" ||
     typeof value.policy.managedCheckoutRoot !== "string" ||
+    !Array.isArray(value.policy.swarmCoreGitHosts) ||
+    value.policy.swarmCoreGitHosts.length !== 2 ||
+    value.policy.swarmCoreGitHosts[0] !== "github.com" ||
+    value.policy.swarmCoreGitHosts[1] !== "gitcode.com" ||
     !isRecord(value.slots)
   ) {
     throw new TypeError("本地代码来源设置格式无效。");
@@ -281,6 +414,18 @@ function repositoryConnectionMutation(
   return {
     apiVersion: LOCAL_SETTINGS_API_VERSION,
     connection: repositoryConnection(value.connection),
+  };
+}
+
+function dependencyInspectionMutation(
+  value: unknown,
+): SwarmCoreDependencyInspectionResponse {
+  if (!isRecord(value) || value.apiVersion !== LOCAL_SETTINGS_API_VERSION) {
+    throw new TypeError("Swarm Core 依赖响应与 API 1.0.0 不匹配。");
+  }
+  return {
+    apiVersion: LOCAL_SETTINGS_API_VERSION,
+    inspection: swarmCoreDependencyInspection(value.inspection),
   };
 }
 
@@ -401,6 +546,20 @@ export class LocalSettingsClient {
       `/api/v1/settings/repositories/${slot}`,
       { method: "DELETE", signal },
     )).connection;
+  }
+
+  async inspectSwarmCoreDependency(
+    signal?: AbortSignal,
+  ): Promise<SwarmCoreDependencyInspection> {
+    return dependencyInspectionMutation(await this.request(
+      "/api/v1/settings/repositories/jiuwenswarm/inspect-core-dependency",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        signal,
+      },
+    )).inspection;
   }
 
   private async request(path: string, init: RequestInit) {

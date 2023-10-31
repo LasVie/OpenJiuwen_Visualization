@@ -14,4 +14,7 @@ export type {
   RepositoryConnectionSlot,
   RepositoryConnectionStatus,
   RepositoryConnectionsStatus,
+  SwarmCoreDependencyInspection,
+  SwarmCoreDependencySource,
+  SwarmCoreDependencyStatus,
 } from "./client";

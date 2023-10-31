@@ -26,6 +26,31 @@ function credential(configured = false) {
   };
 }
 
+function swarmCoreDependency() {
+  return {
+    apiVersion: "1.0.0",
+    status: "ready",
+    code: "git_core_dependency_locked",
+    message: "locked",
+    inspectedAt: "2026-08-20T00:00:00Z",
+    swarmRoot: "C:\\workspace\\jiuwenswarm",
+    source: {
+      kind: "git",
+      package: "openjiuwen",
+      declaredRequirement: "openjiuwen",
+      url: "https://gitcode.com/openJiuwen/agent-core.git",
+      ref: { kind: "branch", value: "develop" },
+      lockedUrl: "https://gitcode.com/openJiuwen/agent-core.git",
+      lockedRevision: "a".repeat(40),
+      lockStatus: "locked",
+    },
+    evidence: {
+      pyproject: { path: "C:\\workspace\\jiuwenswarm\\pyproject.toml", sha256: "b".repeat(64) },
+      uvLock: { path: "C:\\workspace\\jiuwenswarm\\uv.lock", sha256: "c".repeat(64) },
+    },
+  };
+}
+
 function repositoryConnection(slot: "agent-core" | "jiuwenswarm", mode: "local" | "github" = "local") {
   const label = slot === "agent-core" ? "Agent Core" : "JiuwenSwarm";
   return {
@@ -55,6 +80,7 @@ function repositoryConnection(slot: "agent-core" | "jiuwenswarm", mode: "local" 
       dirty: false,
     },
     validation: { status: "ready", code: "ready", message: "ready" },
+    coreDependency: slot === "jiuwenswarm" ? swarmCoreDependency() : null,
     createdAt: mode === "github" ? "2026-08-20T00:00:00Z" : null,
     updatedAt: mode === "github" ? "2026-08-20T00:00:00Z" : null,
     lastSyncedAt: mode === "github" ? "2026-08-20T00:00:00Z" : null,
@@ -75,6 +101,7 @@ function repositories() {
       githubAuthentication: false,
       synchronization: "manual",
       managedCheckoutRoot: "C:\\workspace\\managed",
+      swarmCoreGitHosts: ["github.com", "gitcode.com"],
     },
     slots: {
       agentCore: repositoryConnection("agent-core"),
@@ -161,6 +188,10 @@ describe("LocalSettingsClient", () => {
       .mockImplementationOnce(() => response({
         apiVersion: "1.0.0",
         connection: repositoryConnection("agent-core"),
+      }))
+      .mockImplementationOnce(() => response({
+        apiVersion: "1.0.0",
+        inspection: swarmCoreDependency(),
       }));
     const client = new LocalSettingsClient({ fetcher: fetcher as typeof fetch });
 
@@ -172,6 +203,7 @@ describe("LocalSettingsClient", () => {
     );
     await client.syncRepository("jiuwenswarm");
     await client.resetRepository("agent-core");
+    const dependency = await client.inspectSwarmCoreDependency();
 
     expect(fetcher.mock.calls[0][0]).toBe(
       "http://127.0.0.1:8765/api/v1/settings/repositories/agent-core",
@@ -190,5 +222,9 @@ describe("LocalSettingsClient", () => {
     );
     expect((fetcher.mock.calls[2][1] as RequestInit).body).toBe("{}");
     expect((fetcher.mock.calls[3][1] as RequestInit).method).toBe("DELETE");
+    expect(fetcher.mock.calls[4][0]).toBe(
+      "http://127.0.0.1:8765/api/v1/settings/repositories/jiuwenswarm/inspect-core-dependency",
+    );
+    expect(dependency.source?.kind).toBe("git");
   });
 });

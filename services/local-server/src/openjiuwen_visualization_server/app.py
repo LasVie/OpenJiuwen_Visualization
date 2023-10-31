@@ -151,6 +151,9 @@ REPOSITORY_CONNECTION_ROUTE = re.compile(
 REPOSITORY_CONNECTION_SYNC_ROUTE = re.compile(
     r"^/api/v1/settings/repositories/(agent-core|jiuwenswarm)/sync$"
 )
+SWARM_CORE_DEPENDENCY_INSPECTION_ROUTE = (
+    "/api/v1/settings/repositories/jiuwenswarm/inspect-core-dependency"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -568,6 +571,20 @@ class LocalRepositoryApi:
             return self._start_openrouter(body or {}, trace_token)
         if method == "POST" and route == "/api/v1/settings/openrouter/credential":
             return self._set_openrouter_credential(body or {})
+        if method == "POST" and route == SWARM_CORE_DEPENDENCY_INSPECTION_ROUTE:
+            if body:
+                return _error(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_swarm_dependency_inspection",
+                    "Swarm dependency inspection does not accept request fields.",
+                )
+            return ApiResponse(
+                HTTPStatus.OK,
+                {
+                    "apiVersion": REPOSITORY_CONNECTION_API_VERSION,
+                    "inspection": self.repository_connections.inspect_swarm_core_dependency(),
+                },
+            )
         repository_sync_match = REPOSITORY_CONNECTION_SYNC_ROUTE.fullmatch(route)
         if method == "POST" and repository_sync_match:
             return self._sync_repository_connection(repository_sync_match.group(1))
