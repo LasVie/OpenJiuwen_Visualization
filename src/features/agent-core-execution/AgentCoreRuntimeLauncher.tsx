@@ -15,6 +15,7 @@ import type {
   AgentCoreExecutionController,
   AgentCoreExecutionPhase,
 } from "./use-agent-core-execution";
+import { RuntimeEnvironmentIdentity } from "../runtime-environment";
 
 interface AgentCoreRuntimeLauncherProps {
   controller: AgentCoreExecutionController;
@@ -157,7 +158,7 @@ export function AgentCoreRuntimeLauncher({
                 <div>
                   <strong>Agent Core 运行环境尚未就绪</strong>
                   <p>{controller.runtime?.diagnostic.message ?? "无法读取运行时诊断。"}</p>
-                  <p>Python 入口由 <code>OPENJIUWEN_AGENT_CORE_PYTHON</code> 指定；源码由 <code>OPENJIUWEN_AGENT_CORE_ROOT</code> 指定。OpenRouter key 仍只在本地服务环境中读取。</p>
+                  <p>请在“连接”中绑定 Agent Core 仓库并创建 <code>core-env</code>；运行前会自动检查仓库、锁文件与环境变化。</p>
                 </div>
                 <button type="button" onClick={() => void controller.refresh()}>
                   <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />重新探测
@@ -169,6 +170,7 @@ export function AgentCoreRuntimeLauncher({
                   <ShieldCheck size={17} strokeWidth={2} aria-hidden="true" />
                   <p><strong>这次会执行真实 DeepAgent，而不是伪造链路。</strong>隔离进程内运行 ReAct；只注册只读 <code>inspect_input</code> 工具。输入会发送到 OpenRouter 及其路由的模型。</p>
                 </div>
+                <RuntimeEnvironmentIdentity environment={controller.runtime!.managedEnvironment} />
 
                 <label className="openrouter-form__field">
                   <span>OpenRouter 模型 <small>SERVER ALLOWLIST</small></span>

@@ -10,6 +10,23 @@ export type ManagedEnvironmentState =
   | "plan-drift"
   | "ready"
   | "drifted";
+export type RuntimeEnvironmentConsumer =
+  | "agent-core"
+  | "subagent"
+  | "jiuwenswarm"
+  | "swarmflow";
+
+export interface RuntimeManagedEnvironmentStatus {
+  id: ManagedEnvironmentId;
+  consumer: RuntimeEnvironmentConsumer;
+  state: ManagedEnvironmentState | "unavailable";
+  desiredFingerprint: string | null;
+  activeFingerprint: string | null;
+  pythonVersion: string | null;
+  uvVersion: string | null;
+  autoReconcile: "before-runtime-invocation";
+  diagnostic: { code: string; message: string };
+}
 
 export interface ManagedEnvironmentActiveManifest {
   environmentId: ManagedEnvironmentId;
@@ -136,6 +153,40 @@ function nullableText(value: unknown): value is string | null {
 
 function fingerprint(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
+
+export function runtimeManagedEnvironmentStatus(
+  value: unknown,
+  expectedConsumer: RuntimeEnvironmentConsumer,
+): RuntimeManagedEnvironmentStatus {
+  const expectedId = ["agent-core", "subagent"].includes(expectedConsumer)
+    ? "core-env"
+    : "swarm-core-env";
+  if (
+    !isRecord(value) ||
+    value.id !== expectedId ||
+    value.consumer !== expectedConsumer ||
+    !["blocked", "planned", "plan-drift", "ready", "drifted", "unavailable"].includes(
+      String(value.state),
+    ) ||
+    !(value.desiredFingerprint === null || fingerprint(value.desiredFingerprint)) ||
+    !(value.activeFingerprint === null || fingerprint(value.activeFingerprint)) ||
+    !nullableText(value.pythonVersion) ||
+    !nullableText(value.uvVersion) ||
+    value.autoReconcile !== "before-runtime-invocation" ||
+    !isRecord(value.diagnostic) ||
+    typeof value.diagnostic.code !== "string" ||
+    typeof value.diagnostic.message !== "string" ||
+    (value.state === "ready" && (
+      value.desiredFingerprint === null ||
+      value.activeFingerprint !== value.desiredFingerprint ||
+      value.pythonVersion === null ||
+      value.uvVersion === null
+    ))
+  ) {
+    throw new TypeError("运行时受管环境状态格式无效。");
+  }
+  return value as unknown as RuntimeManagedEnvironmentStatus;
 }
 
 function activeManifest(

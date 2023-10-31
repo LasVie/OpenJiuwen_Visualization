@@ -43,6 +43,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | 网页代码连接与 Swarm Core 依赖检查 | 已完成 | Agent Core/JiuwenSwarm 本地或公开 GitHub 绑定、Swarm Config 解析、声明 ref 与锁定 Core revision 证据 |
 | 受管环境 Desired State | 已完成 | `core-env` / `swarm-core-env` 独立规格、Python/lock/source 指纹、阻塞与 drift 状态 |
 | 受管环境 Reconciliation | 已完成 | 网页一键 uv/CPython 3.11 构建、frozen sync、依赖与双 bridge probe、原子切换、失败保留与两代清理 |
+| Executor 环境收敛 | 已完成 | 四个固定 bridge 只使用匹配 active manifest 的 Python/source，调用前自动对账，Runtime 状态与 Trace 固定记录环境身份 |
 
 ## 当前已支持功能
 
@@ -100,6 +101,8 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 真实 Agent Core 两阶段 SwarmFlow，包含 Workflow/Phase/临时 Worker、真实 ReAct/Rail/Model、结构化状态聚合与每 Worker 独立 Context；
 - Rail 卡片进入独立画布，逐帧查看读取、检查、变更、控制信号与输出证据；
 - Provider 录制回放和 OpenRouter 实时流式调用。
+- Agent Core/Subagent 固定绑定 `core-env`，Agent Team/SwarmFlow 固定绑定 `swarm-core-env`；首次调用前自动对账，环境正在使用时只允许复用同一已验证代际；
+- Runtime 启动面板显示环境 fingerprint、Python 与 uv，Trace 首事件及本机归档保留不含路径/凭据的结构化环境证据。
 
 ### 运行档案与对比
 
@@ -127,6 +130,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - “连接”页面可绑定 Agent Core/JiuwenSwarm 本地或公开 GitHub 来源；JiuwenSwarm 卡片会解析 Swarm Config 与 `uv.lock`，显示它实际依赖的 Core ref/revision；
 - `core-env` 与 `swarm-core-env` 分别服务 Core/Subagent 和 Swarm/SwarmFlow，显示 desired/active 指纹与 drift，支持网页端创建、重验和修复；
 - 环境只在本机受管目录执行固定 uv argv；CPython 3.11、frozen lock、`uv pip check` 和两个 consumer probe 全部通过后才原子切换，失败不覆盖 active，并只保留两代。
+- 受管 bridge 不继承 Companion 的 `PYTHONPATH`；Swarm 的 Git/registry Core 从自身 lock 环境导入，本地 path Core 只使用检查得到的精确路径，standalone Core slot 不会覆盖它。
 
 ## 当前明确限制
 
@@ -144,7 +148,6 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
 - Host V1 不提供页面安装/卸载/升级、第三方签名链、动态插件代码执行、进程沙箱或崩溃监督；内置 integrity 只是本地发布摘要；
 - OpenRouter 已支持 Windows Credential Manager 的网页录入与环境变量回退；其他操作系统的通用 vault、私有 GitHub 凭据和组织级 secret policy 尚未实现；
-- 受管环境已经能在网页构建与验证，但四个 Runtime Executor 尚未切换为读取 active manifest，Trace 也尚未记录 env fingerprint；当前执行器仍以各自 Python 配置为运行 authority；
 - 首次下载 Python/依赖要求主机系统时间正确且 TLS 可验证；不会为了绕过证书错误自动启用 insecure host；
 - Tool Registry 已统一代码发现、Host 目录读取授权、Runtime 注册与调用证据；逐 Tool 执行授权和写 Tool 仍未开放；
 - 还没有协作权限或远端部署控制面。
@@ -212,6 +215,20 @@ Development 的确定性九步 projection 现在会自动保存为独立本机 S
 
 OpenRouter 仍保持只读，不自动生成或应用 patch；V1 也不支持 dirty checkout、任意 Shell、删除/重命名/二进制 patch、push 或远程 PR 写入。
 
+## 已完成：Executor 环境收敛
+
+四类真实 Executor 已从各自的环境变量/服务 Python 回退收敛到 Companion active manifest：
+
+1. Agent Core 与 Subagent 固定消费 `core-env`，Agent Team 与 SwarmFlow 固定消费 `swarm-core-env`；
+2. 首次调用前自动执行环境对账和完整重验，运行中只允许同环境消费者复用完全一致的 generation；
+3. source slot 变化会清除旧 binding，desired fingerprint、active manifest、Python 文件或 validation 任一不匹配都会 fail closed；
+4. Managed bridge 丢弃服务继承的 `PYTHONPATH`；Git/registry Swarm Core 从 lock 环境导入，path Core 只使用检查得到的精确目录；
+5. 四个 Runtime descriptor 和启动面板显示 env state/fingerprint/Python/uv，未就绪时统一引导到网页“连接”；
+6. Trace 首事件记录不含本机路径、命令、凭据和安装输出的环境、项目 revision 与 Core lock identity；事件进入实时投影和本机 Archive 结构化预览；
+7. 单元与 API 测试覆盖 exact binding、tampered Python、远端 Core 不被覆盖、`PYTHONPATH` 隔离、四执行器启动前对账和 Trace 证据。
+
+代码路径已经完成；当前主机系统时钟早于 uv/Python 下载证书有效期，因此真实两套环境的首次下载与端到端调用验收仍需在系统时间修正后执行。TLS 校验不会被绕过。
+
 ## 后续路线
 
 | 优先级 | 阶段 | 核心结果 | 进入前的决策点 |
@@ -229,9 +246,9 @@ OpenRouter 仍保持只读，不自动生成或应用 patch；V1 也不支持 di
 | 已完成 | 受控开发执行 | 完整 Diff、逐次审批、隔离 apply、固定测试、本地 commit、history 与 rollback 画布 | 安全基线已批准；V1 不 push、不创建远端 PR |
 | 已完成 | 网页代码连接与依赖解析 | 本地/公开 GitHub slot、Swarm Core 声明与锁定 revision | 两套环境身份保持独立 |
 | 已完成 | 受管环境构建与激活 | uv-managed Python 3.11、frozen sync、验证、原子 generation 与网页控制 | 不允许 insecure TLS；失败保留旧 active |
-| 进行中 | Executor 环境收敛 | 四个固定 bridge 使用 active manifest，Trace 记录环境 fingerprint | 保持每类执行器独立身份与现有取消/权限边界 |
+| 已完成 | Executor 环境收敛 | 四个固定 bridge 使用 active manifest，Trace 记录环境 fingerprint | 每类执行器身份、取消与权限边界保持独立；并发只复用当前代际 |
 
-下一阶段先完成已经确定的 Executor 环境收敛：调用前自动刷新 desired state、只接受验证通过且匹配指纹的 active generation，把 Python/root/lock/env identity 固定写入 Runtime descriptor 与 Trace。完成后再回到 Development 的 patch candidate、异步测试或 Session/执行记录关联等产品决策。
+下一步先在系统时间正确、TLS 可验证的主机上完成两套真实环境的首次构建，并分别执行 Agent Core、Subagent、Agent Team、SwarmFlow 的无网络 probe 与最小真实调用验收。该验收通过后，再回到 Development 的 patch candidate、异步测试或 Session/执行记录关联等产品决策。
 
 ## 阶段管理规则
 

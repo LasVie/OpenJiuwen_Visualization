@@ -1,0 +1,44 @@
+.runtime-environment-identity {
+  display: grid;
+  grid-template-columns: auto minmax(130px, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent, #34735f) 26%, #d8e0dc);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent, #34735f) 6%, #fff);
+  color: #29443b;
+}
+
+.runtime-environment-identity > svg { color: var(--accent, #34735f); }
+.runtime-environment-identity > span { display: grid; gap: 1px; }
+.runtime-environment-identity > span small,
+.runtime-environment-identity > small {
+  color: #697771;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+.runtime-environment-identity > span strong { font-size: 12px; }
+.runtime-environment-identity > code {
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: rgba(255,255,255,.72);
+  color: #315c4d;
+  font-size: 10px;
+}
+.runtime-environment-identity > em {
+  color: #50635c;
+  font-size: 10px;
+  font-style: normal;
+}
+
+@media (max-width: 720px) {
+  .runtime-environment-identity {
+    grid-template-columns: auto 1fr auto;
+  }
+  .runtime-environment-identity > em,
+  .runtime-environment-identity > small {
+    grid-column: 2 / -1;
+  }
+}

@@ -16,6 +16,7 @@ import type {
   SwarmFlowExecutionController,
   SwarmFlowExecutionPhase,
 } from "./use-swarmflow-execution";
+import { RuntimeEnvironmentIdentity } from "../runtime-environment";
 
 interface SwarmFlowRuntimeLauncherProps {
   controller: SwarmFlowExecutionController;
@@ -165,7 +166,7 @@ export function SwarmFlowRuntimeLauncher({
                 <div>
                   <strong>SwarmFlow 运行环境尚未就绪</strong>
                   <p>{controller.runtime?.diagnostic.message ?? "无法读取运行时诊断。"}</p>
-                  <p>Python 入口可由 <code>OPENJIUWEN_SWARMFLOW_PYTHON</code> 指定；OpenRouter key、源码路径与固定 workflow 都只存在于本地服务。</p>
+                  <p>请在“连接”中绑定 JiuwenSwarm 仓库、检查其 Core 依赖并创建 <code>swarm-core-env</code>；工作流会复用该已验证环境。</p>
                 </div>
                 <button type="button" onClick={() => void controller.refresh()}>
                   <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />重新探测
@@ -177,6 +178,7 @@ export function SwarmFlowRuntimeLauncher({
                   <ShieldCheck size={17} strokeWidth={2} aria-hidden="true" />
                   <p><strong>运行真实、固定形状的 SwarmFlow。</strong>两个阶段各创建一个临时 TeamHarness Worker；它们不属于 Agent Team roster，Context 相互隔离，最终 Rail 会移除全部工具 schema。</p>
                 </div>
+                <RuntimeEnvironmentIdentity environment={controller.runtime!.managedEnvironment} />
 
                 <div className="swarmflow-form__route" aria-label="固定工作流阶段">
                   {controller.runtime!.phases.map((item, index) => (

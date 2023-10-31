@@ -42,6 +42,10 @@ python -B services/local-server/scripts/run_server.py `
 | `POST/DELETE` | `/api/v1/settings/openrouter/credential` | 写入或删除 Windows Credential Manager 中的固定 OpenRouter key |
 | `POST/DELETE` | `/api/v1/settings/repositories/{slot}` | 绑定本地/公开 GitHub 仓库或恢复 slot 默认值 |
 | `POST` | `/api/v1/settings/repositories/{slot}/sync` | 手动同步受管公开 GitHub checkout |
+| `POST` | `/api/v1/settings/repositories/jiuwenswarm/inspect-core-dependency` | 重新解析 Swarm Config 与 lock 中的 Core 来源 |
+| `GET` | `/api/v1/environments` | 读取 `core-env` / `swarm-core-env` desired、active、drift 与 consumer 状态 |
+| `POST` | `/api/v1/environments/refresh` | 原子刷新两套环境 desired spec，不安装依赖 |
+| `POST` | `/api/v1/environments/{id}/reconcile` | 使用固定 uv 流程构建、验证并原子激活所选环境 |
 | `GET` | `/api/v1/repositories` | 返回允许根目录及根目录/一级子目录中发现的 Git 仓库 |
 | `POST` | `/api/v1/repositories/scan` | 解析一个允许范围内的 Git 仓库或子目录 |
 | `POST` | `/api/v1/repositories/source` | 按源码引用读取当前工作树的有界行范围 |
@@ -89,6 +93,8 @@ python -B services/local-server/scripts/run_server.py `
 | `GET` | `/api/v1/swarmflows` | 探测 Agent Core SwarmFlow、JiuwenSwarm Workflow monitor、固定 profile 与 OpenRouter |
 | `POST` | `/api/v1/swarmflows/invocations` | 用 Swarm Trace authority 启动真实固定两阶段 SwarmFlow |
 | `POST` | `/api/v1/swarmflows/invocations/{id}/cancel` | 终止 workflow bridge 并关闭 Swarm Trace |
+
+四类 Executor 调用前会自动对账所属环境，只从验证通过且匹配当前 fingerprint 的 active manifest 取得 Python 与 source identity。环境身份作为 Trace 第一条结构化事件保存；事件不包含本机路径、命令、凭据或安装输出。完整合同见 [`docs/managed-environments-v1.md`](../../docs/managed-environments-v1.md)。
 
 扫描请求：
 

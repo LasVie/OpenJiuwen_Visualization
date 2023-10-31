@@ -48,6 +48,17 @@ const runtimeResponse = {
       maxActiveInvocations: 1,
     },
     diagnostic: { code: "ready", message: "ready" },
+    managedEnvironment: {
+      id: "core-env",
+      consumer: "subagent",
+      state: "ready",
+      desiredFingerprint: "a".repeat(64),
+      activeFingerprint: "a".repeat(64),
+      pythonVersion: "3.11.9",
+      uvVersion: "0.9.0",
+      autoReconcile: "before-runtime-invocation",
+      diagnostic: { code: "ready", message: "verified" },
+    },
     frameworkVersion: "source-checkout",
   },
 };

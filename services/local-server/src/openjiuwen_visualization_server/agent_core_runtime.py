@@ -24,6 +24,10 @@ from .openrouter_provider import (
 )
 from .trace_store import RuntimeTraceStore, TraceStoreError
 from .runtime_source_identity import runtime_source_revisions
+from .runtime_environments import (
+    RuntimeEnvironmentBinding,
+    runtime_environment_event,
+)
 
 
 AGENT_CORE_RUNTIME_API_VERSION = "1.0.0"
@@ -64,6 +68,7 @@ class AgentCoreRuntimeConfig:
     workspace: Path
     provider: OpenRouterProviderConfig
     max_iterations: int = DEFAULT_MAX_ITERATIONS
+    managed_environment: RuntimeEnvironmentBinding | None = None
 
     @classmethod
     def from_environment(
@@ -154,7 +159,11 @@ class SubprocessAgentCoreBridgeLauncher:
     @staticmethod
     def _environment(config: AgentCoreRuntimeConfig) -> dict[str, str]:
         environment = dict(os.environ)
-        previous_python_path = environment.get("PYTHONPATH", "")
+        previous_python_path = (
+            environment.get("PYTHONPATH", "")
+            if config.managed_environment is None
+            else ""
+        )
         environment["PYTHONPATH"] = os.pathsep.join(
             value for value in (str(config.source_root), previous_python_path) if value
         )
@@ -342,6 +351,29 @@ class AgentCoreRuntimeAdapter:
             self.config = replace(
                 self.config,
                 source_root=Path(source_root).resolve(strict=False),
+                managed_environment=None,
+            )
+            self._probe_value = None
+            self._probe_time = 0.0
+
+    def rebind_managed_environment(
+        self,
+        binding: RuntimeEnvironmentBinding,
+    ) -> None:
+        if binding.consumer != "agent-core" or binding.environment_id != "core-env":
+            raise RuntimeError("Agent Core requires the core-env runtime binding.")
+        with self._lock:
+            if self.active_invocations:
+                if self.config.managed_environment == binding:
+                    return
+                raise RuntimeError(
+                    "Agent Core environment cannot change during an active invocation."
+                )
+            self.config = replace(
+                self.config,
+                source_root=binding.project_root,
+                python_executable=binding.python_executable,
+                managed_environment=binding,
             )
             self._probe_value = None
             self._probe_time = 0.0
@@ -361,8 +393,21 @@ class AgentCoreRuntimeAdapter:
             self._probe_time = self._clock()
         return value
 
-    def descriptor(self, *, refresh: bool = False) -> dict[str, object]:
-        probe = self._probe(force=refresh)
+    def descriptor(
+        self,
+        *,
+        refresh: bool = False,
+        probe_runtime: bool = True,
+    ) -> dict[str, object]:
+        probe = (
+            self._probe(force=refresh)
+            if probe_runtime
+            else AgentCoreBridgeProbe(
+                False,
+                "managed_environment_not_ready",
+                "The managed Agent Core environment is not ready.",
+            )
+        )
         configured = probe.ready and self.config.provider.configured
         if configured:
             status = "ready"
@@ -415,6 +460,11 @@ class AgentCoreRuntimeAdapter:
                     "maxActiveInvocations": MAX_ACTIVE_INVOCATIONS,
                 },
                 "diagnostic": diagnostic,
+                "managedEnvironment": (
+                    self.config.managed_environment.evidence()
+                    if self.config.managed_environment is not None
+                    else None
+                ),
                 **(
                     {"frameworkVersion": probe.framework_version}
                     if probe.framework_version
@@ -503,6 +553,29 @@ class AgentCoreRuntimeAdapter:
             job = _AgentCoreJob(invocation_id, trace_id, model_id, self._clock())
             self._jobs[invocation_id] = job
 
+        if self.config.managed_environment is not None:
+            try:
+                self._trace_store.append(
+                    trace_id,
+                    trace_token,
+                    [
+                        runtime_environment_event(
+                            self.config.managed_environment,
+                            invocation_id,
+                            timestamp_ms=(self._clock() - job.started_at) * 1_000,
+                        )
+                    ],
+                )
+            except TraceStoreError as exc:
+                with self._lock:
+                    self._jobs.pop(invocation_id, None)
+                raise AgentCoreRuntimeError(exc.code, str(exc), status=exc.status) from exc
+
+        source_revisions = runtime_source_revisions(
+            (("agent-core", self.config.source_root),)
+        )
+        if self.config.managed_environment is not None:
+            source_revisions.update(self.config.managed_environment.source_revisions())
         request = {
             "invocationId": invocation_id,
             "modelId": model_id,
@@ -512,9 +585,7 @@ class AgentCoreRuntimeAdapter:
             "maxIterations": self.config.max_iterations,
             "traceMaxTokens": int(trace["maxTokens"]),
             "workspace": str(self.config.workspace),
-            "sourceRevisions": runtime_source_revisions(
-                (("agent-core", self.config.source_root),)
-            ),
+            "sourceRevisions": source_revisions,
         }
         worker = threading.Thread(
             target=self._run_job,

@@ -11,4 +11,7 @@ export type {
   ManagedEnvironmentState,
   ManagedEnvironmentStatus,
   ManagedEnvironmentsSnapshot,
+  RuntimeEnvironmentConsumer,
+  RuntimeManagedEnvironmentStatus,
 } from "./client";
+export { runtimeManagedEnvironmentStatus } from "./client";

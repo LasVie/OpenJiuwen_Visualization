@@ -69,6 +69,28 @@ Commands use fixed argv with `shell=false`, disable interactive Git credentials 
 
 Verified TLS remains mandatory for Python and dependency downloads. The implementation does not silently disable certificate checks; a host clock that makes certificates “not yet valid” returns `system_clock_invalid` with an actionable web diagnostic.
 
-## Current integration boundary
+## Runtime binding contract
 
-This stage owns desired-state generation, provisioning, verification, activation, cleanup, API control, and web status. Binding the four Runtime executors to the active manifest and recording environment identity in Trace evidence is the next layer; until that layer is complete, existing executor-specific Python configuration remains their runtime authority.
+The active manifest is now the execution authority for all four fixed bridges:
+
+| Consumer | Required active identity | Runtime import roots |
+| --- | --- | --- |
+| Agent Core | `core-env` | bound Agent Core project |
+| Subagent | `core-env` | bound Agent Core project |
+| JiuwenSwarm | `swarm-core-env` | bound JiuwenSwarm project plus the exact local Core path only when Swarm declares a path dependency |
+| SwarmFlow | `swarm-core-env` | same dependency rule as JiuwenSwarm |
+
+Before a first invocation, Companion reconciles the current desired state, revalidates the active generation, and binds its exact Python executable and source identity to the requested adapter. If another consumer is already using that environment, a concurrent invocation may reuse only the same verified generation; desired-state drift blocks the new invocation instead of replacing an in-use generation. Repository rebinding or synchronization clears stale adapter bindings immediately.
+
+Managed bridge processes do not inherit the Companion process `PYTHONPATH`. A Git or registry Core dependency is imported from the locked Swarm environment and is never shadowed by the standalone Agent Core checkout. A local path dependency receives only its inspected, allowed path.
+
+Every Runtime descriptor includes environment state, desired/active fingerprint, Python version, uv version, automatic reconciliation policy, and a bounded diagnostic. A run starts its Trace with a server-owned `trace.status/instant` event containing:
+
+- environment id and consumer;
+- complete environment fingerprint;
+- Python and uv versions plus activation time;
+- project slot, revision, and dirty state;
+- Swarm Core dependency kind and locked revision/version when applicable;
+- `validation=passed`.
+
+The Trace evidence intentionally excludes local paths, commands, environment variables, credentials, and package-install output. It remains in the local archive's redacted preview because it is structural identity rather than user/model text; the complete event is still available through the existing explicit raw-data boundary.

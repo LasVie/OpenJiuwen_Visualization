@@ -1,4 +1,8 @@
 import { loopbackHttpOrigin } from "../local-service/base-url";
+import {
+  runtimeManagedEnvironmentStatus,
+  type RuntimeManagedEnvironmentStatus,
+} from "../local-environments";
 
 export const SWARMFLOW_RUNTIME_API_VERSION = "1.0.0" as const;
 export const DEFAULT_SWARMFLOW_RUNTIME_SERVER = "http://127.0.0.1:8765";
@@ -51,6 +55,7 @@ export interface SwarmFlowRuntimeStatus {
     maxAgents: 2;
   };
   diagnostic: { code: string; message: string };
+  managedEnvironment: RuntimeManagedEnvironmentStatus;
   frameworkVersion?: string;
 }
 
@@ -154,6 +159,7 @@ function runtimeStatus(value: unknown): SwarmFlowRuntimeStatus {
     !isRecord(diagnostic) ||
     typeof diagnostic.code !== "string" ||
     typeof diagnostic.message !== "string" ||
+    !runtimeManagedEnvironmentStatus(runtime.managedEnvironment, "swarmflow") ||
     (runtime.frameworkVersion !== undefined && typeof runtime.frameworkVersion !== "string")
   ) {
     throw new TypeError("SwarmFlow runtime registry has an invalid shape.");

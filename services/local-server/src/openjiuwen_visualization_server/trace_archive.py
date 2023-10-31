@@ -68,6 +68,7 @@ def _preview_event(event: dict[str, Any]) -> dict[str, Any]:
         "token",
         "subject",
         "definition",
+        "environment",
     }
     preview = {
         key: copy.deepcopy(value)

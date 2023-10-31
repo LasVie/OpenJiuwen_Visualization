@@ -42,6 +42,17 @@ const runtime = {
     maxAgents: 2,
   },
   diagnostic: { code: "ready", message: "ready" },
+  managedEnvironment: {
+    id: "swarm-core-env",
+    consumer: "swarmflow",
+    state: "ready",
+    desiredFingerprint: "b".repeat(64),
+    activeFingerprint: "b".repeat(64),
+    pythonVersion: "3.11.9",
+    uvVersion: "0.9.0",
+    autoReconcile: "before-runtime-invocation",
+    diagnostic: { code: "ready", message: "verified" },
+  },
 };
 
 function response(body: unknown, status = 200) {

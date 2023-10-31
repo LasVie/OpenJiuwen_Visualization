@@ -16,6 +16,7 @@ import type {
   SubagentExecutionController,
   SubagentExecutionPhase,
 } from "./use-subagent-execution";
+import { RuntimeEnvironmentIdentity } from "../runtime-environment";
 
 interface SubagentRuntimeLauncherProps {
   controller: SubagentExecutionController;
@@ -165,7 +166,7 @@ export function SubagentRuntimeLauncher({
                 <div>
                   <strong>Subagent 运行环境尚未就绪</strong>
                   <p>{controller.runtime?.diagnostic.message ?? "无法读取运行时诊断。"}</p>
-                  <p>Python 可由 <code>OPENJIUWEN_SUBAGENT_PYTHON</code> 指定；源码位置和 OpenRouter key 只存在于本地服务。</p>
+                  <p>请在“连接”中绑定 Agent Core 仓库并创建 <code>core-env</code>；Subagent 与独立 Agent 共用同一份已验证环境。</p>
                 </div>
                 <button type="button" onClick={() => void controller.refresh()}>
                   <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />重新探测
@@ -177,6 +178,7 @@ export function SubagentRuntimeLauncher({
                   <ShieldCheck size={17} strokeWidth={2} aria-hidden="true" />
                   <p><strong>这会运行真实的父子 DeepAgent 链路。</strong>父 Agent 通过前台 <code>task_tool</code> 创建一个独立 child session；这不是 Agent Team，也不是 SwarmFlow。</p>
                 </div>
+                <RuntimeEnvironmentIdentity environment={controller.runtime!.managedEnvironment} />
 
                 <label className="openrouter-form__field">
                   <span>OpenRouter 模型 <small>SERVER ALLOWLIST</small></span>

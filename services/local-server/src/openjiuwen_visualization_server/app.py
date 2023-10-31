@@ -48,6 +48,11 @@ from .managed_environments import (
     ManagedEnvironmentError,
     ManagedEnvironmentRegistry,
 )
+from .runtime_environments import (
+    CONSUMER_ENVIRONMENTS,
+    ManagedRuntimeEnvironmentAuthority,
+    RuntimeEnvironmentBinding,
+)
 from .openrouter_provider import (
     OpenRouterProviderConfig,
     OpenRouterProviderError,
@@ -224,6 +229,7 @@ class LocalRepositoryApi:
         repository_connections: RepositoryConnectionStore | None = None,
         environment_registry: ManagedEnvironmentRegistry | None = None,
         environment_reconciler: ManagedEnvironmentReconciler | None = None,
+        runtime_environment_authority: ManagedRuntimeEnvironmentAuthority | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -373,6 +379,14 @@ class LocalRepositoryApi:
             environment_reconciler
             or ManagedEnvironmentReconciler(self.environment_registry)
         )
+        self.runtime_environment_authority = (
+            runtime_environment_authority
+            or ManagedRuntimeEnvironmentAuthority(
+                self.environment_registry,
+                self.environment_reconciler,
+            )
+        )
+        self._apply_active_runtime_environments()
 
     def dispatch(
         self,
@@ -501,32 +515,40 @@ class LocalRepositoryApi:
             refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
             return ApiResponse(
                 HTTPStatus.OK,
-                self._runtime_descriptor(
-                    self.agent_core_adapter.descriptor(refresh=refresh)
+                self._runtime_status_descriptor(
+                    self.agent_core_adapter,
+                    "agent-core",
+                    refresh=refresh,
                 ),
             )
         if method == "GET" and route == "/api/v1/jiuwenswarm":
             refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
             return ApiResponse(
                 HTTPStatus.OK,
-                self._runtime_descriptor(
-                    self.jiuwenswarm_adapter.descriptor(refresh=refresh)
+                self._runtime_status_descriptor(
+                    self.jiuwenswarm_adapter,
+                    "jiuwenswarm",
+                    refresh=refresh,
                 ),
             )
         if method == "GET" and route == "/api/v1/subagents":
             refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
             return ApiResponse(
                 HTTPStatus.OK,
-                self._runtime_descriptor(
-                    self.subagent_adapter.descriptor(refresh=refresh)
+                self._runtime_status_descriptor(
+                    self.subagent_adapter,
+                    "subagent",
+                    refresh=refresh,
                 ),
             )
         if method == "GET" and route == "/api/v1/swarmflows":
             refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
             return ApiResponse(
                 HTTPStatus.OK,
-                self._runtime_descriptor(
-                    self.swarmflow_adapter.descriptor(refresh=refresh)
+                self._runtime_status_descriptor(
+                    self.swarmflow_adapter,
+                    "swarmflow",
+                    refresh=refresh,
                 ),
             )
         if method == "GET" and route == "/api/v1/repositories":
@@ -603,6 +625,7 @@ class LocalRepositoryApi:
                 )
             inspection = self.repository_connections.inspect_swarm_core_dependency()
             self._refresh_environment_specs()
+            self._apply_active_runtime_environments()
             return ApiResponse(
                 HTTPStatus.OK,
                 {
@@ -618,10 +641,9 @@ class LocalRepositoryApi:
                     "Environment spec refresh does not accept request fields.",
                 )
             try:
-                return ApiResponse(
-                    HTTPStatus.OK,
-                    self.environment_registry.refresh(),
-                )
+                snapshot = self.environment_registry.refresh()
+                self._apply_active_runtime_environments()
+                return ApiResponse(HTTPStatus.OK, snapshot)
             except ManagedEnvironmentError as exc:
                 return _error(exc.status, exc.code, str(exc))
         environment_reconcile_match = MANAGED_ENVIRONMENT_RECONCILE_ROUTE.fullmatch(
@@ -642,11 +664,20 @@ class LocalRepositoryApi:
                         "Stop active model and Agent runs before reconciling environments.",
                     )
                 try:
+                    environment_id = environment_reconcile_match.group(1)
                     result = self.environment_reconciler.reconcile(
-                        environment_reconcile_match.group(1)
+                        environment_id
                     )
+                    self._apply_environment_bindings(environment_id)
                 except ManagedEnvironmentError as exc:
                     return _error(exc.status, exc.code, str(exc))
+                except RuntimeError:
+                    LOGGER.exception("Managed runtime environment binding failed")
+                    return _error(
+                        HTTPStatus.CONFLICT,
+                        "managed_environment_bind_failed",
+                        "The verified environment could not be bound to its runtime consumers.",
+                    )
                 return ApiResponse(
                     HTTPStatus.OK,
                     {
@@ -818,10 +849,28 @@ class LocalRepositoryApi:
                 provider["configured"] = False
         return descriptor
 
-    def _runtime_descriptor(self, descriptor: dict[str, object]) -> dict[str, object]:
+    def _runtime_descriptor(
+        self,
+        descriptor: dict[str, object],
+        consumer: str,
+        environment: dict[str, object],
+    ) -> dict[str, object]:
         runtime = descriptor.get("runtime")
         authorization = self._host_authorization(OPENROUTER_HOST_PLUGIN_ID)
         if isinstance(runtime, dict):
+            runtime["managedEnvironment"] = environment
+            if environment.get("state") != "ready":
+                diagnostic = environment.get("diagnostic")
+                runtime["status"] = "unavailable"
+                runtime["configured"] = False
+                runtime["diagnostic"] = (
+                    diagnostic
+                    if isinstance(diagnostic, dict)
+                    else {
+                        "code": "managed_environment_not_ready",
+                        "message": "Build and verify the managed runtime environment.",
+                    }
+                )
             runtime["host"] = {
                 "pluginId": OPENROUTER_HOST_PLUGIN_ID,
                 "status": authorization.plugin_status,
@@ -834,6 +883,47 @@ class LocalRepositoryApi:
                     "message": authorization.message,
                 }
         return descriptor
+
+    def _runtime_environment_descriptor(
+        self,
+        consumer: str,
+        *,
+        refresh: bool = False,
+    ) -> dict[str, object]:
+        try:
+            return self.runtime_environment_authority.descriptor(
+                consumer,
+                refresh=refresh,
+            )
+        except ManagedEnvironmentError as exc:
+            return {
+                "id": CONSUMER_ENVIRONMENTS[consumer],
+                "consumer": consumer,
+                "state": "unavailable",
+                "desiredFingerprint": None,
+                "activeFingerprint": None,
+                "pythonVersion": None,
+                "uvVersion": None,
+                "autoReconcile": "before-runtime-invocation",
+                "diagnostic": {"code": exc.code, "message": str(exc)},
+            }
+
+    def _runtime_status_descriptor(
+        self,
+        adapter: Any,
+        consumer: str,
+        *,
+        refresh: bool,
+    ) -> dict[str, object]:
+        environment = self._runtime_environment_descriptor(
+            consumer,
+            refresh=refresh,
+        )
+        descriptor = adapter.descriptor(
+            refresh=refresh,
+            probe_runtime=environment.get("state") == "ready",
+        )
+        return self._runtime_descriptor(descriptor, consumer, environment)
 
     def _plugin_host_audit(self, query: str) -> ApiResponse:
         if self.plugin_host is None:
@@ -935,6 +1025,62 @@ class LocalRepositoryApi:
             )
         )
 
+    def _environment_active_invocations(self, environment_id: str) -> int:
+        adapters = (
+            (self.agent_core_adapter, self.subagent_adapter)
+            if environment_id == "core-env"
+            else (self.jiuwenswarm_adapter, self.swarmflow_adapter)
+        )
+        return sum(int(getattr(adapter, "active_invocations", 0)) for adapter in adapters)
+
+    def _bind_runtime_environment(
+        self,
+        binding: RuntimeEnvironmentBinding,
+    ) -> None:
+        adapters = {
+            "agent-core": self.agent_core_adapter,
+            "subagent": self.subagent_adapter,
+            "jiuwenswarm": self.jiuwenswarm_adapter,
+            "swarmflow": self.swarmflow_adapter,
+        }
+        adapters[binding.consumer].rebind_managed_environment(binding)
+
+    def _apply_environment_bindings(self, environment_id: str) -> None:
+        self.runtime_environment_authority.invalidate_status_cache()
+        refresh = True
+        for consumer, owned_environment in CONSUMER_ENVIRONMENTS.items():
+            if owned_environment != environment_id:
+                continue
+            binding = self.runtime_environment_authority.current_binding(
+                consumer,
+                refresh=refresh,
+            )
+            self._bind_runtime_environment(binding)
+            refresh = False
+
+    def _apply_active_runtime_environments(self) -> None:
+        self.runtime_environment_authority.invalidate_status_cache()
+        refresh = True
+        for consumer in CONSUMER_ENVIRONMENTS:
+            try:
+                binding = self.runtime_environment_authority.current_binding(
+                    consumer,
+                    refresh=refresh,
+                )
+                self._bind_runtime_environment(binding)
+            except ManagedEnvironmentError:
+                pass
+            finally:
+                refresh = False
+
+    def _prepare_runtime_environment(self, consumer: str) -> None:
+        environment_id = CONSUMER_ENVIRONMENTS[consumer]
+        binding = self.runtime_environment_authority.prepare(
+            consumer,
+            reconcile=self._environment_active_invocations(environment_id) == 0,
+        )
+        self._bind_runtime_environment(binding)
+
     def _apply_repository_connections(self) -> None:
         agent_core_root = self.repository_connections.effective_path("agent-core")
         jiuwenswarm_root = self.repository_connections.effective_path("jiuwenswarm")
@@ -1006,6 +1152,7 @@ class LocalRepositoryApi:
                 )
                 self._apply_repository_connections()
                 self._refresh_environment_specs()
+                self._apply_active_runtime_environments()
             except RepositoryConnectionError as exc:
                 return _error(exc.status, exc.code, str(exc))
             return self._repository_connection_response(connection)
@@ -1022,6 +1169,7 @@ class LocalRepositoryApi:
                 connection = self.repository_connections.sync(slot)
                 self._apply_repository_connections()
                 self._refresh_environment_specs()
+                self._apply_active_runtime_environments()
             except RepositoryConnectionError as exc:
                 return _error(exc.status, exc.code, str(exc))
             return self._repository_connection_response(connection)
@@ -1038,6 +1186,7 @@ class LocalRepositoryApi:
                 connection = self.repository_connections.reset(slot)
                 self._apply_repository_connections()
                 self._refresh_environment_specs()
+                self._apply_active_runtime_environments()
             except RepositoryConnectionError as exc:
                 return _error(exc.status, exc.code, str(exc))
             return self._repository_connection_response(connection)
@@ -1153,7 +1302,16 @@ class LocalRepositoryApi:
             if denied is not None:
                 return denied
             try:
+                self._prepare_runtime_environment("agent-core")
                 result = self.agent_core_adapter.start(body, trace_token)
+            except ManagedEnvironmentError as exc:
+                return _error(exc.status, exc.code, str(exc))
+            except RuntimeError:
+                return _error(
+                    HTTPStatus.CONFLICT,
+                    "managed_environment_busy",
+                    "The Agent Core environment cannot change during an active run.",
+                )
             except AgentCoreRuntimeError as exc:
                 return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
@@ -1179,7 +1337,16 @@ class LocalRepositoryApi:
             if denied is not None:
                 return denied
             try:
+                self._prepare_runtime_environment("jiuwenswarm")
                 result = self.jiuwenswarm_adapter.start(body, trace_token)
+            except ManagedEnvironmentError as exc:
+                return _error(exc.status, exc.code, str(exc))
+            except RuntimeError:
+                return _error(
+                    HTTPStatus.CONFLICT,
+                    "managed_environment_busy",
+                    "The JiuwenSwarm environment cannot change during an active run.",
+                )
             except JiuwenSwarmRuntimeError as exc:
                 return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
@@ -1205,7 +1372,16 @@ class LocalRepositoryApi:
             if denied is not None:
                 return denied
             try:
+                self._prepare_runtime_environment("subagent")
                 result = self.subagent_adapter.start(body, trace_token)
+            except ManagedEnvironmentError as exc:
+                return _error(exc.status, exc.code, str(exc))
+            except RuntimeError:
+                return _error(
+                    HTTPStatus.CONFLICT,
+                    "managed_environment_busy",
+                    "The Subagent environment cannot change during an active run.",
+                )
             except SubagentRuntimeError as exc:
                 return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
@@ -1231,7 +1407,16 @@ class LocalRepositoryApi:
             if denied is not None:
                 return denied
             try:
+                self._prepare_runtime_environment("swarmflow")
                 result = self.swarmflow_adapter.start(body, trace_token)
+            except ManagedEnvironmentError as exc:
+                return _error(exc.status, exc.code, str(exc))
+            except RuntimeError:
+                return _error(
+                    HTTPStatus.CONFLICT,
+                    "managed_environment_busy",
+                    "The SwarmFlow environment cannot change during an active run.",
+                )
             except SwarmFlowRuntimeError as exc:
                 return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)

@@ -16,6 +16,7 @@ import type {
   JiuwenSwarmExecutionController,
   JiuwenSwarmExecutionPhase,
 } from "./use-jiuwenswarm-execution";
+import { RuntimeEnvironmentIdentity } from "../runtime-environment";
 
 interface JiuwenSwarmRuntimeLauncherProps {
   controller: JiuwenSwarmExecutionController;
@@ -165,7 +166,7 @@ export function JiuwenSwarmRuntimeLauncher({
                 <div>
                   <strong>JiuwenSwarm 运行环境尚未就绪</strong>
                   <p>{controller.runtime?.diagnostic.message ?? "无法读取运行时诊断。"}</p>
-                  <p>Python 入口由 <code>OPENJIUWEN_JIUWENSWARM_PYTHON</code> 指定；JiuwenSwarm 与 Agent Core 源码位置只在本地服务中配置。OpenRouter key 不会进入浏览器。</p>
+                  <p>请在“连接”中绑定 JiuwenSwarm 仓库、检查其 Core 依赖并创建 <code>swarm-core-env</code>；无需从 Terminal 指定 Python 或源码路径。</p>
                 </div>
                 <button type="button" onClick={() => void controller.refresh()}>
                   <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />重新探测
@@ -177,6 +178,7 @@ export function JiuwenSwarmRuntimeLauncher({
                   <ShieldCheck size={17} strokeWidth={2} aria-hidden="true" />
                   <p><strong>这会运行真实的两成员 Agent Team。</strong>Team Leader 与 Analysis Member 使用独立 Context，通过受控团队消息和任务协作；当前 profile 明确不是 SwarmFlow。</p>
                 </div>
+                <RuntimeEnvironmentIdentity environment={controller.runtime!.managedEnvironment} />
 
                 <label className="openrouter-form__field">
                   <span>OpenRouter 模型 <small>SERVER ALLOWLIST</small></span>

@@ -225,6 +225,14 @@ identity 绑定 repository、revision、path、symbol 和 runtime name。运行�
 
 `openjiuwen.tool-catalog` 依赖 `openjiuwen.local-repository`，贡献只读、`python-ast`、不导入目标代码的 source contract。Definition 顶层编排只负责在代码定义与 Tool 注册表之间切换，Tool 搜索、过滤、画布和 inspector 均封装在 feature 内。完整合同见 [`tool-catalog-v1.md`](tool-catalog-v1.md)。
 
+## Managed Runtime Environments V1
+
+`services/local-server` 通过 `ManagedEnvironmentRegistry → ManagedEnvironmentReconciler → ManagedRuntimeEnvironmentAuthority` 把网页仓库连接收敛为两个执行身份。`core-env` 只跟随 Agent Core slot并服务 Agent Core/Subagent；`swarm-core-env` 跟随 JiuwenSwarm slot及其锁定的 Core 依赖并服务 Agent Team/SwarmFlow。两者不共享 fingerprint、active manifest 或 Python authority。
+
+首次调用前对账 desired/active；验证通过后 adapter 只接收内部 `RuntimeEnvironmentBinding`，浏览器不能提交 Python、source root、Core dependency 或命令。运行中允许同环境消费者复用完全相同的 binding，但禁止切换 generation。Managed 子进程丢弃服务继承的 `PYTHONPATH`；Swarm Git/registry Core 由 lock 安装结果提供，本地 path Core 才加入精确 source root。
+
+Runtime descriptor 暴露无路径的状态证据；Trace 首事件记录 env id/consumer/fingerprint、Python/uv、project revision/dirty 和 Swarm Core lock identity。该证据由服务端生成并经过 Runtime Trace V1 的严格 owner/slot/dependency 校验，进入本机 Archive 的默认结构化预览。完整构建、激活和并发边界见 [`managed-environments-v1.md`](managed-environments-v1.md)。
+
 ## Core Runtime V1
 
 Core Runtime 使用 `traceId + sequence` 作为运行时顺序权威，并用 `spanId / parentSpanId` 保留后续调用树扩展能力。事件种类覆盖 Agent invoke、用户消息、task/ReAct iteration、model/tool call、Rail callback、Context snapshot/delta、Ability 注册和 Trace 状态。

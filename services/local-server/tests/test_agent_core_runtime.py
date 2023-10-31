@@ -1,22 +1,29 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import unittest
 from io import StringIO
 from pathlib import Path
 from typing import Any, Iterator
+from unittest.mock import patch
 
 from openjiuwen_visualization_server.agent_core_runtime import (
     BRIDGE_RECORD_PREFIX,
     AgentCoreBridgeProbe,
     AgentCoreRuntimeAdapter,
     AgentCoreRuntimeConfig,
+    SubprocessAgentCoreBridgeLauncher,
 )
 from openjiuwen_visualization_server.app import LocalRepositoryApi
 from openjiuwen_visualization_server.config import LocalServiceConfig
 from openjiuwen_visualization_server.openrouter_provider import OpenRouterProviderConfig
 from openjiuwen_visualization_server.trace_store import RuntimeTraceStore
+from runtime_environment_support import (
+    PlannedRuntimeEnvironmentAuthority,
+    ReadyRuntimeEnvironmentAuthority,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -185,6 +192,55 @@ class AgentCoreRuntimeTests(unittest.TestCase):
         cached_adapter.descriptor(refresh=True)
         self.assertEqual(ready_launcher.probe_calls, 4)
 
+    def test_managed_launcher_does_not_inherit_service_pythonpath(self) -> None:
+        adapter = AgentCoreRuntimeAdapter(
+            self.config(),
+            self.store,
+            launcher=FakeLauncher(AgentCoreBridgeProbe(True, "ready", "ok")),
+        )
+        adapter.rebind_managed_environment(
+            ReadyRuntimeEnvironmentAuthority(REPOSITORY_ROOT).binding("agent-core")
+        )
+
+        with patch.dict(os.environ, {"PYTHONPATH": "untrusted-service-path"}):
+            environment = SubprocessAgentCoreBridgeLauncher._environment(adapter.config)
+
+        self.assertEqual(
+            environment["PYTHONPATH"].split(os.pathsep),
+            [str(REPOSITORY_ROOT.resolve(strict=True))],
+        )
+
+    def test_unready_environment_blocks_status_before_legacy_bridge_probe(self) -> None:
+        launcher = FakeLauncher(AgentCoreBridgeProbe(True, "ready", "legacy"))
+        adapter = AgentCoreRuntimeAdapter(
+            self.config(),
+            self.store,
+            launcher=launcher,
+        )
+        api = LocalRepositoryApi(
+            LocalServiceConfig.create(
+                allowed_roots=[REPOSITORY_ROOT],
+                allowed_origins=[ALLOWED_ORIGIN],
+            ),
+            trace_store=self.store,
+            agent_core_adapter=adapter,
+            archive_enabled=False,
+            runtime_environment_authority=PlannedRuntimeEnvironmentAuthority(),
+        )
+
+        status = api.dispatch(
+            "GET",
+            "/api/v1/agent-core?refresh=1",
+            origin=ALLOWED_ORIGIN,
+        )
+
+        self.assertEqual(status.body["runtime"]["status"], "unavailable")
+        self.assertEqual(
+            status.body["runtime"]["diagnostic"]["code"],
+            "managed_environment_not_ready",
+        )
+        self.assertEqual(launcher.probe_calls, 0)
+
     def test_real_bridge_events_are_ingested_without_rewriting_evidence(self) -> None:
         lines = [
             bridge_line(event(
@@ -327,6 +383,7 @@ class AgentCoreRuntimeTests(unittest.TestCase):
             launcher=launcher,
             id_factory=lambda: "ac_api",
         )
+        authority = ReadyRuntimeEnvironmentAuthority(REPOSITORY_ROOT)
         api = LocalRepositoryApi(
             LocalServiceConfig.create(
                 allowed_roots=[REPOSITORY_ROOT],
@@ -335,6 +392,7 @@ class AgentCoreRuntimeTests(unittest.TestCase):
             trace_store=self.store,
             agent_core_adapter=adapter,
             archive_enabled=False,
+            runtime_environment_authority=authority,
         )
 
         status = api.dispatch("GET", "/api/v1/agent-core", origin=ALLOWED_ORIGIN)
@@ -361,9 +419,16 @@ class AgentCoreRuntimeTests(unittest.TestCase):
 
         self.assertEqual(status.status, 200)
         self.assertTrue(status.body["runtime"]["configured"])
+        self.assertEqual(
+            status.body["runtime"]["managedEnvironment"]["id"],
+            "core-env",
+        )
         self.assertEqual(started.status, 202)
+        self.assertEqual(authority.prepare_calls, [("agent-core", True)])
         self.assertEqual(cancelled.status, 202)
         self.assertTrue(adapter.wait_for_terminal("ac_api"))
+        _metadata, events = self.store.snapshot(self.trace["id"])
+        self.assertEqual(events[0]["environment"]["consumer"], "agent-core")
 
 
 if __name__ == "__main__":

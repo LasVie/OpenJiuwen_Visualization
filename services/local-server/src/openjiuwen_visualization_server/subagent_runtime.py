@@ -29,6 +29,10 @@ from .openrouter_provider import (
 )
 from .trace_store import RuntimeTraceStore, TraceStoreError
 from .runtime_source_identity import runtime_source_revisions
+from .runtime_environments import (
+    RuntimeEnvironmentBinding,
+    runtime_environment_event,
+)
 
 
 SUBAGENT_RUNTIME_API_VERSION = "1.0.0"
@@ -70,6 +74,7 @@ class SubagentRuntimeConfig:
     workspace: Path
     provider: OpenRouterProviderConfig
     max_iterations: int = DEFAULT_MAX_ITERATIONS
+    managed_environment: RuntimeEnvironmentBinding | None = None
 
     @classmethod
     def from_environment(
@@ -165,7 +170,11 @@ class SubprocessSubagentBridgeLauncher:
     @staticmethod
     def _environment(config: SubagentRuntimeConfig) -> dict[str, str]:
         environment = dict(os.environ)
-        previous_python_path = environment.get("PYTHONPATH", "")
+        previous_python_path = (
+            environment.get("PYTHONPATH", "")
+            if config.managed_environment is None
+            else ""
+        )
         environment["PYTHONPATH"] = os.pathsep.join(
             value for value in (str(config.agent_core_root), previous_python_path) if value
         )
@@ -374,6 +383,29 @@ class SubagentRuntimeAdapter:
             self.config = replace(
                 self.config,
                 agent_core_root=Path(agent_core_root).resolve(strict=False),
+                managed_environment=None,
+            )
+            self._probe_value = None
+            self._probe_time = 0.0
+
+    def rebind_managed_environment(
+        self,
+        binding: RuntimeEnvironmentBinding,
+    ) -> None:
+        if binding.consumer != "subagent" or binding.environment_id != "core-env":
+            raise RuntimeError("Subagent requires the core-env runtime binding.")
+        with self._lock:
+            if self.active_invocations:
+                if self.config.managed_environment == binding:
+                    return
+                raise RuntimeError(
+                    "Subagent environment cannot change during an active invocation."
+                )
+            self.config = replace(
+                self.config,
+                agent_core_root=binding.project_root,
+                python_executable=binding.python_executable,
+                managed_environment=binding,
             )
             self._probe_value = None
             self._probe_time = 0.0
@@ -393,8 +425,21 @@ class SubagentRuntimeAdapter:
             self._probe_time = self._clock()
         return value
 
-    def descriptor(self, *, refresh: bool = False) -> dict[str, object]:
-        probe = self._probe(force=refresh)
+    def descriptor(
+        self,
+        *,
+        refresh: bool = False,
+        probe_runtime: bool = True,
+    ) -> dict[str, object]:
+        probe = (
+            self._probe(force=refresh)
+            if probe_runtime
+            else SubagentBridgeProbe(
+                False,
+                "managed_environment_not_ready",
+                "The managed Subagent environment is not ready.",
+            )
+        )
         configured = probe.ready and self.config.provider.configured
         if configured:
             status = "ready"
@@ -452,6 +497,11 @@ class SubagentRuntimeAdapter:
                     "maxActiveInvocations": MAX_ACTIVE_INVOCATIONS,
                 },
                 "diagnostic": diagnostic,
+                "managedEnvironment": (
+                    self.config.managed_environment.evidence()
+                    if self.config.managed_environment is not None
+                    else None
+                ),
                 **({"frameworkVersion": probe.framework_version} if probe.framework_version else {}),
             },
         }
@@ -539,6 +589,29 @@ class SubagentRuntimeAdapter:
             )
             self._jobs[invocation_id] = job
 
+        if self.config.managed_environment is not None:
+            try:
+                self._trace_store.append(
+                    trace_id,
+                    trace_token,
+                    [
+                        runtime_environment_event(
+                            self.config.managed_environment,
+                            invocation_id,
+                            timestamp_ms=(self._clock() - job.started_at) * 1_000,
+                        )
+                    ],
+                )
+            except TraceStoreError as exc:
+                with self._lock:
+                    self._jobs.pop(invocation_id, None)
+                raise SubagentRuntimeError(exc.code, str(exc), status=exc.status) from exc
+
+        source_revisions = runtime_source_revisions(
+            (("agent-core", self.config.agent_core_root),)
+        )
+        if self.config.managed_environment is not None:
+            source_revisions.update(self.config.managed_environment.source_revisions())
         request = {
             "invocationId": invocation_id,
             "childInvocationId": job.child_invocation_id,
@@ -555,9 +628,7 @@ class SubagentRuntimeAdapter:
             "maxIterations": self.config.max_iterations,
             "traceMaxTokens": int(trace["maxTokens"]),
             "workspace": str(self.config.workspace / segment),
-            "sourceRevisions": runtime_source_revisions(
-                (("agent-core", self.config.agent_core_root),)
-            ),
+            "sourceRevisions": source_revisions,
         }
         threading.Thread(
             target=self._run_job,

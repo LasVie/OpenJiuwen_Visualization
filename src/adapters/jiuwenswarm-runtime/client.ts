@@ -1,4 +1,8 @@
 import { loopbackHttpOrigin } from "../local-service/base-url";
+import {
+  runtimeManagedEnvironmentStatus,
+  type RuntimeManagedEnvironmentStatus,
+} from "../local-environments";
 
 export const JIUWENSWARM_RUNTIME_API_VERSION = "1.0.0" as const;
 export const DEFAULT_JIUWENSWARM_RUNTIME_SERVER = "http://127.0.0.1:8765";
@@ -44,6 +48,7 @@ export interface JiuwenSwarmRuntimeStatus {
     maxActiveInvocations: number;
   };
   diagnostic: { code: string; message: string };
+  managedEnvironment: RuntimeManagedEnvironmentStatus;
   frameworkVersion?: string;
 }
 
@@ -139,6 +144,7 @@ function runtimeStatus(value: unknown): JiuwenSwarmRuntimeStatus {
     !isRecord(diagnostic) ||
     typeof diagnostic.code !== "string" ||
     typeof diagnostic.message !== "string" ||
+    !runtimeManagedEnvironmentStatus(runtime.managedEnvironment, "jiuwenswarm") ||
     (runtime.frameworkVersion !== undefined && typeof runtime.frameworkVersion !== "string")
   ) {
     throw new TypeError("JiuwenSwarm runtime registry has an invalid shape.");

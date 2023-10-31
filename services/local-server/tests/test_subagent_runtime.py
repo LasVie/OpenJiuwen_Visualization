@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import unittest
 from io import StringIO
 from pathlib import Path
 from typing import Any, Iterator
+from unittest.mock import patch
 
 from openjiuwen_visualization_server.app import LocalRepositoryApi
 from openjiuwen_visualization_server.config import LocalServiceConfig
@@ -16,8 +18,10 @@ from openjiuwen_visualization_server.subagent_runtime import (
     SubagentRuntimeAdapter,
     SubagentRuntimeConfig,
     SubagentRuntimeError,
+    SubprocessSubagentBridgeLauncher,
 )
 from openjiuwen_visualization_server.trace_store import RuntimeTraceStore
+from runtime_environment_support import ReadyRuntimeEnvironmentAuthority
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -205,6 +209,24 @@ class SubagentRuntimeTests(unittest.TestCase):
         self.assertNotIn("server-secret", json.dumps(descriptor))
         self.assertEqual(launcher.probe_calls, 3)
 
+    def test_managed_launcher_does_not_inherit_service_pythonpath(self) -> None:
+        adapter = SubagentRuntimeAdapter(
+            self.config(),
+            self.store,
+            launcher=FakeLauncher(SubagentBridgeProbe(True, "ready", "ok")),
+        )
+        adapter.rebind_managed_environment(
+            ReadyRuntimeEnvironmentAuthority(REPOSITORY_ROOT).binding("subagent")
+        )
+
+        with patch.dict(os.environ, {"PYTHONPATH": "untrusted-service-path"}):
+            environment = SubprocessSubagentBridgeLauncher._environment(adapter.config)
+
+        self.assertEqual(
+            environment["PYTHONPATH"].split(os.pathsep),
+            [str(REPOSITORY_ROOT.resolve(strict=True))],
+        )
+
     def test_bridge_events_preserve_child_identity_and_separate_context(self) -> None:
         lines = [
             bridge_line(event(
@@ -320,6 +342,7 @@ class SubagentRuntimeTests(unittest.TestCase):
             launcher=launcher,
             id_factory=lambda: "sub_api",
         )
+        authority = ReadyRuntimeEnvironmentAuthority(REPOSITORY_ROOT)
         api = LocalRepositoryApi(
             LocalServiceConfig.create(
                 allowed_roots=[REPOSITORY_ROOT],
@@ -328,6 +351,7 @@ class SubagentRuntimeTests(unittest.TestCase):
             trace_store=self.store,
             subagent_adapter=adapter,
             archive_enabled=False,
+            runtime_environment_authority=authority,
         )
 
         status = api.dispatch("GET", "/api/v1/subagents", origin=ALLOWED_ORIGIN)
@@ -354,9 +378,16 @@ class SubagentRuntimeTests(unittest.TestCase):
 
         self.assertEqual(status.status, 200)
         self.assertTrue(status.body["runtime"]["configured"])
+        self.assertEqual(
+            status.body["runtime"]["managedEnvironment"]["id"],
+            "core-env",
+        )
         self.assertEqual(started.status, 202)
+        self.assertEqual(authority.prepare_calls, [("subagent", True)])
         self.assertEqual(cancelled.status, 202)
         self.assertTrue(adapter.wait_for_terminal("sub_api"))
+        _metadata, events = self.store.snapshot(self.trace["id"])
+        self.assertEqual(events[0]["environment"]["consumer"], "subagent")
 
 
 if __name__ == "__main__":

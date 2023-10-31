@@ -43,6 +43,8 @@ GitHub V1 不支持私有仓库，不接受嵌入凭据、query token、任意 G
 - 页面显示 desired/active 指纹、Python/uv 版本、consumer 和 drift 状态，并提供逐环境“检查并修复”。
 - Companion 只写 `.openjiuwen-visualization/environments`，使用 uv-managed CPython 3.11、frozen lock、依赖检查、固定 bridge probe 和原子 generation 切换；源码 checkout 始终只读。
 - 失败或取消的 staging 不会替换旧 active；每个环境只保留 active 与一个上一代。Python/依赖下载必须通过正常 TLS 校验，不提供不安全下载开关。
+- 四个 Executor 的调用前置检查只接受 fingerprint 匹配且验证通过的 active manifest；环境正在运行时不切换 generation。
+- Runtime 面板显示当前 fingerprint/Python/uv，每条真实执行 Trace 先写入不含本机路径与凭据的环境身份事件。
 
 详细合同见 [`managed-environments-v1.md`](managed-environments-v1.md)。
 

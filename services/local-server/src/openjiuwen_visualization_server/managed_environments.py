@@ -477,14 +477,7 @@ class ManagedEnvironmentRegistry:
     def refresh(self) -> dict[str, object]:
         with self._lock:
             desired = self._desired_specs()
-            specs_root = self._ensure_specs_root()
-            for environment_id in MANAGED_ENVIRONMENT_IDS:
-                spec = desired[environment_id]
-                path = specs_root / f"{environment_id}.json"
-                existing = self._read_spec(path)
-                if existing is not None and existing.get("fingerprint") == spec["fingerprint"]:
-                    continue
-                self._atomic_write(path, spec)
+            self._persist_desired_specs(desired)
             return self._descriptor(desired)
 
     def descriptor(self) -> dict[str, object]:
@@ -494,8 +487,9 @@ class ManagedEnvironmentRegistry:
     def desired_spec(self, environment_id: str) -> dict[str, object]:
         checked = self._validate_environment_id(environment_id)
         with self._lock:
-            self.refresh()
-            return self._desired_specs()[checked]
+            desired = self._desired_specs()
+            self._persist_desired_specs(desired)
+            return desired[checked]
 
     def active_manifest(self, environment_id: str) -> dict[str, Any] | None:
         checked = self._validate_environment_id(environment_id)
@@ -719,6 +713,19 @@ class ManagedEnvironmentRegistry:
 
     def _desired_specs(self) -> dict[str, dict[str, object]]:
         return self._builder.build_all(self._connections.descriptor())
+
+    def _persist_desired_specs(
+        self,
+        desired: dict[str, dict[str, object]],
+    ) -> None:
+        specs_root = self._ensure_specs_root()
+        for environment_id in MANAGED_ENVIRONMENT_IDS:
+            spec = desired[environment_id]
+            path = specs_root / f"{environment_id}.json"
+            existing = self._read_spec(path)
+            if existing is not None and existing.get("fingerprint") == spec["fingerprint"]:
+                continue
+            self._atomic_write(path, spec)
 
     def _descriptor(
         self,

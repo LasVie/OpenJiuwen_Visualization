@@ -196,6 +196,25 @@ export interface RuntimeSubagentObservation {
   error?: string;
 }
 
+export interface RuntimeEnvironmentEvidence {
+  id: "core-env" | "swarm-core-env";
+  consumer: "agent-core" | "subagent" | "jiuwenswarm" | "swarmflow";
+  fingerprint: string;
+  pythonVersion: string;
+  uvVersion: string;
+  activatedAt: string;
+  project: {
+    slot: "agent-core" | "jiuwenswarm";
+    revision: string | null;
+    dirty: boolean | null;
+  };
+  coreDependency: {
+    kind: "git" | "path" | "registry";
+    revision: string | null;
+  } | null;
+  validation: "passed";
+}
+
 export interface RuntimeTraceEventInput<
   Kind extends RuntimeTraceEventKind = RuntimeTraceEventKind,
 > {
@@ -219,6 +238,7 @@ export interface RuntimeTraceEventInput<
   subagent?: RuntimeSubagentObservation;
   subject?: RuntimeSubjectReference;
   definition?: GraphSourceReference;
+  environment?: RuntimeEnvironmentEvidence;
   payload?: Readonly<Record<string, JsonValue>>;
 }
 

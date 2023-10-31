@@ -119,6 +119,12 @@ X-Trace-Token: {writeToken}
 
 `mutationDiff` 和 `controlSignal` 必须来自探针实际观测，不能由页面推断。敏感载荷应放在 Context message 的 `raw` 中，避免复制到摘要、日志或事件标题。
 
+### 受管环境证据
+
+四个内置 Executor 会在 bridge 输出任何事件前写入一条服务端拥有的 `trace.status/instant`。其 `environment` 对象包含固定的 env/consumer 映射、完整 fingerprint、Python/uv、项目 revision/dirty、Swarm Core dependency identity 和 `validation=passed`。Core/Subagent 必须对应 `core-env + agent-core` project slot且不得声明独立 Core dependency；JiuwenSwarm/SwarmFlow 必须对应 `swarm-core-env + jiuwenswarm` slot并声明已解析的 Core dependency。
+
+该字段不接受路径、命令、环境变量或安装输出。外部 producer 可以按同一协议提交结构化环境证据，但服务会执行相同的封闭字段和 ownership 校验；只有内置 Executor 的事件能证明本次运行确实使用 Companion active manifest。完整执行绑定规则见 [`managed-environments-v1.md`](managed-environments-v1.md)。
+
 ## API
 
 | Method | Path | Purpose |

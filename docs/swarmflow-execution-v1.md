@@ -139,23 +139,17 @@ X-Trace-Token: <write token>
 
 取消终止整个 bridge process，保留已收到的 Workflow/Phase/Worker/Rail/Model/Context 证据，再追加 workflow、runtime container 与 Trace 的取消事件。调用完成后不能再次取消。
 
-## 服务端配置
+## 受管环境配置
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `OPENJIUWEN_SWARMFLOW_PYTHON` | JiuwenSwarm Python → Agent Core Python → 服务 Python | 能导入两个源码仓及完整依赖的解释器 |
-| `OPENJIUWEN_AGENT_CORE_ROOT` | `../agent-core` | Agent Core source checkout |
-| `OPENJIUWEN_JIUWENSWARM_ROOT` | `../jiuwenswarm` | JiuwenSwarm source checkout |
-| `OPENJIUWEN_SWARMFLOW_WORKSPACE` | `.swarmflow-runtime/` | 每次调用的运行目录根 |
-| `OPENJIUWEN_SWARMFLOW_MAX_ITERATIONS` | `8` | 每个 Worker 的 ReAct 上限，范围 `2..20` |
-| `OPENJIUWEN_OPENROUTER_API_KEY` | 无 | 服务端 OpenRouter key |
-| `OPENJIUWEN_OPENROUTER_MODELS` | `openrouter/free` | 模型 allowlist |
+SwarmFlow 与 JiuwenSwarm Agent Team 共用网页管理的 `swarm-core-env`。用户在“连接”中绑定 JiuwenSwarm 仓、检查其 Core 依赖并创建环境，然后从运行面板启动；无需设置 Python/source 环境变量。
 
-bridge 把 Agent Core 本地状态、journal、Worker workspace 与临时目录都放在本次 invocation workspace 下。源码仓保持只读，浏览器不能覆盖路径。Trace authority 与实时播放状态只在 local service 内存中，完整归一化事件与 Context 同步进入本机运行归档。
+Git/registry Core 由 JiuwenSwarm 的精确 lock 安装结果提供，不会被 standalone Agent Core slot 或 Companion `PYTHONPATH` 覆盖；本地 path Core 只使用依赖检查得到的精确路径。首次调用前自动对账；Agent Team 或另一 SwarmFlow 正在使用环境时只能复用同一 generation。运行面板及 Trace 首事件显示 fingerprint、Python/uv、JiuwenSwarm revision 和 Core lock identity。
+
+bridge 把 Agent Core 本地状态、journal、Worker workspace 与临时目录都放在本次 invocation workspace 下。源码仓保持只读，浏览器不能覆盖路径。Trace authority 与实时播放状态只在 local service 内存中，完整归一化事件与 Context 同步进入本机运行归档。完整环境合同见 [`managed-environments-v1.md`](managed-environments-v1.md)。
 
 ## 无网络真实框架自检
 
-项目的 `.venv-agent-core` 已具备两个框架依赖时，可以运行：
+开发者拥有可导入两个框架的解释器时可以直接运行自检；该命令不是普通用户的配置或启动方式：
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE = "1"
@@ -184,4 +178,4 @@ $env:PYTHONPATH = "C:\path\to\jiuwenswarm;C:\path\to\agent-core"
 - WorkflowProgress 本身仍没有结构化 Tool activity；本 profile 同时禁止全部 Worker Tool，因此不会从日志制造 Tool 节点；
 - OpenRouter 是首个 Provider；输入发送后的数据处理受 OpenRouter 与实际上游模型策略约束；
 - 一次最多一个 SwarmFlow invocation，取消按完整进程树处理；
-- 不持久化 Trace、Context、模型输出或跨运行比较结果。
+- 实时 Trace authority 不跨服务重启恢复；完整事件、Context 与模型输出仍按 Runtime Archive 合同保存在本机，并可做结构化跨运行比较。

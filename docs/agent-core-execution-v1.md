@@ -9,9 +9,10 @@ Agent Core Execution V1 把“接收外部 Trace”扩展为可选的真实独�
 ```mermaid
 flowchart LR
   UI["Agent Core 启动面板"] -->|"创建 Trace + 显式运行"| Service["Loopback local service"]
-  Service -->|"固定 Python + 固定 bridge"| Bridge["Isolated bridge process"]
-  Source["agent-core source checkout"] -->|"import create_deep_agent"| Bridge
-  Env["Server environment"] -->|"OpenRouter key / model allowlist"| Bridge
+  Service -->|"core-env Python + fixed bridge"| Bridge["Isolated bridge process"]
+  Source["Connection · Agent Core"] --> Env["verified core-env active generation"]
+  Env -->|"exact Python / source / revision"| Bridge
+  Credential["Local credential authority"] -->|"OpenRouter key / model allowlist"| Bridge
   Bridge -->|"Agent Core OpenRouter Model Client"| OR["openrouter.ai"]
   Bridge -->|"normalized events"| Trace["Live Runtime Trace + local archive"]
   Trace -->|"SSE + sequence"| UI
@@ -26,51 +27,29 @@ flowchart LR
 
 ## Python 运行环境
 
-本地服务本身继续只依赖 Python 标准库。Agent Core 的第三方依赖放在单独解释器中，不进入 Web 服务进程。
+本地服务本身继续只依赖 Python 标准库。普通使用不创建 venv、不设置 Python/source 环境变量，也不从 Terminal 启动：
 
-从 `visualization-web` 根目录创建环境：
+1. 在网页“连接”中绑定本地或公开 GitHub Agent Core 仓；
+2. 在同一仓库卡片创建并校验 `core-env`；
+3. 在网页录入 OpenRouter key；
+4. 从 Core Trace 的“Agent Core”面板启动。
 
-```powershell
-python -m venv .venv-agent-core
-.\.venv-agent-core\Scripts\python.exe -m pip install -e '..\agent-core[observability]'
-```
+Companion 使用项目精确 `uv.lock`、受管 CPython 3.11、依赖检查和 Agent Core/Subagent 两个 probe 构建 active generation。每次首次调用都会重新对账 desired state；只有 fingerprint、Python 身份和验证结果全部匹配时才绑定 bridge。运行面板显示当前环境 fingerprint、Python 与 uv，Trace 首事件记录相同环境身份和 Agent Core revision。
 
-启动服务前配置：
-
-```powershell
-$env:OPENJIUWEN_AGENT_CORE_ROOT = (Resolve-Path "..\agent-core")
-$env:OPENJIUWEN_AGENT_CORE_PYTHON = (Resolve-Path ".\.venv-agent-core\Scripts\python.exe")
-$env:OPENJIUWEN_OPENROUTER_API_KEY = "<your-key>"
-$env:OPENJIUWEN_OPENROUTER_MODELS = "openrouter/free"
-
-python -B services/local-server/scripts/run_server.py `
-  --allow-root (Resolve-Path "..") `
-  --allow-origin "http://127.0.0.1:5173"
-```
-
-可选变量：
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `OPENJIUWEN_AGENT_CORE_ROOT` | `../agent-core` | Agent Core source checkout |
-| `OPENJIUWEN_AGENT_CORE_PYTHON` | 启动本地服务的 Python | 安装了 Agent Core 完整依赖的解释器 |
-| `OPENJIUWEN_AGENT_CORE_WORKSPACE` | `visualization-web/.agent-core-runtime` | DeepAgent 工作区和运行日志边界 |
-| `OPENJIUWEN_AGENT_CORE_MAX_ITERATIONS` | `6` | ReAct 上限，服务强制限制在 2–20 |
-
-普通状态读取复用 5 分钟的探测结果；`GET /api/v1/agent-core?refresh=1` 会在固定工作区中强制启动一次只导入、不调用模型的探测进程。冷启动最多等待 90 秒。状态明确区分：
+普通状态读取复用 5 分钟的 bridge 探测结果；`GET /api/v1/agent-core?refresh=1` 强制执行一次只导入、不调用模型的探测。状态明确区分：
 
 - `ready`：Agent Core 导入成功且服务端 OpenRouter key 已配置；
 - `unconfigured`：Python runtime 可用，但 OpenRouter key 缺失；
-- `unavailable`：源码、解释器、bridge 或 Python 依赖不可用。
+- `unavailable`：`core-env` 尚未激活/发生 drift，或 bridge/依赖探测失败。
 
-安装后可先运行不访问 OpenRouter 的真实框架自检：
+开发者仍可直接运行不访问 OpenRouter 的 bridge 自检，但它不是正常配置流程：
 
 ```powershell
 $env:PYTHONPATH = (Resolve-Path "..\agent-core")
 .\.venv-agent-core\Scripts\python.exe -B services\local-server\scripts\agent_core_bridge.py --self-test
 ```
 
-自检使用确定性模型替身，但实际创建并运行 `DeepAgent → ReActAgent → inspect_input → Rail → ContextWindow`；成功时最后一条前缀事件是 `trace.status/end`。该入口只用于本地验证，不对浏览器 API 开放。
+自检使用确定性模型替身，但实际创建并运行 `DeepAgent → ReActAgent → inspect_input → Rail → ContextWindow`；成功时最后一条前缀事件是 `trace.status/end`。该入口只用于开发验证，不对浏览器 API 开放。受管环境完整合同见 [`managed-environments-v1.md`](managed-environments-v1.md)。
 
 ## 真实执行边界
 

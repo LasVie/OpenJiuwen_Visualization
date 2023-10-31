@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import unittest
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 from typing import Any, Iterator
+from unittest.mock import patch
 
 from openjiuwen_visualization_server.app import LocalRepositoryApi
 from openjiuwen_visualization_server.config import LocalServiceConfig
@@ -15,9 +18,11 @@ from openjiuwen_visualization_server.jiuwenswarm_runtime import (
     JiuwenSwarmRuntimeAdapter,
     JiuwenSwarmRuntimeConfig,
     JiuwenSwarmRuntimeError,
+    SubprocessJiuwenSwarmBridgeLauncher,
 )
 from openjiuwen_visualization_server.openrouter_provider import OpenRouterProviderConfig
 from openjiuwen_visualization_server.trace_store import RuntimeTraceStore
+from runtime_environment_support import ReadyRuntimeEnvironmentAuthority
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -196,6 +201,28 @@ class JiuwenSwarmRuntimeTests(unittest.TestCase):
         self.assertNotIn("server-secret", json.dumps(ready))
         self.assertEqual(ready_launcher.probe_calls, 3)
 
+    def test_remote_core_dependency_is_loaded_from_lock_without_path_override(self) -> None:
+        adapter = JiuwenSwarmRuntimeAdapter(
+            self.config(),
+            self.store,
+            launcher=FakeLauncher(JiuwenSwarmBridgeProbe(True, "ready", "ok")),
+        )
+        binding = replace(
+            ReadyRuntimeEnvironmentAuthority(REPOSITORY_ROOT).binding("jiuwenswarm"),
+            core_dependency_kind="git",
+            core_dependency_revision="2" * 40,
+            core_source_root=None,
+        )
+        adapter.rebind_managed_environment(binding)
+
+        with patch.dict(os.environ, {"PYTHONPATH": "untrusted-service-path"}):
+            environment = SubprocessJiuwenSwarmBridgeLauncher._environment(adapter.config)
+
+        self.assertEqual(
+            environment["PYTHONPATH"].split(os.pathsep),
+            [str(REPOSITORY_ROOT.resolve(strict=True))],
+        )
+
     def test_bridge_events_preserve_team_hierarchy_and_member_context(self) -> None:
         lines = [
             bridge_line(event(
@@ -343,6 +370,7 @@ class JiuwenSwarmRuntimeTests(unittest.TestCase):
             launcher=launcher,
             id_factory=lambda: "sw_api",
         )
+        authority = ReadyRuntimeEnvironmentAuthority(REPOSITORY_ROOT)
         api = LocalRepositoryApi(
             LocalServiceConfig.create(
                 allowed_roots=[REPOSITORY_ROOT],
@@ -351,6 +379,7 @@ class JiuwenSwarmRuntimeTests(unittest.TestCase):
             trace_store=self.store,
             jiuwenswarm_adapter=adapter,
             archive_enabled=False,
+            runtime_environment_authority=authority,
         )
 
         status = api.dispatch("GET", "/api/v1/jiuwenswarm", origin=ALLOWED_ORIGIN)
@@ -377,9 +406,16 @@ class JiuwenSwarmRuntimeTests(unittest.TestCase):
 
         self.assertEqual(status.status, 200)
         self.assertTrue(status.body["runtime"]["configured"])
+        self.assertEqual(
+            status.body["runtime"]["managedEnvironment"]["id"],
+            "swarm-core-env",
+        )
         self.assertEqual(started.status, 202)
+        self.assertEqual(authority.prepare_calls, [("jiuwenswarm", True)])
         self.assertEqual(cancelled.status, 202)
         self.assertTrue(adapter.wait_for_terminal("sw_api"))
+        _metadata, events = self.store.snapshot(self.trace["id"])
+        self.assertEqual(events[0]["environment"]["consumer"], "jiuwenswarm")
 
 
 if __name__ == "__main__":

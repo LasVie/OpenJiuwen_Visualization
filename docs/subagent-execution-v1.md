@@ -110,20 +110,13 @@ Trace 必须属于 `jiuwenswarm`，因为 `swarm.subagent`、父子 subject 层�
 
 ## 环境配置
 
-```powershell
-$env:OPENJIUWEN_AGENT_CORE_ROOT = "C:\path\to\agent-core"
-$env:OPENJIUWEN_SUBAGENT_PYTHON = "C:\path\to\python.exe"
-$env:OPENJIUWEN_SUBAGENT_WORKSPACE = "C:\path\to\visualization-web\.subagent-runtime"
-$env:OPENJIUWEN_SUBAGENT_MAX_ITERATIONS = "6"
-$env:OPENJIUWEN_OPENROUTER_API_KEY = "..."
-$env:OPENJIUWEN_OPENROUTER_MODELS = "openrouter/free"
-```
+Subagent 与独立 Agent Core 共用网页管理的 `core-env`。用户只需在“连接”中绑定 Agent Core 仓、创建并校验环境、录入 OpenRouter key；无需设置 Python 或 source 环境变量。每次首次调用前会自动对账，只有匹配当前仓库与 lock fingerprint 的 active generation 才能运行。
 
-`OPENJIUWEN_SUBAGENT_PYTHON` 缺省回退到 `OPENJIUWEN_AGENT_CORE_PYTHON`，再回退到启动 local service 的 Python。所有路径和密钥都只由服务端环境提供。
+Subagent bridge 使用 active manifest 的精确 Python 与 Agent Core root，不继承 Companion 的 `PYTHONPATH`。运行面板显示 fingerprint/Python/uv，Trace 首事件记录环境与 Agent Core revision；与 Agent Core 并发时只能复用同一 generation，不能在运行中切换。完整合同见 [`managed-environments-v1.md`](managed-environments-v1.md)。
 
 ## 无网络框架自检
 
-自检使用确定性 Model 替身，但真实执行 `create_deep_agent → SubagentRail → task_tool → create_subagent → child DeepAgent`，不会访问 OpenRouter：
+开发者自检使用确定性 Model 替身，但真实执行 `create_deep_agent → SubagentRail → task_tool → create_subagent → child DeepAgent`，不会访问 OpenRouter；该命令不是普通配置流程：
 
 ```powershell
 $env:PYTHONPATH = "C:\path\to\agent-core"
@@ -146,6 +139,6 @@ $env:PYTHONPATH = "C:\path\to\agent-core"
 - child 再创建 Subagent；
 - 文件、Shell、Git、网络、MCP、Skill、浏览器或用户注册工具；
 - Agent Team roster、SwarmFlow Workflow/Phase/Human 控制；
-- 持久化运行、跨运行 diff 或远端执行。
+- 跨服务重启续跑、语义级跨运行 diff 或远端执行；完整事件与 Context 仍按 Runtime Archive 合同保存在本机。
 
 这些能力需要新的 profile、权限和事件语义，不能通过放宽 V1 请求字段隐式开启。

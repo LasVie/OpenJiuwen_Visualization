@@ -208,6 +208,37 @@ function validDefinition(value: unknown) {
   );
 }
 
+function validEnvironment(value: unknown) {
+  if (!isRecord(value)) return false;
+  const consumer = String(value.consumer);
+  const expectedId = ["agent-core", "subagent"].includes(consumer)
+    ? "core-env"
+    : ["jiuwenswarm", "swarmflow"].includes(consumer)
+      ? "swarm-core-env"
+      : null;
+  const project = value.project;
+  const dependency = value.coreDependency;
+  return (
+    value.id === expectedId &&
+    typeof value.fingerprint === "string" &&
+    /^[0-9a-f]{64}$/.test(value.fingerprint) &&
+    typeof value.pythonVersion === "string" &&
+    typeof value.uvVersion === "string" &&
+    typeof value.activatedAt === "string" &&
+    value.validation === "passed" &&
+    isRecord(project) &&
+    project.slot === (value.id === "core-env" ? "agent-core" : "jiuwenswarm") &&
+    (project.revision === null || typeof project.revision === "string") &&
+    (project.dirty === null || typeof project.dirty === "boolean") &&
+    ((value.id === "core-env" && dependency === null) ||
+      (value.id === "swarm-core-env" &&
+      isRecord(dependency) &&
+      ["git", "path", "registry"].includes(String(dependency.kind)) &&
+      (dependency.revision === null || typeof dependency.revision === "string")
+      ))
+  );
+}
+
 function traceSession(value: unknown): RuntimeTraceSession {
   if (
     !isRecord(value) ||
@@ -263,6 +294,7 @@ function runtimeEvent(value: unknown): RuntimeTraceEvent {
         value.subject.contextOwnerId !== (value.subagent as Record<string, unknown>).contextOwnerId)) ||
     (value.kind !== "swarm.subagent" && value.subagent !== undefined) ||
     (value.definition !== undefined && !validDefinition(value.definition)) ||
+    (value.environment !== undefined && !validEnvironment(value.environment)) ||
     (value.payload !== undefined && !isRecord(value.payload))
   ) {
     throw new TypeError("Runtime event does not match Runtime Trace V1.");

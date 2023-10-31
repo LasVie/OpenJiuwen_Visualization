@@ -13,8 +13,10 @@ V1 是固定两成员 Agent Team，不是 SwarmFlow。`enable_swarmflow=False` �
 flowchart LR
   UI["Agent Team 启动面板"] -->|"创建 jiuwenswarm Trace"| Trace["Runtime Trace V1"]
   UI -->|"traceId + authority + 有界输入"| Service["Loopback local service"]
-  Service -->|"固定命令与固定 bridge"| Bridge["JiuwenSwarm subprocess bridge"]
-  Env["Server environment"] -->|"source roots / Python / OpenRouter key"| Bridge
+  Service -->|"fixed command + bridge"| Bridge["JiuwenSwarm subprocess bridge"]
+  Source["Connection · JiuwenSwarm"] --> Env["verified swarm-core-env"]
+  Env -->|"exact Python / Swarm source / locked Core"| Bridge
+  Credential["Local credential authority"] -->|"OpenRouter key"| Bridge
   Bridge --> Assembly["enrich_team_spec_for_swarm"]
   Assembly --> Runner["Agent Core Team Runner"]
   Runner --> Leader["Team Leader · own Context"]
@@ -127,19 +129,16 @@ X-Trace-Token: <write token>
 
 ## 环境配置
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `OPENJIUWEN_JIUWENSWARM_ROOT` | `../jiuwenswarm` | JiuwenSwarm source checkout |
-| `OPENJIUWEN_AGENT_CORE_ROOT` | `../agent-core` | Agent Core source checkout |
-| `OPENJIUWEN_JIUWENSWARM_PYTHON` | `OPENJIUWEN_AGENT_CORE_PYTHON` 或服务 Python | 可导入两个框架依赖的解释器 |
-| `OPENJIUWEN_JIUWENSWARM_WORKSPACE` | `.jiuwenswarm-runtime/` | 每次调用的服务端 workspace 根 |
-| `OPENJIUWEN_JIUWENSWARM_MAX_ITERATIONS` | `8` | 每个成员的 ReAct 上限，范围 `2..20` |
-| `OPENJIUWEN_OPENROUTER_API_KEY` | 无 | 服务端 OpenRouter key |
-| `OPENJIUWEN_OPENROUTER_MODELS` | `openrouter/free` | 模型 allowlist |
+普通使用全部从网页完成：绑定 JiuwenSwarm 本地/公开 GitHub 仓、执行“检查 Core 依赖”、创建并校验 `swarm-core-env`，然后录入 OpenRouter key。Companion 从 JiuwenSwarm `pyproject.toml` 与 `uv.lock` 决定 Core：
 
-Source checkout 由服务端组装进子进程 `PYTHONPATH`；不会修改两个上游仓。解释器仍需具备它们声明的运行依赖，包括 Agent Team 默认 SQLite driver。
+- Git/registry Core 只从 `swarm-core-env` 的锁定安装结果导入，不加入 standalone Agent Core 路径；
+- 本地 path Core 只加入依赖检查得到的 allow-root 精确路径；
+- 每次首次调用前自动对账，环境有活动 Team/SwarmFlow 时只允许复用同一 generation；
+- bridge 不继承 Companion 进程的 `PYTHONPATH`，也不修改任何上游 checkout。
 
-可以先运行不访问 OpenRouter 的真实框架自检：
+运行面板显示 fingerprint/Python/uv；Trace 首事件记录 JiuwenSwarm revision、Core dependency kind 与锁定 revision/version。完整合同见 [`managed-environments-v1.md`](managed-environments-v1.md)。
+
+开发者可以直接运行不访问 OpenRouter 的真实框架自检，但它不是普通用户的配置或启动方式：
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE = "1"

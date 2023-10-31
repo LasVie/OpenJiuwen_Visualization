@@ -25,6 +25,10 @@ from .openrouter_provider import (
 )
 from .trace_store import RuntimeTraceStore, TraceStoreError
 from .runtime_source_identity import runtime_source_revisions
+from .runtime_environments import (
+    RuntimeEnvironmentBinding,
+    runtime_environment_event,
+)
 
 
 SWARMFLOW_RUNTIME_API_VERSION = "1.0.0"
@@ -60,13 +64,14 @@ class SwarmFlowRuntimeConfig:
     """Server-only source locations and bounded workflow settings."""
 
     source_root: Path
-    agent_core_root: Path
+    agent_core_root: Path | None
     python_executable: Path
     bridge_script: Path
     workflow_script: Path
     workspace: Path
     provider: OpenRouterProviderConfig
     max_iterations: int = DEFAULT_MAX_ITERATIONS
+    managed_environment: RuntimeEnvironmentBinding | None = None
 
     @classmethod
     def from_environment(
@@ -147,9 +152,15 @@ class SwarmFlowRuntimeConfig:
                 "OPENJIUWEN_JIUWENSWARM_ROOT must point to a JiuwenSwarm checkout.",
             )
         workflow_source = (
-            self.agent_core_root / "openjiuwen" / "agent_teams" / "workflow" / "runner.py"
+            self.agent_core_root
+            / "openjiuwen"
+            / "agent_teams"
+            / "workflow"
+            / "runner.py"
+            if self.agent_core_root is not None
+            else None
         )
-        if not workflow_source.is_file():
+        if workflow_source is not None and not workflow_source.is_file():
             return SwarmFlowBridgeProbe(
                 False,
                 "agent_core_swarmflow_unavailable",
@@ -192,12 +203,16 @@ class SubprocessSwarmFlowBridgeLauncher:
         environment = dict(os.environ)
         temp_root = config.workspace / "tmp"
         temp_root.mkdir(parents=True, exist_ok=True)
-        previous_python_path = environment.get("PYTHONPATH", "")
+        previous_python_path = (
+            environment.get("PYTHONPATH", "")
+            if config.managed_environment is None
+            else ""
+        )
         environment["PYTHONPATH"] = os.pathsep.join(
             value
             for value in (
                 str(config.source_root),
-                str(config.agent_core_root),
+                str(config.agent_core_root) if config.agent_core_root is not None else "",
                 previous_python_path,
             )
             if value
@@ -426,6 +441,30 @@ class SwarmFlowRuntimeAdapter:
                 self.config,
                 source_root=Path(source_root).resolve(strict=False),
                 agent_core_root=Path(agent_core_root).resolve(strict=False),
+                managed_environment=None,
+            )
+            self._probe_value = None
+            self._probe_time = 0.0
+
+    def rebind_managed_environment(
+        self,
+        binding: RuntimeEnvironmentBinding,
+    ) -> None:
+        if binding.consumer != "swarmflow" or binding.environment_id != "swarm-core-env":
+            raise RuntimeError("SwarmFlow requires the swarm-core-env runtime binding.")
+        with self._lock:
+            if self.active_invocations:
+                if self.config.managed_environment == binding:
+                    return
+                raise RuntimeError(
+                    "SwarmFlow environment cannot change during an active invocation."
+                )
+            self.config = replace(
+                self.config,
+                source_root=binding.project_root,
+                agent_core_root=binding.core_source_root,
+                python_executable=binding.python_executable,
+                managed_environment=binding,
             )
             self._probe_value = None
             self._probe_time = 0.0
@@ -445,8 +484,21 @@ class SwarmFlowRuntimeAdapter:
             self._probe_time = self._clock()
         return value
 
-    def descriptor(self, *, refresh: bool = False) -> dict[str, object]:
-        probe = self._probe(force=refresh)
+    def descriptor(
+        self,
+        *,
+        refresh: bool = False,
+        probe_runtime: bool = True,
+    ) -> dict[str, object]:
+        probe = (
+            self._probe(force=refresh)
+            if probe_runtime
+            else SwarmFlowBridgeProbe(
+                False,
+                "managed_environment_not_ready",
+                "The managed SwarmFlow environment is not ready.",
+            )
+        )
         configured = probe.ready and self.config.provider.configured
         if configured:
             status = "ready"
@@ -508,6 +560,11 @@ class SwarmFlowRuntimeAdapter:
                     "maxAgents": 2,
                 },
                 "diagnostic": diagnostic,
+                "managedEnvironment": (
+                    self.config.managed_environment.evidence()
+                    if self.config.managed_environment is not None
+                    else None
+                ),
                 **(
                     {"frameworkVersion": probe.framework_version}
                     if probe.framework_version
@@ -608,6 +665,34 @@ class SwarmFlowRuntimeAdapter:
             )
             self._jobs[invocation_id] = job
 
+        if self.config.managed_environment is not None:
+            try:
+                self._trace_store.append(
+                    trace_id,
+                    trace_token,
+                    [
+                        runtime_environment_event(
+                            self.config.managed_environment,
+                            invocation_id,
+                            timestamp_ms=(self._clock() - job.started_at) * 1_000,
+                        )
+                    ],
+                )
+            except TraceStoreError as exc:
+                with self._lock:
+                    self._jobs.pop(invocation_id, None)
+                raise SwarmFlowRuntimeError(exc.code, str(exc), status=exc.status) from exc
+
+        revision_roots = [
+            ("jiuwenswarm", self.config.source_root),
+            ("visualization-web", self.config.bridge_script.parents[3]),
+        ]
+        if self.config.agent_core_root is not None:
+            revision_roots.insert(0, ("agent-core", self.config.agent_core_root))
+        source_revisions = runtime_source_revisions(tuple(revision_roots))
+        if self.config.managed_environment is not None:
+            source_revisions.update(self.config.managed_environment.source_revisions())
+
         request = {
             "invocationId": invocation_id,
             "teamName": team_name,
@@ -621,13 +706,7 @@ class SwarmFlowRuntimeAdapter:
             "traceMaxTokens": int(trace["maxTokens"]),
             "workspace": str(self.config.workspace / segment),
             "workflowScript": str(self.config.workflow_script),
-            "sourceRevisions": runtime_source_revisions(
-                (
-                    ("agent-core", self.config.agent_core_root),
-                    ("jiuwenswarm", self.config.source_root),
-                    ("visualization-web", self.config.bridge_script.parents[3]),
-                )
-            ),
+            "sourceRevisions": source_revisions,
         }
         threading.Thread(
             target=self._run_job,

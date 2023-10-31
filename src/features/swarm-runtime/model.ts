@@ -349,6 +349,20 @@ function runtimeDetails(event: RuntimeTraceEvent): TraceDetail[] {
           { label: "model source", value: event.model.source },
         ]
       : []),
+    ...(event.environment
+      ? [
+          { label: "environment", value: event.environment.id },
+          { label: "environment fingerprint", value: event.environment.fingerprint },
+          { label: "python", value: event.environment.pythonVersion },
+          { label: "uv", value: event.environment.uvVersion },
+          ...(event.environment.project.revision
+            ? [{ label: `${event.environment.project.slot} revision`, value: event.environment.project.revision }]
+            : []),
+          ...(event.environment.coreDependency?.revision
+            ? [{ label: "Core dependency", value: event.environment.coreDependency.revision }]
+            : []),
+        ]
+      : []),
     ...payloadDetails,
     ...(event.details ?? []),
   ];

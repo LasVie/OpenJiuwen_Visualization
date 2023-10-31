@@ -60,6 +60,19 @@ function eventEvidence(event: ArchivedEventPreview) {
       .filter((item) => typeof item === "string").join(" · ");
     if (value) evidence.push({ label: "MODEL", value });
   }
+  if (isRecord(event.environment)) {
+    const fingerprint = typeof event.environment.fingerprint === "string"
+      ? event.environment.fingerprint.slice(0, 12)
+      : null;
+    const value = [
+      event.environment.id,
+      fingerprint,
+      typeof event.environment.pythonVersion === "string"
+        ? `Python ${event.environment.pythonVersion}`
+        : null,
+    ].filter((item) => typeof item === "string").join(" · ");
+    if (value) evidence.push({ label: "ENV", value });
+  }
   if (isRecord(event.payload) && Array.isArray(event.payload.keys)) {
     evidence.push({ label: "PAYLOAD", value: event.payload.keys.join(", ") });
   }

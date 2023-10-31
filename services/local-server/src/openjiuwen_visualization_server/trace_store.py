@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import re
 import secrets
 import threading
 import time
@@ -76,6 +77,7 @@ EVENT_FIELDS = frozenset(
         "subject",
         "definition",
         "payload",
+        "environment",
     }
 )
 
@@ -483,6 +485,126 @@ def _validate_definition(definition: Any) -> None:
                 raise TraceStoreError("invalid_event", f"definition.{field_name} must be a positive integer.")
 
 
+def _validate_environment(environment: Any) -> None:
+    if not isinstance(environment, dict):
+        raise TraceStoreError("invalid_event", "environment must be an object.")
+    allowed = {
+        "id",
+        "consumer",
+        "fingerprint",
+        "pythonVersion",
+        "uvVersion",
+        "activatedAt",
+        "project",
+        "coreDependency",
+        "validation",
+    }
+    unknown = set(environment) - allowed
+    if unknown:
+        raise TraceStoreError(
+            "invalid_event",
+            f"environment contains unsupported field: {sorted(unknown)[0]}",
+        )
+    environment_id = _required_text(environment.get("id"), "environment.id")
+    if environment_id not in {"core-env", "swarm-core-env"}:
+        raise TraceStoreError("invalid_event", "environment.id is not registered.")
+    consumer = _required_text(environment.get("consumer"), "environment.consumer")
+    if consumer not in {"agent-core", "subagent", "jiuwenswarm", "swarmflow"}:
+        raise TraceStoreError("invalid_event", "environment.consumer is not registered.")
+    expected_environment = (
+        "core-env" if consumer in {"agent-core", "subagent"} else "swarm-core-env"
+    )
+    if environment_id != expected_environment:
+        raise TraceStoreError(
+            "invalid_event",
+            "environment.id does not own the declared consumer.",
+        )
+    fingerprint = _required_text(
+        environment.get("fingerprint"),
+        "environment.fingerprint",
+        max_length=64,
+    )
+    if re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None:
+        raise TraceStoreError(
+            "invalid_event",
+            "environment.fingerprint must be a lowercase SHA-256 digest.",
+        )
+    for field_name in ("pythonVersion", "uvVersion", "activatedAt"):
+        environment[field_name] = _required_text(
+            environment.get(field_name),
+            f"environment.{field_name}",
+            max_length=120,
+        )
+    if environment.get("validation") != "passed":
+        raise TraceStoreError("invalid_event", "environment.validation must be passed.")
+
+    project = environment.get("project")
+    if not isinstance(project, dict):
+        raise TraceStoreError("invalid_event", "environment.project must be an object.")
+    unknown_project = set(project) - {"slot", "revision", "dirty"}
+    if unknown_project:
+        raise TraceStoreError(
+            "invalid_event",
+            f"environment.project contains unsupported field: {sorted(unknown_project)[0]}",
+        )
+    slot = _required_text(project.get("slot"), "environment.project.slot")
+    if slot not in {"agent-core", "jiuwenswarm"}:
+        raise TraceStoreError("invalid_event", "environment.project.slot is invalid.")
+    expected_slot = "agent-core" if environment_id == "core-env" else "jiuwenswarm"
+    if slot != expected_slot:
+        raise TraceStoreError(
+            "invalid_event",
+            "environment.project.slot does not own the declared environment.",
+        )
+    if project.get("revision") is not None:
+        project["revision"] = _required_text(
+            project.get("revision"),
+            "environment.project.revision",
+            max_length=240,
+        )
+    if project.get("dirty") is not None and not isinstance(project.get("dirty"), bool):
+        raise TraceStoreError("invalid_event", "environment.project.dirty must be boolean or null.")
+
+    dependency = environment.get("coreDependency")
+    if environment_id == "core-env" and dependency is not None:
+        raise TraceStoreError(
+            "invalid_event",
+            "core-env evidence cannot declare a separate Core dependency.",
+        )
+    if environment_id == "swarm-core-env" and dependency is None:
+        raise TraceStoreError(
+            "invalid_event",
+            "swarm-core-env evidence requires its resolved Core dependency.",
+        )
+    if dependency is not None:
+        if not isinstance(dependency, dict):
+            raise TraceStoreError(
+                "invalid_event",
+                "environment.coreDependency must be an object or null.",
+            )
+        unknown_dependency = set(dependency) - {"kind", "revision"}
+        if unknown_dependency:
+            raise TraceStoreError(
+                "invalid_event",
+                "environment.coreDependency contains unsupported fields.",
+            )
+        kind = _required_text(
+            dependency.get("kind"),
+            "environment.coreDependency.kind",
+        )
+        if kind not in {"git", "path", "registry"}:
+            raise TraceStoreError(
+                "invalid_event",
+                "environment.coreDependency.kind is invalid.",
+            )
+        if dependency.get("revision") is not None:
+            dependency["revision"] = _required_text(
+                dependency.get("revision"),
+                "environment.coreDependency.revision",
+                max_length=240,
+            )
+
+
 def _validate_event(raw_event: Any) -> dict[str, Any]:
     if not isinstance(raw_event, dict):
         raise TraceStoreError("invalid_event", "Each event must be a JSON object.")
@@ -567,6 +689,8 @@ def _validate_event(raw_event: Any) -> dict[str, Any]:
         )
     if "definition" in event:
         _validate_definition(event["definition"])
+    if "environment" in event:
+        _validate_environment(event["environment"])
     if "payload" in event:
         if not isinstance(event["payload"], dict):
             raise TraceStoreError("invalid_event", "payload must be an object.")

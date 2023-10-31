@@ -31,6 +31,7 @@ npm run check
 - Agent Core / JiuwenSwarm 本地仓库：粘贴工作区白名单内的绝对目录，框架标记校验成功后热切换所有相关执行器。
 - Agent Core / JiuwenSwarm GitHub 仓库：填写公开 HTTPS 仓库 URL，可选 branch/tag/ref；Companion 在管理目录中创建隔离 checkout，支持网页手动同步。
 - Companion 会从当前绑定生成两个本机环境规格：Agent Core / Subagent 使用 `core-env`，JiuwenSwarm / SwarmFlow 使用由 Swarm Config 决定 Core 来源的 `swarm-core-env`。每张仓库卡可直接“创建并校验环境”或“重新校验环境”；Companion 使用受管 CPython 3.11、精确 `uv.lock`、隔离 staging、bridge probe 与原子 active generation，全部位于 `.openjiuwen-visualization/environments`，不会修改上游仓。
+- 四个真实执行器在调用前自动核对所属 active generation；运行面板显示 fingerprint/Python/uv，Trace 首事件记录无路径、无凭据的环境与源码 revision 证据。Swarm 的远端 Core 始终来自 JiuwenSwarm 自身 lock，不会被独立 Agent Core 连接覆盖。
 - 恢复默认：逐个连接二次确认后恢复工作区默认仓库；不会顺带删除其他连接或 Session。
 
 当前 GitHub 连接为匿名只读公开仓库，不接受 URL 内 token，也尚未开放私有仓库授权。完整启动与连接边界见 [`docs/local-companion-v1.md`](docs/local-companion-v1.md)。
@@ -211,6 +212,7 @@ src/
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
 │  ├─ relation-explorer/       # Definition/Change 共享节点关系深入画布
 │  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期
+│  ├─ runtime-environment/     # 四类 Executor 共享的 active env 身份展示
 │  ├─ trace-archive/           # 本机 Session 管理、按需原文与跨运行对比
 │  ├─ source-viewer/           # Definition/Change/Tool 共享只读源码窗口
 │  ├─ swarm-runtime/           # Swarm 层级、主体 Context 与动态画布
