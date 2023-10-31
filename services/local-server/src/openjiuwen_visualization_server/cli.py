@@ -73,6 +73,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Directory for public GitHub repository checkouts.",
     )
     serve.add_argument(
+        "--managed-environment-root",
+        help="Directory for generated environment specs and isolated runtimes.",
+    )
+    serve.add_argument(
         "--disable-system-credential-store",
         action="store_true",
         help="Disable write-only operating-system credential storage.",
@@ -157,6 +161,9 @@ def _config(arguments: argparse.Namespace) -> LocalServiceConfig:
             arguments, "connection_settings_path", None
         ),
         managed_source_root=getattr(arguments, "managed_source_root", None),
+        managed_environment_root=getattr(
+            arguments, "managed_environment_root", None
+        ),
         system_credentials_enabled=(
             getattr(arguments, "command", None) == "serve"
             and not getattr(arguments, "disable_system_credential_store", False)

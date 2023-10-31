@@ -27,6 +27,7 @@ class LocalServiceConfig:
     plugin_host_path: Path | None = None
     connection_settings_path: Path | None = None
     managed_source_root: Path | None = None
+    managed_environment_root: Path | None = None
     system_credentials_enabled: bool = False
     allow_unsigned_plugins: bool = False
     plugin_developer_roots: tuple[Path, ...] = ()
@@ -49,6 +50,7 @@ class LocalServiceConfig:
         plugin_host_path: str | Path | None = None,
         connection_settings_path: str | Path | None = None,
         managed_source_root: str | Path | None = None,
+        managed_environment_root: str | Path | None = None,
         system_credentials_enabled: bool = False,
         allow_unsigned_plugins: bool = False,
         plugin_developer_roots: Iterable[str | Path] = (),
@@ -203,6 +205,28 @@ class LocalServiceConfig:
                 "Managed source root must stay inside an allowed root."
             )
 
+        resolved_managed_environments = (
+            Path(managed_environment_root).expanduser().resolve(strict=False)
+            if managed_environment_root is not None
+            else resolved_roots[0]
+            / ".openjiuwen-visualization"
+            / "environments"
+        )
+        if (
+            resolved_managed_environments.exists()
+            and not resolved_managed_environments.is_dir()
+        ):
+            raise PathAccessError(
+                "Managed environment root must be a directory, not a file."
+            )
+        if not any(
+            resolved_managed_environments.is_relative_to(root)
+            for root in resolved_roots
+        ):
+            raise PathAccessError(
+                "Managed environment root must stay inside an allowed root."
+            )
+
         resolved_developer_roots: list[Path] = []
         for raw_root in plugin_developer_roots:
             root = Path(raw_root).expanduser().resolve(strict=True)
@@ -237,6 +261,7 @@ class LocalServiceConfig:
             plugin_host_path=resolved_plugin_host,
             connection_settings_path=resolved_connection_settings,
             managed_source_root=resolved_managed_sources,
+            managed_environment_root=resolved_managed_environments,
             system_credentials_enabled=system_credentials_enabled,
             allow_unsigned_plugins=allow_unsigned_plugins,
             plugin_developer_roots=tuple(resolved_developer_roots),

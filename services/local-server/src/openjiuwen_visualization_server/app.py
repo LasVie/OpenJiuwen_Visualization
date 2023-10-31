@@ -42,6 +42,10 @@ from .jiuwenswarm_runtime import (
     JiuwenSwarmRuntimeConfig,
     JiuwenSwarmRuntimeError,
 )
+from .managed_environments import (
+    ManagedEnvironmentError,
+    ManagedEnvironmentRegistry,
+)
 from .openrouter_provider import (
     OpenRouterProviderConfig,
     OpenRouterProviderError,
@@ -154,6 +158,7 @@ REPOSITORY_CONNECTION_SYNC_ROUTE = re.compile(
 SWARM_CORE_DEPENDENCY_INSPECTION_ROUTE = (
     "/api/v1/settings/repositories/jiuwenswarm/inspect-core-dependency"
 )
+MANAGED_ENVIRONMENT_REFRESH_ROUTE = "/api/v1/environments/refresh"
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +217,7 @@ class LocalRepositoryApi:
         plugin_host: PluginHost | None = None,
         plugin_host_enabled: bool = True,
         repository_connections: RepositoryConnectionStore | None = None,
+        environment_registry: ManagedEnvironmentRegistry | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -352,6 +358,11 @@ class LocalRepositoryApi:
             database_path=connection_settings_path,
         )
         self._apply_repository_connections()
+        self.environment_registry = environment_registry or ManagedEnvironmentRegistry(
+            config,
+            self.repository_connections,
+        )
+        self._refresh_environment_specs()
 
     def dispatch(
         self,
@@ -472,6 +483,8 @@ class LocalRepositoryApi:
                     },
                 },
             )
+        if method == "GET" and route == "/api/v1/environments":
+            return ApiResponse(HTTPStatus.OK, self.environment_registry.descriptor())
         if method == "GET" and route == "/api/v1/model-providers/openrouter":
             return ApiResponse(HTTPStatus.OK, self._provider_descriptor())
         if method == "GET" and route == "/api/v1/agent-core":
@@ -585,6 +598,20 @@ class LocalRepositoryApi:
                     "inspection": self.repository_connections.inspect_swarm_core_dependency(),
                 },
             )
+        if method == "POST" and route == MANAGED_ENVIRONMENT_REFRESH_ROUTE:
+            if body:
+                return _error(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_environment_refresh",
+                    "Environment spec refresh does not accept request fields.",
+                )
+            try:
+                return ApiResponse(
+                    HTTPStatus.OK,
+                    self.environment_registry.refresh(),
+                )
+            except ManagedEnvironmentError as exc:
+                return _error(exc.status, exc.code, str(exc))
         repository_sync_match = REPOSITORY_CONNECTION_SYNC_ROUTE.fullmatch(route)
         if method == "POST" and repository_sync_match:
             return self._sync_repository_connection(repository_sync_match.group(1))
@@ -879,6 +906,12 @@ class LocalRepositoryApi:
             agent_core_root,
         )
 
+    def _refresh_environment_specs(self) -> None:
+        try:
+            self.environment_registry.refresh()
+        except ManagedEnvironmentError:
+            LOGGER.exception("Managed environment spec refresh failed")
+
     @staticmethod
     def _repository_connection_response(
         connection: dict[str, object],
@@ -929,6 +962,7 @@ class LocalRepositoryApi:
                     )
                 )
                 self._apply_repository_connections()
+                self._refresh_environment_specs()
             except RepositoryConnectionError as exc:
                 return _error(exc.status, exc.code, str(exc))
             return self._repository_connection_response(connection)
@@ -944,6 +978,7 @@ class LocalRepositoryApi:
             try:
                 connection = self.repository_connections.sync(slot)
                 self._apply_repository_connections()
+                self._refresh_environment_specs()
             except RepositoryConnectionError as exc:
                 return _error(exc.status, exc.code, str(exc))
             return self._repository_connection_response(connection)
@@ -959,6 +994,7 @@ class LocalRepositoryApi:
             try:
                 connection = self.repository_connections.reset(slot)
                 self._apply_repository_connections()
+                self._refresh_environment_specs()
             except RepositoryConnectionError as exc:
                 return _error(exc.status, exc.code, str(exc))
             return self._repository_connection_response(connection)

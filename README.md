@@ -30,6 +30,7 @@ npm run check
 - OpenRouter API key：经 loopback 请求写入 Windows Credential Manager；保存后输入框和页面状态立即清空，SQLite、日志、Git 与后续 API 响应都不会保存或回读 key。
 - Agent Core / JiuwenSwarm 本地仓库：粘贴工作区白名单内的绝对目录，框架标记校验成功后热切换所有相关执行器。
 - Agent Core / JiuwenSwarm GitHub 仓库：填写公开 HTTPS 仓库 URL，可选 branch/tag/ref；Companion 在管理目录中创建隔离 checkout，支持网页手动同步。
+- Companion 会从当前绑定生成两个本机环境规格：Agent Core / Subagent 使用 `core-env`，JiuwenSwarm / SwarmFlow 使用由 Swarm Config 决定 Core 来源的 `swarm-core-env`；规格与后续运行环境均位于 `.openjiuwen-visualization/environments`，不会修改上游仓。
 - 恢复默认：逐个连接二次确认后恢复工作区默认仓库；不会顺带删除其他连接或 Session。
 
 当前 GitHub 连接为匿名只读公开仓库，不接受 URL 内 token，也尚未开放私有仓库授权。完整启动与连接边界见 [`docs/local-companion-v1.md`](docs/local-companion-v1.md)。
