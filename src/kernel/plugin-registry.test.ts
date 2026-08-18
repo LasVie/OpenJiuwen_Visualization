@@ -66,6 +66,14 @@ describe("visualization plugin registry", () => {
         contributedBy: "openjiuwen.git-change",
       }),
     ]);
+    expect(defaultWorkbench.toolCatalogSources).toEqual([
+      expect.objectContaining({
+        id: "openjiuwen.local-tool-catalog",
+        readOnly: true,
+        importsTargetCode: false,
+        contributedBy: "openjiuwen.tool-catalog",
+      }),
+    ]);
     expect(defaultWorkbench.plugins.map((item) => [item.id, item.state]))
       .toEqual([
         ["openjiuwen.agent-core", "enabled"],
@@ -74,6 +82,7 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.integration", "enabled"],
         ["openjiuwen.deterministic-replay", "enabled"],
         ["openjiuwen.local-repository", "enabled"],
+        ["openjiuwen.tool-catalog", "enabled"],
         ["openjiuwen.git-change", "enabled"],
       ]);
     expect(defaultWorkbench.capabilities["graph.rail"]).toEqual([
@@ -88,6 +97,8 @@ describe("visualization plugin registry", () => {
     expect(defaultWorkbench.capabilities["graph.change.impact.v1"]).toEqual([
       "openjiuwen.git-change",
     ]);
+    expect(defaultWorkbench.capabilities["graph.definition.tool-registry.v1"])
+      .toEqual(["openjiuwen.tool-catalog"]);
     expect(defaultWorkbench.graph.nodes.find((node) => node.id === "model"))
       .toMatchObject({
         contributedBy: "openjiuwen.agent-core",
@@ -111,6 +122,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",
       "openjiuwen.local-repository": "enabled",
+      "openjiuwen.tool-catalog": "enabled",
       "openjiuwen.git-change": "enabled",
     });
     expect(snapshot.graph.nodes.map((node) => node.id)).toEqual([
@@ -138,7 +150,12 @@ describe("visualization plugin registry", () => {
       withoutLocalGit.plugins.find((item) => item.id === "openjiuwen.git-change")
         ?.state,
     ).toBe("blocked");
+    expect(
+      withoutLocalGit.plugins.find((item) => item.id === "openjiuwen.tool-catalog")
+        ?.state,
+    ).toBe("blocked");
     expect(withoutLocalGit.changeSources).toEqual([]);
+    expect(withoutLocalGit.toolCatalogSources).toEqual([]);
   });
 
   it("keeps the canonical graph independent from its ReactFlow projection", () => {

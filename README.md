@@ -43,6 +43,12 @@ python -B services/local-server/scripts/scan_repository.py `
 
 页面每次只投影当前焦点和有限数量的子节点，不会把完整仓库的数千节点同时交给 ReactFlow。
 
+### Registered Tools Catalog
+
+“定义图 → Tool 注册表”会只读识别 `@tool`、Tool 子类、顶层 `ToolCard` 与 Ability/Resource 注册调用，并把信息拆成“声明 → 静态注册路径 → 当前 Trace 运行确认”三层。Core 与 Swarm 使用不同卡片色，同时保留文字来源与状态；点击任一 Tool 或注册点可查看 card metadata、目标表达式、置信度和源码行。静态已关联不等于运行时已注册，只有显式 `ability.register` 事件会显示为本次运行已观察。
+
+完整扫描合同、API、证据等级和限制见 [`docs/tool-catalog-v1.md`](docs/tool-catalog-v1.md)。
+
 ## Core Runtime
 
 运行链路的数据源可以在“演示 / Core Trace / Swarm Trace”之间切换。Core Trace 创建一个本机内存会话，通过 SSE 接收归一化的 Agent、ReAct、Rail、Context、Model、Tool 和 Ability 事件；它不会自行执行 `agent-core`、工具或模型。
@@ -93,9 +99,11 @@ src/
 ├─ features/
 │  ├─ context-window/          # 脱敏、原文和展示 Token 模型
 │  ├─ core-runtime/            # Agent Core 事件投影
+│  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
 │  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期
 │  ├─ swarm-runtime/           # Swarm 层级、主体 Context 与动态画布
+│  ├─ tool-catalog/            # Tool 声明、注册路径与 Runtime 观察画布
 │  └─ trace-graph/             # 可调磁吸、实时节点避碰与共享画布控件
 ├─ plugins/                    # Core、Swarm、集成边与轨迹数据贡献者
 ├─ shared/ui/                  # 无业务状态的通用 UI

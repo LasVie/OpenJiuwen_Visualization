@@ -11,6 +11,10 @@ import type {
   GitChangeSourceDefinition,
   RegisteredGitChangeSource,
 } from "./change";
+import type {
+  RegisteredToolCatalogSource,
+  ToolCatalogSourceDefinition,
+} from "./tool-catalog";
 
 export const PLUGIN_API_VERSION = "1.0.0" as const;
 
@@ -32,6 +36,7 @@ export interface VisualizationPluginContribution {
   modelProviders?: readonly ModelProviderDefinition[];
   modelRecordings?: readonly ModelRuntimeRecording[];
   changeSources?: readonly GitChangeSourceDefinition[];
+  toolCatalogSources?: readonly ToolCatalogSourceDefinition[];
 }
 
 export interface VisualizationPlugin {
@@ -62,6 +67,7 @@ export interface WorkbenchSnapshot {
   modelProviders: readonly RegisteredModelProvider[];
   modelRecordings: readonly RegisteredModelRuntimeRecording[];
   changeSources: readonly RegisteredGitChangeSource[];
+  toolCatalogSources: readonly RegisteredToolCatalogSource[];
   plugins: readonly ResolvedPluginStatus[];
   capabilities: Readonly<Record<string, readonly string[]>>;
 }

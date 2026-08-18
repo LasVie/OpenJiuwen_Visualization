@@ -15,7 +15,12 @@ from urllib.parse import parse_qs, urlsplit
 from .config import LocalServiceConfig, PathAccessError
 from .git_changes import GitChangeError, GitChangeInspector, GitChangeOptions
 from .repository import RepositoryResolutionError, RepositoryResolver
-from .scanner import PythonRepositoryScanner, ScanOptions
+from .scanner import (
+    PythonRepositoryScanner,
+    ScanOptions,
+    ToolCatalogOptions,
+    ToolCatalogScanner,
+)
 from .trace_store import API_VERSION as TRACE_API_VERSION
 from .trace_store import RuntimeTraceStore, TraceStoreError
 
@@ -61,12 +66,14 @@ class LocalRepositoryApi:
         *,
         resolver: RepositoryResolver | None = None,
         scanner: PythonRepositoryScanner | None = None,
+        tool_catalog_scanner: ToolCatalogScanner | None = None,
         trace_store: RuntimeTraceStore | None = None,
         change_inspector: GitChangeInspector | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
         self._scanner = scanner or PythonRepositoryScanner()
+        self._tool_catalog_scanner = tool_catalog_scanner or ToolCatalogScanner()
         self.trace_store = trace_store or RuntimeTraceStore()
         self._change_inspector = change_inspector or GitChangeInspector()
 
@@ -91,7 +98,12 @@ class LocalRepositoryApi:
                     "status": "ok",
                     "apiVersion": "1.0.0",
                     "mode": "read-only",
-                    "capabilities": ["repository.read", "git.change.read", "trace.ephemeral"],
+                    "capabilities": [
+                        "repository.read",
+                        "repository.tools.read",
+                        "git.change.read",
+                        "trace.ephemeral",
+                    ],
                     "traceStorage": "memory-only",
                 },
             )
@@ -109,6 +121,8 @@ class LocalRepositoryApi:
             )
         if method == "POST" and route == "/api/v1/repositories/scan":
             return self._scan(body or {})
+        if method == "POST" and route == "/api/v1/repositories/tools":
+            return self._tool_catalog(body or {})
         if method == "POST" and route == "/api/v1/repositories/changes":
             return self._changes(body or {})
         if method == "POST" and route == "/api/v1/traces":
@@ -266,6 +280,43 @@ class LocalRepositoryApi:
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 "git_change_failed",
                 "Git comparison failed without modifying the target repository.",
+            )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _tool_catalog(self, body: dict[str, Any]) -> ApiResponse:
+        repository_path = body.get("path")
+        if not isinstance(repository_path, str) or not repository_path.strip():
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_path", "path must be a non-empty string.")
+        raw_options = body.get("options", {})
+        if not isinstance(raw_options, dict):
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_options", "options must be an object.")
+
+        try:
+            options = ToolCatalogOptions(
+                include_tests=_boolean_option(raw_options, "includeTests", False),
+                max_files=_integer_option(raw_options, "maxFiles", 5_000),
+                max_file_bytes=_integer_option(raw_options, "maxFileBytes", 1_000_000),
+                max_tools=_integer_option(raw_options, "maxTools", 5_000),
+                max_registration_sites=_integer_option(
+                    raw_options,
+                    "maxRegistrationSites",
+                    10_000,
+                ),
+            )
+            identity = self._resolver.resolve(repository_path)
+            result = self._tool_catalog_scanner.scan(identity, options)
+        except PathAccessError as exc:
+            return _error(HTTPStatus.FORBIDDEN, "path_not_allowed", str(exc))
+        except RepositoryResolutionError as exc:
+            return _error(HTTPStatus.UNPROCESSABLE_ENTITY, "repository_unavailable", str(exc))
+        except ValueError as exc:
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_options", str(exc))
+        except Exception:
+            LOGGER.exception("Tool catalog scan failed")
+            return _error(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "tool_catalog_failed",
+                "Tool catalog scan failed without importing or modifying target code.",
             )
         return ApiResponse(HTTPStatus.OK, result)
 

@@ -162,6 +162,74 @@ describe("local repository client", () => {
     });
   });
 
+  it("requests and validates a read-only Tool catalog", async () => {
+    const fetcher = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
+        response({
+          apiVersion: "1.0.0",
+          schemaVersion: "1.0.0",
+          repository: scanPayload.repository,
+          tools: [
+            {
+              id: "tool:weather",
+              name: "weather_lookup",
+              symbol: "WeatherTool",
+              kind: "tool-class",
+              owner: "agent-core",
+              summary: "Look up weather.",
+              source: { path: "tools.py", symbol: "WeatherTool", startLine: 4, endLine: 18 },
+              card: {
+                description: "Look up weather.",
+                exposure: "direct",
+                stateless: true,
+                parallelSafe: true,
+                idempotent: true,
+                parameters: ["city"],
+                nameSource: "literal",
+              },
+              registrationSiteIds: ["registration:weather"],
+            },
+          ],
+          registrationSites: [
+            {
+              id: "registration:weather",
+              mechanism: "ability-resource",
+              callee: "agent.ability_manager.add_ability",
+              container: "bind",
+              targetExpression: "weather",
+              candidateNames: ["weather"],
+              resolvedToolIds: ["tool:weather"],
+              confidence: "inferred",
+              source: { path: "tools.py", symbol: "bind", startLine: 22, endLine: 22 },
+            },
+          ],
+          statistics: {
+            pythonFiles: 1,
+            tools: 1,
+            registrationSites: 1,
+            linkedRegistrations: 1,
+            dynamicRegistrations: 0,
+            durationMs: 3,
+            truncated: false,
+          },
+          warnings: [],
+          writeOperations: false,
+        }),
+    );
+    const client = new LocalRepositoryClient({ fetcher: fetcher as typeof fetch });
+
+    const result = await client.tools("C:\\workspace\\agent-core", {
+      includeTests: false,
+    });
+
+    expect(result.tools[0]).toMatchObject({ name: "weather_lookup", kind: "tool-class" });
+    expect(result.registrationSites[0].confidence).toBe("inferred");
+    expect(fetcher).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/api/v1/repositories/tools",
+      expect.objectContaining({ method: "POST", cache: "no-store" }),
+    );
+  });
+
   it("preserves structured service errors", async () => {
     const fetcher = vi.fn(
       async (_input: string | URL | Request, _init?: RequestInit) =>

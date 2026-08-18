@@ -4,6 +4,9 @@ import type {
   GitChangeMode,
   GitChangeStatistics,
   GraphSnapshot,
+  ToolCatalogStatistics,
+  ToolDefinitionRecord,
+  ToolRegistrationSiteRecord,
 } from "../../kernel";
 import { loopbackHttpOrigin } from "../local-service/base-url";
 
@@ -73,6 +76,25 @@ export interface LocalGitChangeResult {
   comparison: GitChangeComparison;
   files: GitChangedFile[];
   statistics: GitChangeStatistics;
+  warnings: string[];
+  writeOperations: false;
+}
+
+export interface ToolCatalogScanOptions {
+  includeTests?: boolean;
+  maxFiles?: number;
+  maxFileBytes?: number;
+  maxTools?: number;
+  maxRegistrationSites?: number;
+}
+
+export interface LocalToolCatalogResult {
+  apiVersion: "1.0.0";
+  schemaVersion: "1.0.0";
+  repository: LocalRepositoryIdentity;
+  tools: ToolDefinitionRecord[];
+  registrationSites: ToolRegistrationSiteRecord[];
+  statistics: ToolCatalogStatistics;
   warnings: string[];
   writeOperations: false;
 }
@@ -202,6 +224,89 @@ function changeResult(value: unknown): LocalGitChangeResult {
   return value as unknown as LocalGitChangeResult;
 }
 
+function sourceReference(value: unknown) {
+  return (
+    isRecord(value) &&
+    typeof value.path === "string" &&
+    typeof value.symbol === "string" &&
+    nonNegativeInteger(value.startLine) &&
+    nonNegativeInteger(value.endLine)
+  );
+}
+
+function nullableBoolean(value: unknown) {
+  return value === null || typeof value === "boolean";
+}
+
+function toolDefinition(value: unknown): value is ToolDefinitionRecord {
+  if (!isRecord(value) || !isRecord(value.card)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.symbol === "string" &&
+    ["decorated-function", "tool-class", "tool-card"].includes(String(value.kind)) &&
+    typeof value.owner === "string" &&
+    typeof value.summary === "string" &&
+    sourceReference(value.source) &&
+    typeof value.card.description === "string" &&
+    ["direct", "deferred", "unknown"].includes(String(value.card.exposure)) &&
+    nullableBoolean(value.card.stateless) &&
+    nullableBoolean(value.card.parallelSafe) &&
+    nullableBoolean(value.card.idempotent) &&
+    Array.isArray(value.card.parameters) &&
+    value.card.parameters.every((item) => typeof item === "string") &&
+    ["literal", "symbol"].includes(String(value.card.nameSource)) &&
+    Array.isArray(value.registrationSiteIds) &&
+    value.registrationSiteIds.every((item) => typeof item === "string")
+  );
+}
+
+function registrationSite(value: unknown): value is ToolRegistrationSiteRecord {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    ["ability-card", "ability-resource", "resource-manager", "ownership-helper"]
+      .includes(String(value.mechanism)) &&
+    typeof value.callee === "string" &&
+    typeof value.container === "string" &&
+    typeof value.targetExpression === "string" &&
+    Array.isArray(value.candidateNames) &&
+    value.candidateNames.every((item) => typeof item === "string") &&
+    Array.isArray(value.resolvedToolIds) &&
+    value.resolvedToolIds.every((item) => typeof item === "string") &&
+    ["exact", "inferred", "dynamic"].includes(String(value.confidence)) &&
+    sourceReference(value.source)
+  );
+}
+
+function toolCatalogResult(value: unknown): LocalToolCatalogResult {
+  if (!isRecord(value)) throw new TypeError("Tool catalog response is not an object.");
+  const statistics = value.statistics;
+  if (
+    value.apiVersion !== "1.0.0" ||
+    value.schemaVersion !== "1.0.0" ||
+    !repositoryIdentity(value.repository) ||
+    !Array.isArray(value.tools) ||
+    !value.tools.every(toolDefinition) ||
+    !Array.isArray(value.registrationSites) ||
+    !value.registrationSites.every(registrationSite) ||
+    !isRecord(statistics) ||
+    !nonNegativeInteger(statistics.pythonFiles) ||
+    !nonNegativeInteger(statistics.tools) ||
+    !nonNegativeInteger(statistics.registrationSites) ||
+    !nonNegativeInteger(statistics.linkedRegistrations) ||
+    !nonNegativeInteger(statistics.dynamicRegistrations) ||
+    !nonNegativeInteger(statistics.durationMs) ||
+    typeof statistics.truncated !== "boolean" ||
+    !Array.isArray(value.warnings) ||
+    !value.warnings.every((warning) => typeof warning === "string") ||
+    value.writeOperations !== false
+  ) {
+    throw new TypeError("Tool catalog response does not match API version 1.0.0.");
+  }
+  return value as unknown as LocalToolCatalogResult;
+}
+
 export class LocalRepositoryClientError extends Error {
   constructor(
     message: string,
@@ -280,6 +385,21 @@ export class LocalRepositoryClient {
       signal,
     });
     return changeResult(value);
+  }
+
+  async tools(
+    path: string,
+    options: ToolCatalogScanOptions = {},
+    signal?: AbortSignal,
+  ): Promise<LocalToolCatalogResult> {
+    if (!path.trim()) throw new TypeError("Repository path is required.");
+    const value = await this.request("/api/v1/repositories/tools", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, options }),
+      signal,
+    });
+    return toolCatalogResult(value);
   }
 
   private async request(path: string, init: RequestInit) {

@@ -1,4 +1,5 @@
 export * from "./contracts/change";
+export * from "./contracts/tool-catalog";
 export * from "./contracts/graph";
 export * from "./contracts/plugin";
 export * from "./contracts/model-provider";

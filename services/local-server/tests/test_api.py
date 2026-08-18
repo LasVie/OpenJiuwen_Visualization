@@ -51,6 +51,23 @@ class LocalRepositoryApiTests(unittest.TestCase):
         self.assertEqual(scan.status, 200)
         self.assertGreater(scan.body["statistics"]["nodes"], 5)
         self.assertEqual(scan.body["repository"]["scanScope"], str(FIXTURE_ROOT))
+        self.assertIn("repository.tools.read", health.body["capabilities"])
+
+    def test_reports_static_tool_catalog_without_importing_target_code(self) -> None:
+        catalog = self.api.dispatch(
+            "POST",
+            "/api/v1/repositories/tools",
+            body={"path": str(FIXTURE_ROOT), "options": {"includeTests": False}},
+            origin=ALLOWED_ORIGIN,
+        )
+
+        self.assertEqual(catalog.status, 200)
+        self.assertEqual(catalog.body["schemaVersion"], "1.0.0")
+        self.assertFalse(catalog.body["writeOperations"])
+        self.assertGreaterEqual(catalog.body["statistics"]["tools"], 3)
+        self.assertTrue(
+            any(tool["name"] == "weather_lookup" for tool in catalog.body["tools"])
+        )
 
     def test_rejects_untrusted_origins_and_paths(self) -> None:
         origin_response = self.api.dispatch(

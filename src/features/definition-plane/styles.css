@@ -1,0 +1,59 @@
+.definition-workbench {
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.definition-workbench__tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.definition-workbench__tabs button {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  gap: 7px;
+  padding: 0 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.definition-workbench__tabs button > span {
+  display: grid;
+  line-height: 1;
+  text-align: left;
+}
+
+.definition-workbench__tabs button strong {
+  color: inherit;
+  font-size: 9px;
+}
+
+.definition-workbench__tabs button small {
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 6px;
+  letter-spacing: 0.08em;
+}
+
+.definition-workbench__tabs button.active {
+  color: var(--core);
+  background: var(--core-surface);
+  border-color: rgb(35 132 137 / 0.16);
+}
+
+.definition-workbench__tabs p {
+  margin: 0 0 0 auto;
+  color: var(--muted);
+  font-size: 8px;
+}

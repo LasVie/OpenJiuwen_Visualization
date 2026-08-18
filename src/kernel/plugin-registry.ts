@@ -19,6 +19,7 @@ import type {
   RegisteredModelRuntimeRecording,
 } from "./contracts/model-provider";
 import type { RegisteredGitChangeSource } from "./contracts/change";
+import type { RegisteredToolCatalogSource } from "./contracts/tool-catalog";
 
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 
@@ -37,6 +38,7 @@ export class PluginRegistryError extends Error {
       | "duplicate-model-provider"
       | "duplicate-model-recording"
       | "duplicate-change-source"
+      | "duplicate-tool-catalog-source"
       | "dangling-edge"
       | "invalid-scenario-reference",
   ) {
@@ -86,6 +88,7 @@ export class VisualizationPluginRegistry {
     const modelProviders: RegisteredModelProvider[] = [];
     const modelRecordings: RegisteredModelRuntimeRecording[] = [];
     const changeSources: RegisteredGitChangeSource[] = [];
+    const toolCatalogSources: RegisteredToolCatalogSource[] = [];
     const nodeIds = new Set<string>();
     const edgeIds = new Set<string>();
     const scenarioIds = new Set<string>();
@@ -93,6 +96,7 @@ export class VisualizationPluginRegistry {
     const modelProviderIds = new Set<string>();
     const modelRecordingIds = new Set<string>();
     const changeSourceIds = new Set<string>();
+    const toolCatalogSourceIds = new Set<string>();
     const capabilities = new Map<string, string[]>();
 
     orderedPlugins.forEach((plugin) => {
@@ -134,6 +138,15 @@ export class VisualizationPluginRegistry {
         this.assertUnique(changeSourceIds, source.id, "change-source", pluginId);
         changeSources.push({ ...source, contributedBy: pluginId });
       });
+      (contribution.toolCatalogSources ?? []).forEach((source) => {
+        this.assertUnique(
+          toolCatalogSourceIds,
+          source.id,
+          "tool-catalog-source",
+          pluginId,
+        );
+        toolCatalogSources.push({ ...source, contributedBy: pluginId });
+      });
     });
 
     this.validateEdges(edges, nodeIds);
@@ -151,6 +164,7 @@ export class VisualizationPluginRegistry {
       modelProviders,
       modelRecordings,
       changeSources,
+      toolCatalogSources,
       plugins: statuses,
       capabilities: Object.fromEntries(capabilities),
     };
@@ -238,7 +252,8 @@ export class VisualizationPluginRegistry {
       | "runtime-source"
       | "model-provider"
       | "model-recording"
-      | "change-source",
+      | "change-source"
+      | "tool-catalog-source",
     pluginId: string,
   ) {
     if (ids.has(id)) {
@@ -249,7 +264,8 @@ export class VisualizationPluginRegistry {
         | "duplicate-runtime-source"
         | "duplicate-model-provider"
         | "duplicate-model-recording"
-        | "duplicate-change-source";
+        | "duplicate-change-source"
+        | "duplicate-tool-catalog-source";
       throw new PluginRegistryError(
         `${entity} "${id}" contributed by "${pluginId}" is duplicated.`,
         code,

@@ -17,7 +17,7 @@ import { ScenarioTabs } from "./components/ScenarioTabs";
 import { TimelineControls } from "./components/TimelineControls";
 import { getScenario, graphNodes, scenarios } from "./data/scenarios";
 import { RailDecisionCanvas } from "./features/rail-review";
-import { RepositoryWorkspace } from "./features/repository-browser";
+import { DefinitionWorkspace } from "./features/definition-plane";
 import { ChangeWorkspace } from "./features/change-plane";
 import {
   CoreRuntimeSessionBar,
@@ -529,7 +529,8 @@ export default function App() {
             : undefined}
         />
       </div> : workbenchMode === "definition" ? (
-        <RepositoryWorkspace
+        <DefinitionWorkspace
+          runtimeEvents={activeRuntimeEvents}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
           onToggleMagnet={toggleMagnet}
