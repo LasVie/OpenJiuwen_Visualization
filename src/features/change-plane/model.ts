@@ -9,6 +9,11 @@ import type {
   LocalGitChangeResult,
   LocalRepositoryScanResult,
 } from "../../adapters/local-repository";
+import type { GitHubPullRequestResult } from "../../adapters/github-pull-request";
+
+export type RepositoryChangeResult =
+  | LocalGitChangeResult
+  | GitHubPullRequestResult;
 
 export interface FileImpactProjection {
   file: GitChangedFile;
@@ -20,7 +25,7 @@ export interface FileImpactProjection {
 
 export interface ChangeImpactProjection {
   graph: GraphSnapshot;
-  changes: LocalGitChangeResult;
+  changes: RepositoryChangeResult;
   files: readonly FileImpactProjection[];
   impacts: readonly NodeChangeImpact[];
   impactsById: ReadonlyMap<string, NodeChangeImpact>;
@@ -80,7 +85,7 @@ function pushUnique(
 
 function isHeadAligned(
   scan: LocalRepositoryScanResult,
-  changes: LocalGitChangeResult,
+  changes: RepositoryChangeResult,
 ) {
   if (changes.comparison.mode === "working-tree") return true;
   return (
@@ -91,7 +96,7 @@ function isHeadAligned(
 
 export function projectChangeImpacts(
   scan: LocalRepositoryScanResult,
-  changes: LocalGitChangeResult,
+  changes: RepositoryChangeResult,
 ): ChangeImpactProjection {
   const nodesById = new Map(scan.graph.nodes.map((node) => [node.id, node]));
   const edgesById = new Map(scan.graph.edges.map((edge) => [edge.id, edge]));

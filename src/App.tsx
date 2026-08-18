@@ -463,7 +463,7 @@ export default function App() {
             <GitCompareArrows size={17} />
             <span>
               <strong>Git Change Plane</strong>
-              <small>工作树 / commit refs · 节点影响映射 · 只读</small>
+              <small>工作树 / commit refs / GitHub PR · 节点影响映射 · 只读</small>
             </span>
           </div>
         ) : (
@@ -670,6 +670,7 @@ export default function App() {
         />
       ) : workbenchMode === "change" ? (
         <ChangeWorkspace
+          changeSources={workbench.changeSources}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
           onToggleMagnet={toggleMagnet}

@@ -78,6 +78,7 @@ repository@revision:path:symbol
 | `openjiuwen.jiuwenswarm` | Swarm 请求/响应定义与 Team/Workflow/Subagent Runtime |
 | `openjiuwen.model-provider` | Provider 流、用量、取消与确定性录制回放 |
 | `openjiuwen.git-change` | 工作树、commit refs 与节点级影响映射 |
+| `openjiuwen.github-pull-request` | GitHub PR 只读文件变更、远端 head 对齐与节点影响映射 |
 | `openjiuwen.tool-catalog` | Tool 声明、静态注册路径与 `ability.register` 运行确认 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
@@ -120,7 +121,9 @@ repository@revision:path:symbol
 4. 每条 Context 消息必须同时保留完整 `raw`；需要人工摘要时提供 `preview`。
 5. 运行 `npm run check`，确保引用、Token 预算和 ID 唯一性通过。
 
-## 后续适配顺序
+## 基础适配交付顺序
+
+以下顺序已经形成可组合的 V1 基线，后续能力继续沿同一依赖方向扩展：
 
 1. Local Repository 插件：静态 AST 索引、源码证据、增量 revision 缓存。
 2. Core Runtime 插件：Span、Rail Hook、ContextDelta、Ability 注册事件。
@@ -203,3 +206,5 @@ Model Provider 作为独立插件注册 adapter 与确定性 recording，不把�
 Git Change 插件把 `working-tree` 与本地 `base/head` 比较归一化为 change set。服务端只通过无 shell 参数调用读取 porcelain status、name-status、numstat、merge-base 和零上下文 patch；ref 先解析为 commit SHA，路径再规范化，所有响应均声明 `writeOperations: false`。
 
 前端并行取得 change set 与当前 Python AST Definition snapshot。hunk 与完整符号范围相交形成 direct impact，祖先形成 container impact，非 contains 关系形成 dependent impact。只有当前检出与比较 head 对齐时行号证据才是 exact；历史 ref、脏检出、删除、重命名和二进制会降级为 inferred。完整协议见 [`git-change-plane-v1.md`](git-change-plane-v1.md)。
+
+`openjiuwen.github-pull-request` 通过独立 adapter 把 GitHub PR metadata 与 files endpoint 归一化到同一个 change set，不让 React 组件理解 GitHub 原始响应。浏览器只提交结构化 PR 引用；loopback 服务固定访问 `api.github.com`，不会接受任意 URL，也不会为了对齐代码自动 fetch。PR head SHA 与当前干净检出一致时才能产生 exact 行号证据。完整协议见 [`github-pull-request-v1.md`](github-pull-request-v1.md)。

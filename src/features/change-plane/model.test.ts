@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LocalGitChangeResult, LocalRepositoryScanResult } from "../../adapters/local-repository";
+import type { GitHubPullRequestResult } from "../../adapters/github-pull-request";
 import { projectChangeImpacts } from "./model";
 
 const repository = {
@@ -65,6 +66,45 @@ function changes(head = repository.revision): LocalGitChangeResult {
   };
 }
 
+function githubChanges(head = repository.revision): GitHubPullRequestResult {
+  const local = changes(head);
+  const branch = {
+    ref: "feature/pr",
+    sha: head,
+    label: "LasVie:feature/pr",
+    repository: "LasVie/sample",
+  };
+  return {
+    ...local,
+    comparison: {
+      mode: "github-pr",
+      base: { requested: "main", resolved: "b".repeat(40) },
+      head: { requested: branch.ref, resolved: head },
+      mergeBase: null,
+    },
+    pullRequest: {
+      provider: "github",
+      owner: "LasVie",
+      repository: "sample",
+      number: 12,
+      title: "Map remote change",
+      state: "open",
+      draft: false,
+      merged: false,
+      author: "octocat",
+      htmlUrl: "https://github.com/LasVie/sample/pull/12",
+      head: branch,
+      base: { ...branch, ref: "main", sha: "b".repeat(40), label: "LasVie:main" },
+      changedFiles: 1,
+      additions: 3,
+      deletions: 1,
+      rateLimit: { limit: 60, remaining: 59, resetEpoch: null },
+    },
+    remoteOperations: { networkRead: true, mutation: false, authenticated: false },
+    writeOperations: false,
+  };
+}
+
 describe("change impact projection", () => {
   it("maps line hunks to symbols, containers and relation dependants", () => {
     const projection = projectChangeImpacts(scan, changes());
@@ -84,5 +124,15 @@ describe("change impact projection", () => {
     const projection = projectChangeImpacts(scan, changes("c".repeat(40)));
     expect(projection.headAligned).toBe(false);
     expect(projection.files[0].direct[0]).toMatchObject({ confidence: "inferred" });
+  });
+
+  it("uses the GitHub PR head SHA as the remote-to-local alignment boundary", () => {
+    const exact = projectChangeImpacts(scan, githubChanges());
+    const inferred = projectChangeImpacts(scan, githubChanges("c".repeat(40)));
+
+    expect(exact.headAligned).toBe(true);
+    expect(exact.files[0].direct[0].confidence).toBe("exact");
+    expect(inferred.headAligned).toBe(false);
+    expect(inferred.files[0].direct[0].reason).toMatch(/head/);
   });
 });

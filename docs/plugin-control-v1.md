@@ -30,7 +30,7 @@ V1 只控制浏览器内的 Workbench 解析，不安装、卸载插件，不启
 - `agent-core`：Core 执行内核、Rail 与 Model 观测；
 - `jiuwenswarm`：Swarm 编排、主体层级与 Subagent；
 - `integration`：跨仓因果边与确定性回放；
-- `workspace`：本地仓、Tool Catalog 与 Git 数据面。
+- `workspace`：本地仓、Tool Catalog、本地 Git 与 GitHub PR 数据面。
 
 Group 是产品语义，不是任意颜色值。UI 将 Core 映射为青色、Swarm 映射为紫色，并同时显示文字标签，不能只靠颜色区分来源。
 
@@ -75,7 +75,9 @@ openjiuwen.agent-core ──→ openjiuwen.model-provider
 
 openjiuwen.local-repository ──→ openjiuwen.tool-catalog
                  │
-                 └────────────→ openjiuwen.git-change
+                 ├────────────→ openjiuwen.git-change
+                 │
+                 └────────────→ openjiuwen.github-pull-request
 ```
 
 控制中心只展示直接依赖和直接下游；传递阻塞由注册器按拓扑顺序计算。

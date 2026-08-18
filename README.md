@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、Model Provider 录制回放、工作树或 commit range 的节点影响图，以及带依赖解析的模块开关。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、Model Provider 录制回放、工作树/commit range/GitHub PR 的节点影响图，以及带依赖解析的模块开关。
 
 ## 本地运行
 
@@ -71,7 +71,7 @@ Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，
 
 ### Git Change Plane
 
-顶部“变更图”通过本地服务只读比较 `HEAD ↔ 工作树` 或 `merge-base ↔ head`，再把文件 hunk 映射到 AST 符号、上层容器和 imports/inherits 等关系节点。页面明确区分 exact 与 inferred，不会 fetch、checkout 或修改仓库。完整合同见 [`docs/git-change-plane-v1.md`](docs/git-change-plane-v1.md)。
+顶部“变更图”通过本地服务只读比较 `HEAD ↔ 工作树`、`merge-base ↔ head`，或读取公共 GitHub PR，再把文件 hunk 映射到 AST 符号、上层容器和 imports/inherits 等关系节点。PR head 与当前干净检出一致时才使用 exact 行号，否则明确降级为 inferred；工具不会 fetch、checkout 或修改本地/远端状态。完整合同见 [`docs/git-change-plane-v1.md`](docs/git-change-plane-v1.md) 与 [`docs/github-pull-request-v1.md`](docs/github-pull-request-v1.md)。
 
 ### 模块控制中心
 
@@ -95,7 +95,7 @@ Context 的“消息分段”默认显示脱敏精简摘要，用户可逐条展
 
 ```text
 src/
-├─ adapters/                   # 本地服务等外部数据源客户端
+├─ adapters/                   # 本地服务、GitHub PR 等外部数据源客户端
 ├─ components/                 # 页面编排与 ReactFlow 适配组件
 ├─ kernel/                     # 版本化图协议、插件协议与注册器
 ├─ domain/

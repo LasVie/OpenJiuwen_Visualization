@@ -73,6 +73,12 @@ describe("visualization plugin registry", () => {
         remoteFetch: false,
         contributedBy: "openjiuwen.git-change",
       }),
+      expect.objectContaining({
+        id: "openjiuwen.github-pull-request",
+        readOnly: true,
+        remoteFetch: true,
+        contributedBy: "openjiuwen.github-pull-request",
+      }),
     ]);
     expect(defaultWorkbench.toolCatalogSources).toEqual([
       expect.objectContaining({
@@ -92,6 +98,7 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.local-repository", "enabled"],
         ["openjiuwen.tool-catalog", "enabled"],
         ["openjiuwen.git-change", "enabled"],
+        ["openjiuwen.github-pull-request", "enabled"],
       ]);
     expect(defaultWorkbench.plugins[0]).toMatchObject({
       id: "openjiuwen.agent-core",
@@ -115,6 +122,9 @@ describe("visualization plugin registry", () => {
     ]);
     expect(defaultWorkbench.capabilities["graph.change.impact.v1"]).toEqual([
       "openjiuwen.git-change",
+    ]);
+    expect(defaultWorkbench.capabilities["graph.change.github-pr.v1"]).toEqual([
+      "openjiuwen.github-pull-request",
     ]);
     expect(defaultWorkbench.capabilities["graph.definition.tool-registry.v1"])
       .toEqual(["openjiuwen.tool-catalog"]);
@@ -143,6 +153,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.local-repository": "enabled",
       "openjiuwen.tool-catalog": "enabled",
       "openjiuwen.git-change": "enabled",
+      "openjiuwen.github-pull-request": "enabled",
     });
     expect(snapshot.graph.nodes.map((node) => node.id)).toEqual([
       "input",
@@ -172,6 +183,10 @@ describe("visualization plugin registry", () => {
     ).toBe("blocked");
     expect(
       withoutLocalGit.plugins.find((item) => item.id === "openjiuwen.tool-catalog")
+        ?.state,
+    ).toBe("blocked");
+    expect(
+      withoutLocalGit.plugins.find((item) => item.id === "openjiuwen.github-pull-request")
         ?.state,
     ).toBe("blocked");
     expect(withoutLocalGit.changeSources).toEqual([]);

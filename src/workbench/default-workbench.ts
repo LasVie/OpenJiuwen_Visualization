@@ -5,6 +5,7 @@ import { deterministicReplayPlugin } from "../plugins/deterministic-replay";
 import { jiuwenSwarmPlugin } from "../plugins/jiuwenswarm";
 import { localRepositoryPlugin } from "../plugins/local-repository";
 import { gitChangePlugin } from "../plugins/git-change";
+import { githubPullRequestPlugin } from "../plugins/github-pull-request";
 import { modelProviderPlugin } from "../plugins/model-provider";
 import { toolCatalogPlugin } from "../plugins/tool-catalog";
 import { openJiuwenIntegrationPlugin } from "../plugins/openjiuwen-integration";
@@ -19,6 +20,7 @@ export function createDefaultPluginRegistry() {
     localRepositoryPlugin,
     toolCatalogPlugin,
     gitChangePlugin,
+    githubPullRequestPlugin,
   ]);
 }
 

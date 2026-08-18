@@ -1,7 +1,8 @@
 import type {
   GitChangeComparison,
   GitChangedFile,
-  GitChangeMode,
+  GitChangeSet,
+  LocalGitChangeMode,
   GitChangeStatistics,
   GraphSnapshot,
   ToolCatalogStatistics,
@@ -61,7 +62,7 @@ export interface LocalRepositoryCatalog {
 }
 
 export interface GitChangeRequest {
-  mode: GitChangeMode;
+  mode: LocalGitChangeMode;
   base?: string;
   head?: string;
   options?: {
@@ -70,10 +71,13 @@ export interface GitChangeRequest {
   };
 }
 
-export interface LocalGitChangeResult {
+export interface LocalGitChangeResult extends GitChangeSet {
   apiVersion: "1.0.0";
   repository: LocalRepositoryIdentity;
-  comparison: GitChangeComparison;
+  comparison: GitChangeComparison & {
+    mode: LocalGitChangeMode;
+    mergeBase: string;
+  };
   files: GitChangedFile[];
   statistics: GitChangeStatistics;
   warnings: string[];
@@ -183,6 +187,7 @@ function changedFile(value: unknown): value is GitChangedFile {
     typeof value.unstaged === "boolean" &&
     typeof value.untracked === "boolean" &&
     typeof value.binary === "boolean" &&
+    (value.patchAvailable === undefined || typeof value.patchAvailable === "boolean") &&
     (value.additions === null || nonNegativeInteger(value.additions)) &&
     (value.deletions === null || nonNegativeInteger(value.deletions)) &&
     Array.isArray(value.hunks) &&

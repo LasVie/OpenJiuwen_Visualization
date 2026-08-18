@@ -14,6 +14,12 @@ from urllib.parse import parse_qs, urlsplit
 
 from .config import LocalServiceConfig, PathAccessError
 from .git_changes import GitChangeError, GitChangeInspector, GitChangeOptions
+from .github_pull_requests import (
+    GitHubPullRequestError,
+    GitHubPullRequestInspector,
+    GitHubPullRequestOptions,
+    GitHubPullRequestReference,
+)
 from .repository import RepositoryResolutionError, RepositoryResolver
 from .scanner import (
     PythonRepositoryScanner,
@@ -69,6 +75,7 @@ class LocalRepositoryApi:
         tool_catalog_scanner: ToolCatalogScanner | None = None,
         trace_store: RuntimeTraceStore | None = None,
         change_inspector: GitChangeInspector | None = None,
+        github_pull_request_inspector: GitHubPullRequestInspector | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -76,6 +83,9 @@ class LocalRepositoryApi:
         self._tool_catalog_scanner = tool_catalog_scanner or ToolCatalogScanner()
         self.trace_store = trace_store or RuntimeTraceStore()
         self._change_inspector = change_inspector or GitChangeInspector()
+        self._github_pull_request_inspector = (
+            github_pull_request_inspector or GitHubPullRequestInspector()
+        )
 
     def dispatch(
         self,
@@ -102,6 +112,7 @@ class LocalRepositoryApi:
                         "repository.read",
                         "repository.tools.read",
                         "git.change.read",
+                        "github.pull-request.read",
                         "trace.ephemeral",
                     ],
                     "traceStorage": "memory-only",
@@ -125,6 +136,8 @@ class LocalRepositoryApi:
             return self._tool_catalog(body or {})
         if method == "POST" and route == "/api/v1/repositories/changes":
             return self._changes(body or {})
+        if method == "POST" and route == "/api/v1/repositories/github/pull-request":
+            return self._github_pull_request(body or {})
         if method == "POST" and route == "/api/v1/traces":
             return self._create_trace(body or {})
         trace_match = TRACE_ROUTE.fullmatch(route)
@@ -280,6 +293,57 @@ class LocalRepositoryApi:
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 "git_change_failed",
                 "Git comparison failed without modifying the target repository.",
+            )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _github_pull_request(self, body: dict[str, Any]) -> ApiResponse:
+        repository_path = body.get("path")
+        if not isinstance(repository_path, str) or not repository_path.strip():
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_path", "path must be a non-empty string.")
+        owner = body.get("owner")
+        repository = body.get("repository")
+        pull_number = body.get("pullNumber")
+        if not isinstance(owner, str):
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_github_owner", "owner must be a string.")
+        if not isinstance(repository, str):
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_github_repository",
+                "repository must be a string.",
+            )
+        if isinstance(pull_number, bool) or not isinstance(pull_number, int):
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_pull_request_number",
+                "pullNumber must be an integer.",
+            )
+        raw_options = body.get("options", {})
+        if not isinstance(raw_options, dict):
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_options", "options must be an object.")
+
+        try:
+            identity = self._resolver.resolve(repository_path)
+            result = self._github_pull_request_inspector.inspect(
+                identity,
+                GitHubPullRequestReference(owner, repository, pull_number),
+                GitHubPullRequestOptions(
+                    max_files=_integer_option(raw_options, "maxFiles", 500),
+                ),
+            )
+        except PathAccessError as exc:
+            return _error(HTTPStatus.FORBIDDEN, "path_not_allowed", str(exc))
+        except RepositoryResolutionError as exc:
+            return _error(HTTPStatus.UNPROCESSABLE_ENTITY, "repository_unavailable", str(exc))
+        except GitHubPullRequestError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        except ValueError as exc:
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_options", str(exc))
+        except Exception:
+            LOGGER.exception("GitHub pull-request inspection failed")
+            return _error(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "github_pull_request_failed",
+                "GitHub pull-request inspection failed without modifying local or remote state.",
             )
         return ApiResponse(HTTPStatus.OK, result)
 

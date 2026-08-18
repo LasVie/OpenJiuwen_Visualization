@@ -23,6 +23,7 @@ python -B services/local-server/scripts/run_server.py `
 | `POST` | `/api/v1/repositories/scan` | 解析一个允许范围内的 Git 仓库或子目录 |
 | `POST` | `/api/v1/repositories/tools` | 只读索引 Tool 声明与静态注册路径 |
 | `POST` | `/api/v1/repositories/changes` | 只读比较工作树或本地 commit refs |
+| `POST` | `/api/v1/repositories/github/pull-request` | 只读获取 GitHub PR 元数据与 changed files |
 | `POST` | `/api/v1/traces` | 创建内存 Trace 会话 |
 | `POST` | `/api/v1/traces/{id}/events` | 使用会话令牌追加归一化事件 |
 | `GET` | `/api/v1/traces/{id}` | 读取增量事件快照 |
@@ -74,9 +75,10 @@ Tool 目录请求：
 - `swarm.subagent` 必须声明结构化派发与隔离证据；服务会校验 subject/context owner 一致性，并阻止同一 invocation 中途改变 session、dispatcher 或隔离策略。完整原文仍只能进入所属 Context message。
 - Model Provider 事件会校验 invocation 身份、录制帧单调性、Token/费用预算和取消原因；服务不读取 Provider 凭据，完整输出不写日志或磁盘。
 - Git Change API 只读取 porcelain status、merge-base、name-status、numstat 与零上下文 patch；不会 fetch、checkout、merge 或写 refs，返回始终声明 `writeOperations: false`。
+- GitHub PR API 只接受结构化 owner/repository/PR 编号，固定访问 `api.github.com` 且拒绝重定向；浏览器不接触凭据，本地 Git 与远端 PR 都不会被修改。公共仓默认无需 token；可选的 `OPENJIUWEN_GITHUB_TOKEN` 只从服务端进程环境读取。
 - Tool Catalog 仅解析候选文件 AST，不 import、执行或实例化 Tool；注册数据流无法静态解析时保留为 `dynamic`，返回始终声明 `writeOperations: false`。
 
-Trace、变更与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
+Trace、变更与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
 
 仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 

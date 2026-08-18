@@ -52,6 +52,7 @@ class LocalRepositoryApiTests(unittest.TestCase):
         self.assertGreater(scan.body["statistics"]["nodes"], 5)
         self.assertEqual(scan.body["repository"]["scanScope"], str(FIXTURE_ROOT))
         self.assertIn("repository.tools.read", health.body["capabilities"])
+        self.assertIn("github.pull-request.read", health.body["capabilities"])
 
     def test_reports_static_tool_catalog_without_importing_target_code(self) -> None:
         catalog = self.api.dispatch(
@@ -104,6 +105,66 @@ class LocalRepositoryApiTests(unittest.TestCase):
         self.assertEqual(changes.body["comparison"]["mode"], "working-tree")
         self.assertFalse(changes.body["writeOperations"])
         self.assertIsInstance(changes.body["files"], list)
+
+    def test_routes_structured_github_pull_request_reads_through_the_server_adapter(self) -> None:
+        captured: dict[str, object] = {}
+
+        class StubGitHubInspector:
+            def inspect(self, identity, reference, options):  # type: ignore[no-untyped-def]
+                captured.update(
+                    identity=identity,
+                    reference=reference,
+                    options=options,
+                )
+                return {
+                    "apiVersion": "1.0.0",
+                    "repository": identity.to_api_dict(),
+                    "comparison": {
+                        "mode": "github-pr",
+                        "base": {"requested": "develop", "resolved": "1" * 40},
+                        "head": {"requested": "feature", "resolved": "2" * 40},
+                        "mergeBase": None,
+                    },
+                    "pullRequest": {"number": reference.number},
+                    "files": [],
+                    "statistics": {
+                        "files": 0,
+                        "additions": 0,
+                        "deletions": 0,
+                        "binaryFiles": 0,
+                        "truncated": False,
+                    },
+                    "warnings": [],
+                    "remoteOperations": {
+                        "networkRead": True,
+                        "mutation": False,
+                        "authenticated": False,
+                    },
+                    "writeOperations": False,
+                }
+
+        api = LocalRepositoryApi(
+            self.api.config,
+            github_pull_request_inspector=StubGitHubInspector(),  # type: ignore[arg-type]
+        )
+        response = api.dispatch(
+            "POST",
+            "/api/v1/repositories/github/pull-request",
+            body={
+                "path": str(REPOSITORY_ROOT),
+                "owner": "LasVie",
+                "repository": "agent-core",
+                "pullNumber": 42,
+                "options": {"maxFiles": 125},
+            },
+            origin=ALLOWED_ORIGIN,
+        )
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.body["comparison"]["mode"], "github-pr")
+        self.assertEqual(captured["reference"].owner, "LasVie")
+        self.assertEqual(captured["reference"].number, 42)
+        self.assertEqual(captured["options"].max_files, 125)
 
     def test_creates_memory_only_trace_and_accepts_token_scoped_events(self) -> None:
         created = self.api.dispatch(
