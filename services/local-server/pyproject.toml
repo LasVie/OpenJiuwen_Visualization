@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openjiuwen-visualization-local-server"
-version = "0.1.0"
-description = "Read-only local repository adapter for OpenJiuwen Visualization"
+version = "0.2.0"
+description = "Loopback repository and runtime trace adapter for OpenJiuwen Visualization"
 requires-python = ">=3.11"
 dependencies = []
 

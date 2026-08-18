@@ -13,6 +13,7 @@ import {
   type VisualizationPlugin,
   type WorkbenchSnapshot,
 } from "./contracts/plugin";
+import type { RegisteredRuntimeSource } from "./contracts/runtime";
 
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 
@@ -27,6 +28,7 @@ export class PluginRegistryError extends Error {
       | "duplicate-node"
       | "duplicate-edge"
       | "duplicate-scenario"
+      | "duplicate-runtime-source"
       | "dangling-edge"
       | "invalid-scenario-reference",
   ) {
@@ -72,9 +74,11 @@ export class VisualizationPluginRegistry {
     const nodes: RegisteredGraphNode[] = [];
     const edges: RegisteredGraphEdge[] = [];
     const scenarios: RegisteredTraceScenario[] = [];
+    const runtimeSources: RegisteredRuntimeSource[] = [];
     const nodeIds = new Set<string>();
     const edgeIds = new Set<string>();
     const scenarioIds = new Set<string>();
+    const runtimeSourceIds = new Set<string>();
     const capabilities = new Map<string, string[]>();
 
     orderedPlugins.forEach((plugin) => {
@@ -100,6 +104,10 @@ export class VisualizationPluginRegistry {
         this.assertUnique(scenarioIds, scenario.id, "scenario", pluginId);
         scenarios.push({ ...scenario, contributedBy: pluginId });
       });
+      (contribution.runtimeSources ?? []).forEach((source) => {
+        this.assertUnique(runtimeSourceIds, source.id, "runtime-source", pluginId);
+        runtimeSources.push({ ...source, contributedBy: pluginId });
+      });
     });
 
     this.validateEdges(edges, nodeIds);
@@ -113,6 +121,7 @@ export class VisualizationPluginRegistry {
         edges,
       },
       scenarios,
+      runtimeSources,
       plugins: statuses,
       capabilities: Object.fromEntries(capabilities),
     };
@@ -193,14 +202,15 @@ export class VisualizationPluginRegistry {
   private assertUnique(
     ids: Set<string>,
     id: string,
-    entity: "node" | "edge" | "scenario",
+    entity: "node" | "edge" | "scenario" | "runtime-source",
     pluginId: string,
   ) {
     if (ids.has(id)) {
       const code = `duplicate-${entity}` as
         | "duplicate-node"
         | "duplicate-edge"
-        | "duplicate-scenario";
+        | "duplicate-scenario"
+        | "duplicate-runtime-source";
       throw new PluginRegistryError(
         `${entity} "${id}" contributed by "${pluginId}" is duplicated.`,
         code,

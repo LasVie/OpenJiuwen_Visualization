@@ -15,7 +15,7 @@ class PathAccessError(ValueError):
 class LocalServiceConfig:
     allowed_roots: tuple[Path, ...]
     allowed_origins: frozenset[str]
-    max_request_bytes: int = 64 * 1024
+    max_request_bytes: int = 2 * 1024 * 1024
 
     @classmethod
     def create(
@@ -23,7 +23,7 @@ class LocalServiceConfig:
         *,
         allowed_roots: Iterable[str | Path],
         allowed_origins: Iterable[str] = (),
-        max_request_bytes: int = 64 * 1024,
+        max_request_bytes: int = 2 * 1024 * 1024,
     ) -> "LocalServiceConfig":
         resolved_roots: list[Path] = []
         for raw_root in allowed_roots:

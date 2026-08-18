@@ -1,6 +1,6 @@
 # Local Repository Service
 
-该服务为 Visualization Web 提供本地仓库的只读边界。它只使用 Python 标准库，不导入目标仓模块，不执行仓库脚本，也不提供 Git 或文件写接口。
+该服务为 Visualization Web 提供本地仓库的只读边界和临时 Runtime Trace 采集。它只使用 Python 标准库，不导入目标仓模块，不执行仓库脚本，也不提供 Git 或文件写接口；Trace 事件只写入进程内存。
 
 ## 启动
 
@@ -21,6 +21,10 @@ python -B services/local-server/scripts/run_server.py `
 | `GET` | `/api/v1/health` | 返回 API 版本与 `read-only` 模式 |
 | `GET` | `/api/v1/repositories` | 返回允许根目录及根目录/一级子目录中发现的 Git 仓库 |
 | `POST` | `/api/v1/repositories/scan` | 解析一个允许范围内的 Git 仓库或子目录 |
+| `POST` | `/api/v1/traces` | 创建内存 Trace 会话 |
+| `POST` | `/api/v1/traces/{id}/events` | 使用会话令牌追加归一化事件 |
+| `GET` | `/api/v1/traces/{id}` | 读取增量事件快照 |
+| `GET` | `/api/v1/traces/{id}/stream` | 通过 SSE 读取增量事件 |
 
 扫描请求：
 
@@ -45,7 +49,8 @@ python -B services/local-server/scripts/run_server.py `
 - Python 仅经 `ast.parse` 分析；不 import、eval、exec 或运行目标仓入口。
 - 浏览器 Origin 必须在启动白名单中；响应禁止缓存并设置 `nosniff`。
 - 请求体有大小上限，文件、文件数量和边数量均有扫描上限。
-- 当前没有任何写、命令执行、模型调用或凭据接口。
+- Repository API 没有任何写、命令执行、模型调用或凭据接口。
+- Runtime Trace 使用高熵会话 ID 和独立写入令牌；数据有数量、请求体和过期限制，只保存在内存。
 
 仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 

@@ -4,6 +4,7 @@ from .app import LocalRepositoryApi, create_http_server
 from .config import LocalServiceConfig, PathAccessError
 from .repository import RepositoryIdentity, RepositoryResolver
 from .scanner import PythonRepositoryScanner, ScanOptions
+from .trace_store import RuntimeTraceStore, TraceStoreError
 
 __all__ = [
     "LocalRepositoryApi",
@@ -13,5 +14,7 @@ __all__ = [
     "RepositoryIdentity",
     "RepositoryResolver",
     "ScanOptions",
+    "RuntimeTraceStore",
+    "TraceStoreError",
     "create_http_server",
 ]

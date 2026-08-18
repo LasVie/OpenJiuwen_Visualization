@@ -254,7 +254,11 @@ export function RailDecisionCanvas({
             <ScanSearch size={22} strokeWidth={1.8} />
           </span>
           <div className="rail-decision-dialog__title">
-            <span>RAIL DECISION WORKBENCH · DETERMINISTIC TRACE</span>
+            <span>
+              RAIL DECISION WORKBENCH · {scenario.provenance?.kind === "runtime"
+                ? "RUNTIME TRACE"
+                : "DETERMINISTIC TRACE"}
+            </span>
             <h2 id="rail-decision-title">{definition.label}</h2>
             <p>{selectedFrame.snapshot.profile.examines}</p>
           </div>

@@ -77,6 +77,8 @@ repository@revision:path:symbol
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务与静态定义图客户端，默认关闭 |
 
+`openjiuwen.agent-core` 同时注册 `openjiuwen.agent-core.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；网络连接、状态合并与 UI 生命周期由 `features/core-runtime/` 管理，组件不会读取 Python 对象或原始日志格式。
+
 后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
 
 ## Trace 来源语义
@@ -145,3 +147,11 @@ OpenJiuwen 的 Agent、Rail、Tool、Context、Workflow、Model 与 Team 目前�
 - Definition 画布复用 Trace 画布的磁吸与实时避碰算法，但位置仍是临时 View State，不写回语义图。
 
 这样单仓数千节点仍可渐进浏览，也为未来把 Runtime span、Tool registry 与 Git change 叠加到同一稳定节点保留了空间。
+
+## Core Runtime V1
+
+Core Runtime 使用 `traceId + sequence` 作为运行时顺序权威，并用 `spanId / parentSpanId` 保留后续调用树扩展能力。事件种类覆盖 Agent invoke、用户消息、task/ReAct iteration、model/tool call、Rail callback、Context snapshot/delta、Ability 注册和 Trace 状态。
+
+本地服务为每次运行创建有界、自动过期的内存会话：写入需要独立 token，读取依赖高熵 Trace ID，SSE 使用 `Last-Event-ID` 恢复。浏览器先按 sequence 幂等合并，再由 `features/core-runtime/model.ts` 投影为现有 `TraceScenario`；因此确定性 fixture 与真实 Runtime 共用画布、时间轴、Context 和 Rail 详情组件。
+
+框架 callback 只能生成 `rail.chain` 证据。`rail.hook` 的 mutation、control signal 和 examines 只有显式探针提供且标记 `exact=true` 时才作为单 Rail 决策展示，防止把链级耗时误标成某个 Rail 的内部过程。完整协议见 [`core-runtime-v1.md`](core-runtime-v1.md)。

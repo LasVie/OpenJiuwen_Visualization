@@ -77,7 +77,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
         server = create_http_server(config, host=arguments.host, port=arguments.port)
         print(
-            f"OpenJiuwen read-only repository service listening on "
+            f"OpenJiuwen local companion service listening on "
             f"http://{arguments.host}:{arguments.port}",
             flush=True,
         )

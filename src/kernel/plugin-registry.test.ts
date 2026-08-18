@@ -32,6 +32,13 @@ describe("visualization plugin registry", () => {
     expect(defaultWorkbench.graph.nodes).toHaveLength(15);
     expect(defaultWorkbench.graph.edges).toHaveLength(14);
     expect(defaultWorkbench.scenarios).toHaveLength(4);
+    expect(defaultWorkbench.runtimeSources).toEqual([
+      expect.objectContaining({
+        id: "openjiuwen.agent-core.runtime",
+        owner: "agent-core",
+        contributedBy: "openjiuwen.agent-core",
+      }),
+    ]);
     expect(defaultWorkbench.plugins.map((item) => [item.id, item.state]))
       .toEqual([
         ["openjiuwen.agent-core", "enabled"],

@@ -129,4 +129,10 @@ export interface TraceScenario {
   messages: ContextMessage[];
   steps: TraceStep[];
   maxTokens: number;
+  provenance?: {
+    kind: "fixture" | "runtime";
+    owner: RuntimeOwner;
+    traceId?: string;
+    status?: "open" | "completed" | "failed";
+  };
 }

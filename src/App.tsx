@@ -17,6 +17,12 @@ import { TimelineControls } from "./components/TimelineControls";
 import { getScenario, graphNodes, scenarios } from "./data/scenarios";
 import { RailDecisionCanvas } from "./features/rail-review";
 import { RepositoryWorkspace } from "./features/repository-browser";
+import {
+  CoreRuntimeSessionBar,
+  RuntimeSourceToggle,
+  useCoreRuntimeSession,
+  type RuntimeSourceMode,
+} from "./features/core-runtime";
 import { MagnetControls } from "./features/trace-graph";
 import { RuntimeBadge } from "./shared/ui/RuntimeBadge";
 import { useReplayStore } from "./state/replay-store";
@@ -25,9 +31,15 @@ export default function App() {
   const [workbenchMode, setWorkbenchMode] = useState<"runtime" | "definition">(
     "runtime",
   );
+  const [runtimeSource, setRuntimeSource] =
+    useState<RuntimeSourceMode>("fixture");
+  const [coreTraceLabel, setCoreTraceLabel] = useState("Agent Core local run");
+  const [liveStepIndex, setLiveStepIndex] = useState(0);
+  const [followLive, setFollowLive] = useState(true);
+  const coreRuntime = useCoreRuntimeSession();
   const {
     scenarioId,
-    stepIndex,
+    stepIndex: fixtureStepIndex,
     draftInput,
     runInput,
     contextOpen,
@@ -42,9 +54,9 @@ export default function App() {
     setScenario,
     setDraftInput,
     startRun,
-    nextStep,
-    previousStep,
-    jumpToStep,
+    nextStep: nextFixtureStep,
+    previousStep: previousFixtureStep,
+    jumpToStep: jumpToFixtureStep,
     setViewMode,
     expandDeepAgent,
     toggleContext,
@@ -55,11 +67,56 @@ export default function App() {
     toggleMagnet,
     setMagnetStrength,
   } = useReplayStore();
-  const scenario = getScenario(scenarioId);
+  const fixtureScenario = getScenario(scenarioId);
+  const scenario = runtimeSource === "core-runtime"
+    ? coreRuntime.scenario
+    : fixtureScenario;
+  const liveLastStep = Math.max(0, scenario.steps.length - 1);
+  const stepIndex = runtimeSource === "core-runtime"
+    ? Math.min(liveStepIndex, liveLastStep)
+    : fixtureStepIndex;
   const step = scenario.steps[stepIndex];
+  const activeRunInput = runtimeSource === "core-runtime" ? "" : runInput;
   const railCanvasDefinition = graphNodes.find(
     (node) => node.id === railCanvasRailId && node.type === "rail",
   );
+
+  useEffect(() => {
+    if (runtimeSource !== "core-runtime") return;
+    setLiveStepIndex((current) => followLive
+      ? liveLastStep
+      : Math.min(current, liveLastStep));
+  }, [followLive, liveLastStep, runtimeSource]);
+
+  function nextStep() {
+    if (runtimeSource === "fixture") {
+      nextFixtureStep();
+      return;
+    }
+    const next = Math.min(stepIndex + 1, liveLastStep);
+    setLiveStepIndex(next);
+    setFollowLive(next === liveLastStep);
+  }
+
+  function previousStep() {
+    if (runtimeSource === "fixture") {
+      previousFixtureStep();
+      return;
+    }
+    const previous = Math.max(0, stepIndex - 1);
+    setLiveStepIndex(previous);
+    setFollowLive(false);
+  }
+
+  function jumpToStep(index: number) {
+    if (runtimeSource === "fixture") {
+      jumpToFixtureStep(index);
+      return;
+    }
+    const next = Math.max(0, Math.min(index, liveLastStep));
+    setLiveStepIndex(next);
+    setFollowLive(next === liveLastStep);
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -83,11 +140,35 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [nextStep, previousStep, workbenchMode]);
+  }, [runtimeSource, scenario, stepIndex, liveLastStep, workbenchMode]);
+
+  async function createCoreTrace() {
+    setLiveStepIndex(0);
+    setFollowLive(true);
+    selectNode(null);
+    if (inspectorOpen) toggleInspector();
+    closeRailCanvas();
+    await coreRuntime.startSession(coreTraceLabel.trim() || "Agent Core local run");
+  }
+
+  function changeRuntimeSource(value: RuntimeSourceMode) {
+    setRuntimeSource(value);
+    closeRailCanvas();
+    selectNode(null);
+    if (inspectorOpen) toggleInspector();
+    if (value === "core-runtime") {
+      setLiveStepIndex(0);
+      setFollowLive(true);
+    }
+  }
 
   function submitRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    startRun();
+    if (runtimeSource === "core-runtime") {
+      void createCoreTrace();
+    } else {
+      startRun();
+    }
   }
 
   return (
@@ -127,21 +208,29 @@ export default function App() {
         {workbenchMode === "runtime" ? (
           <form className="run-composer" onSubmit={submitRun}>
             <label className="sr-only" htmlFor="simulation-input">
-              模拟输入
+              {runtimeSource === "core-runtime" ? "Trace 标签" : "模拟输入"}
             </label>
             <span className="run-composer__icon" aria-hidden="true">
               <Braces size={17} strokeWidth={1.8} />
             </span>
             <input
               id="simulation-input"
-              value={draftInput}
-              onChange={(event) => setDraftInput(event.target.value)}
-              placeholder="输入一段文字，按确定性轨迹模拟运行"
+              value={runtimeSource === "core-runtime" ? coreTraceLabel : draftInput}
+              onChange={(event) => runtimeSource === "core-runtime"
+                ? setCoreTraceLabel(event.target.value)
+                : setDraftInput(event.target.value)}
+              placeholder={runtimeSource === "core-runtime"
+                ? "填写 Trace 标签；采集器不会执行 Agent"
+                : "输入一段文字，按确定性轨迹模拟运行"}
               autoComplete="off"
             />
-            <button type="submit" className="run-button">
+            <button
+              type="submit"
+              className="run-button"
+              disabled={coreRuntime.connection === "creating"}
+            >
               <Play size={16} strokeWidth={2} fill="currentColor" aria-hidden="true" />
-              开始模拟
+              {runtimeSource === "core-runtime" ? "开始监听" : "开始模拟"}
             </button>
           </form>
         ) : (
@@ -163,13 +252,27 @@ export default function App() {
 
       {workbenchMode === "runtime" ? <div className="content-shell">
         <section className="stage-column">
-          <ScenarioTabs
-            scenarios={scenarios}
-            activeId={scenarioId}
-            onChange={setScenario}
-          />
+          {runtimeSource === "fixture" ? (
+            <ScenarioTabs
+              scenarios={scenarios}
+              activeId={scenarioId}
+              onChange={setScenario}
+            />
+          ) : (
+            <CoreRuntimeSessionBar
+              created={coreRuntime.created}
+              trace={coreRuntime.trace}
+              connection={coreRuntime.connection}
+              error={coreRuntime.error}
+              onCreate={() => void createCoreTrace()}
+            />
+          )}
           <div className="scenario-note">
             <ShieldCheck size={14} strokeWidth={1.8} aria-hidden="true" />
+            <RuntimeSourceToggle
+              value={runtimeSource}
+              onChange={changeRuntimeSource}
+            />
             <span>{scenario.description}</span>
             <MagnetControls
               enabled={magnetEnabled}
@@ -215,7 +318,7 @@ export default function App() {
           <FlowCanvas
             scenario={scenario}
             stepIndex={stepIndex}
-            playbackRevision={playbackRevision}
+            playbackRevision={playbackRevision + coreRuntime.events.length}
             selectedNodeId={selectedNodeId}
             viewMode={viewMode}
             deepAgentExpanded={deepAgentExpanded}
@@ -228,7 +331,7 @@ export default function App() {
           <InspectorPanel
             step={step}
             selectedNodeId={selectedNodeId}
-            runInput={runInput}
+            runInput={activeRunInput}
             open={inspectorOpen}
             onToggle={toggleInspector}
           />
@@ -246,7 +349,7 @@ export default function App() {
           scenario={scenario}
           step={step}
           stepIndex={stepIndex}
-          runInput={runInput}
+          runInput={activeRunInput}
           open={contextOpen}
           onToggle={toggleContext}
         />
@@ -265,7 +368,7 @@ export default function App() {
           definition={railCanvasDefinition}
           scenario={scenario}
           currentStepIndex={stepIndex}
-          runInput={runInput}
+          runInput={activeRunInput}
           onClose={closeRailCanvas}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}

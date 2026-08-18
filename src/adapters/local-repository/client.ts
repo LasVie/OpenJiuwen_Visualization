@@ -1,4 +1,5 @@
 import type { GraphSnapshot } from "../../kernel";
+import { loopbackHttpOrigin } from "../local-service/base-url";
 
 export const DEFAULT_LOCAL_REPOSITORY_SERVER = "http://127.0.0.1:8765";
 
@@ -57,23 +58,6 @@ interface ClientOptions {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function loopbackBaseUrl(value: string) {
-  const url = new URL(value);
-  const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-  if (
-    url.protocol !== "http:" ||
-    !loopbackHosts.has(url.hostname) ||
-    url.username ||
-    url.password ||
-    (url.pathname !== "/" && url.pathname !== "") ||
-    url.search ||
-    url.hash
-  ) {
-    throw new TypeError("Local repository server must be a credential-free loopback HTTP origin.");
-  }
-  return url.origin;
 }
 
 function scanResult(value: unknown): LocalRepositoryScanResult {
@@ -142,7 +126,7 @@ export class LocalRepositoryClient {
   private readonly fetcher: typeof fetch;
 
   constructor(options: ClientOptions = {}) {
-    this.baseUrl = loopbackBaseUrl(
+    this.baseUrl = loopbackHttpOrigin(
       options.baseUrl ?? DEFAULT_LOCAL_REPOSITORY_SERVER,
     );
     this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);

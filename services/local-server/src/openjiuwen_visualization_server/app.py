@@ -1,21 +1,28 @@
-"""Small dependency-free HTTP API for local repository inspection."""
+"""Dependency-free loopback API for repository inspection and runtime traces."""
 
 from __future__ import annotations
 
 import json
 import logging
+import re
+import time
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from .config import LocalServiceConfig, PathAccessError
 from .repository import RepositoryResolutionError, RepositoryResolver
 from .scanner import PythonRepositoryScanner, ScanOptions
+from .trace_store import API_VERSION as TRACE_API_VERSION
+from .trace_store import RuntimeTraceStore, TraceStoreError
 
 
 LOGGER = logging.getLogger(__name__)
+TRACE_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)$")
+TRACE_EVENTS_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)/events$")
+TRACE_STREAM_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)/stream$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +49,10 @@ def _integer_option(options: dict[str, Any], name: str, default: int) -> int:
     return value
 
 
+def _reject_json_constant(constant: str) -> None:
+    raise ValueError(f"Non-finite JSON number is not allowed: {constant}")
+
+
 class LocalRepositoryApi:
     def __init__(
         self,
@@ -49,10 +60,12 @@ class LocalRepositoryApi:
         *,
         resolver: RepositoryResolver | None = None,
         scanner: PythonRepositoryScanner | None = None,
+        trace_store: RuntimeTraceStore | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
         self._scanner = scanner or PythonRepositoryScanner()
+        self.trace_store = trace_store or RuntimeTraceStore()
 
     def dispatch(
         self,
@@ -61,11 +74,13 @@ class LocalRepositoryApi:
         *,
         body: dict[str, Any] | None = None,
         origin: str | None = None,
+        trace_token: str | None = None,
     ) -> ApiResponse:
         if not self.config.is_origin_allowed(origin):
             return _error(HTTPStatus.FORBIDDEN, "origin_not_allowed", "Origin is not allowed.")
 
-        route = urlsplit(path).path.rstrip("/") or "/"
+        split_path = urlsplit(path)
+        route = split_path.path.rstrip("/") or "/"
         if method == "GET" and route == "/api/v1/health":
             return ApiResponse(
                 HTTPStatus.OK,
@@ -73,6 +88,8 @@ class LocalRepositoryApi:
                     "status": "ok",
                     "apiVersion": "1.0.0",
                     "mode": "read-only",
+                    "capabilities": ["repository.read", "trace.ephemeral"],
+                    "traceStorage": "memory-only",
                 },
             )
         if method == "GET" and route == "/api/v1/repositories":
@@ -89,7 +106,84 @@ class LocalRepositoryApi:
             )
         if method == "POST" and route == "/api/v1/repositories/scan":
             return self._scan(body or {})
+        if method == "POST" and route == "/api/v1/traces":
+            return self._create_trace(body or {})
+        trace_match = TRACE_ROUTE.fullmatch(route)
+        if method == "GET" and trace_match:
+            return self._trace_snapshot(trace_match.group(1), split_path.query)
+        events_match = TRACE_EVENTS_ROUTE.fullmatch(route)
+        if method == "POST" and events_match:
+            return self._append_trace(events_match.group(1), trace_token, body or {})
         return _error(HTTPStatus.NOT_FOUND, "not_found", "API route was not found.")
+
+    def _create_trace(self, body: dict[str, Any]) -> ApiResponse:
+        try:
+            metadata, write_token = self.trace_store.create(
+                owner=body.get("owner", "agent-core"),
+                label=body.get("label", "Agent Core trace"),
+                max_tokens=body.get("maxTokens", 8192),
+            )
+        except TraceStoreError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        trace_id = metadata["id"]
+        return ApiResponse(
+            HTTPStatus.CREATED,
+            {
+                "apiVersion": TRACE_API_VERSION,
+                "trace": metadata,
+                "writeToken": write_token,
+                "endpoints": {
+                    "events": f"/api/v1/traces/{trace_id}/events",
+                    "snapshot": f"/api/v1/traces/{trace_id}",
+                    "stream": f"/api/v1/traces/{trace_id}/stream",
+                },
+                "storage": "memory-only",
+            },
+        )
+
+    def _append_trace(
+        self,
+        trace_id: str,
+        trace_token: str | None,
+        body: dict[str, Any],
+    ) -> ApiResponse:
+        try:
+            metadata, accepted = self.trace_store.append(
+                trace_id,
+                trace_token,
+                body.get("events"),
+            )
+        except TraceStoreError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(
+            HTTPStatus.ACCEPTED,
+            {
+                "apiVersion": TRACE_API_VERSION,
+                "trace": metadata,
+                "accepted": len(accepted),
+                "lastSequence": metadata["lastSequence"],
+                "storage": "memory-only",
+            },
+        )
+
+    def _trace_snapshot(self, trace_id: str, query: str) -> ApiResponse:
+        raw_after = parse_qs(query).get("after", ["0"])[0]
+        try:
+            after = int(raw_after)
+            metadata, events = self.trace_store.snapshot(trace_id, after=after)
+        except TraceStoreError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        except ValueError:
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_cursor", "after must be an integer.")
+        return ApiResponse(
+            HTTPStatus.OK,
+            {
+                "apiVersion": TRACE_API_VERSION,
+                "trace": metadata,
+                "events": events,
+                "storage": "memory-only",
+            },
+        )
 
     def _scan(self, body: dict[str, Any]) -> ApiResponse:
         repository_path = body.get("path")
@@ -134,7 +228,7 @@ class LocalRepositoryHttpServer(ThreadingHTTPServer):
 
 
 class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
-    server_version = "OpenJiuwenLocal/0.1"
+    server_version = "OpenJiuwenLocal/0.2"
     sys_version = ""
 
     @property
@@ -152,12 +246,17 @@ class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.NO_CONTENT)
         self._write_common_headers(origin)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Trace-Token")
         self.send_header("Access-Control-Max-Age", "600")
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         origin = self.headers.get("Origin")
+        split_path = urlsplit(self.path)
+        stream_match = TRACE_STREAM_ROUTE.fullmatch(split_path.path.rstrip("/"))
+        if stream_match:
+            self._stream_trace_events(stream_match.group(1), split_path.query, origin)
+            return
         self._write_response(self._api.dispatch("GET", self.path, origin=origin), origin)
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
@@ -177,9 +276,78 @@ class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
             )
             return
         self._write_response(
-            self._api.dispatch("POST", self.path, body=body, origin=origin),
+            self._api.dispatch(
+                "POST",
+                self.path,
+                body=body,
+                origin=origin,
+                trace_token=self.headers.get("X-Trace-Token"),
+            ),
             origin,
         )
+
+    def _stream_trace_events(self, trace_id: str, query: str, origin: str | None) -> None:
+        if not self._api.config.is_origin_allowed(origin):
+            self._write_response(
+                _error(HTTPStatus.FORBIDDEN, "origin_not_allowed", "Origin is not allowed."),
+                origin,
+            )
+            return
+        query_after = parse_qs(query).get("after", ["0"])[0]
+        raw_after = self.headers.get("Last-Event-ID") or query_after
+        try:
+            after = int(raw_after)
+            metadata, events = self._api.trace_store.snapshot(trace_id, after=after)
+        except TraceStoreError as exc:
+            self._write_response(_error(exc.status, exc.code, str(exc)), origin)
+            return
+        except ValueError:
+            self._write_response(
+                _error(HTTPStatus.BAD_REQUEST, "invalid_cursor", "after must be an integer."),
+                origin,
+            )
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self._write_common_headers(origin)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        try:
+            self.wfile.write(b": ready\n\n")
+            self.wfile.flush()
+            stream_deadline = time.monotonic() + 55
+            while True:
+                for event in events:
+                    payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+                    frame = (
+                        f"id: {event['sequence']}\n"
+                        f"event: trace.event\n"
+                        f"data: {payload}\n\n"
+                    )
+                    self.wfile.write(frame.encode("utf-8"))
+                    after = event["sequence"]
+                if events:
+                    self.wfile.flush()
+                if metadata["status"] != "open":
+                    payload = json.dumps(metadata, ensure_ascii=False, separators=(",", ":"))
+                    self.wfile.write(f"event: trace.end\ndata: {payload}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                    break
+
+                remaining = stream_deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                metadata, events = self._api.trace_store.wait_for_events(
+                    trace_id,
+                    after=after,
+                    timeout_seconds=min(15, remaining),
+                )
+                if not events:
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            LOGGER.debug("Trace stream client disconnected")
 
     def _read_json_body(self) -> dict[str, Any]:
         content_type = self.headers.get("Content-Type", "")
@@ -195,7 +363,10 @@ class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
             raise ValueError("Request body exceeds the configured size limit.")
         raw_body = self.rfile.read(content_length)
         try:
-            value = json.loads(raw_body.decode("utf-8"))
+            value = json.loads(
+                raw_body.decode("utf-8"),
+                parse_constant=_reject_json_constant,
+            )
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError("Request body is not valid UTF-8 JSON.") from exc
         if not isinstance(value, dict):

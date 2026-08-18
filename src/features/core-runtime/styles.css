@@ -1,0 +1,228 @@
+.core-runtime-session {
+  position: relative;
+  z-index: 14;
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) auto minmax(180px, auto) auto auto;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+  padding: 9px 14px;
+  background: var(--core-surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.core-runtime-session__identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+  color: var(--core);
+}
+
+.core-runtime-session__identity > span {
+  display: grid;
+  min-width: 0;
+}
+
+.core-runtime-session__identity small {
+  color: var(--core);
+  font-family: var(--mono);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+
+.core-runtime-session__identity strong {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-runtime-status,
+.core-runtime-session__metrics,
+.core-runtime-session__metrics > span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.core-runtime-status {
+  height: 28px;
+  gap: 5px;
+  padding: 0 9px;
+  color: var(--muted);
+  background: rgb(255 255 255 / 0.66);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px rgb(18 42 47 / 0.08);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.core-runtime-status--connected,
+.core-runtime-status--completed {
+  color: var(--success);
+}
+
+.core-runtime-status--creating,
+.core-runtime-status--reconnecting {
+  color: var(--amber);
+}
+
+.core-runtime-status--failed {
+  color: var(--fault);
+}
+
+.core-runtime-session__metrics {
+  min-width: 0;
+  gap: 9px;
+}
+
+.core-runtime-session__metrics > span {
+  flex: 0 0 auto;
+  gap: 4px;
+  color: var(--core-ink);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.core-runtime-session__metrics code {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-runtime-session > p {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-runtime-session__connection {
+  position: relative;
+}
+
+.core-runtime-session__connection summary {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  gap: 5px;
+  padding: 0 9px;
+  color: var(--core-ink);
+  background: rgb(255 255 255 / 0.62);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px rgb(22 116 123 / 0.12);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.core-runtime-session__connection summary::-webkit-details-marker {
+  display: none;
+}
+
+.core-runtime-session__connection > div {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  display: grid;
+  width: 420px;
+  gap: 6px;
+  padding: 12px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: 11px;
+  box-shadow: var(--shadow-border-hover), 0 12px 32px rgb(18 42 47 / 0.14);
+}
+
+.core-runtime-session__connection > div span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.core-runtime-session__connection > div code {
+  padding: 6px 8px;
+  overflow-wrap: anywhere;
+  color: var(--core-ink);
+  background: var(--core-surface);
+  border-radius: 6px;
+  font-size: 8px;
+  user-select: all;
+}
+
+.core-runtime-session__create {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  gap: 5px;
+  padding: 0 11px;
+  color: white;
+  background: var(--core);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.core-runtime-session__create:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.runtime-source-toggle {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 34px;
+  padding: 3px;
+  background: var(--surface-muted);
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px rgb(18 42 47 / 0.06);
+}
+
+.runtime-source-toggle button {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  gap: 5px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.runtime-source-toggle button.runtime-source-toggle--active {
+  color: var(--core-ink);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-border);
+}
+
+@media (max-width: 1240px) {
+  .core-runtime-session {
+    grid-template-columns: minmax(180px, 1fr) auto auto auto;
+  }
+
+  .core-runtime-session__metrics {
+    display: none;
+  }
+}

@@ -43,6 +43,14 @@ python -B services/local-server/scripts/scan_repository.py `
 
 页面每次只投影当前焦点和有限数量的子节点，不会把完整仓库的数千节点同时交给 ReactFlow。
 
+## Core Runtime
+
+运行链路的数据源可以在“演示 / Core Trace”之间切换。Core Trace 创建一个本机内存会话，通过 SSE 接收归一化的 Agent、ReAct、Rail、Context、Model、Tool 和 Ability 事件；它不会自行执行 `agent-core`、工具或模型。
+
+页面把事件顺序直接映射到已有的上一步/下一步、节点高亮、Rail 决策画布和 ContextWindow。停留在最新步骤时自动跟随新事件；回退查看历史后保持当前位置。Context 的分段模式默认脱敏，展开显示原文，连续原文始终保留完整消息。
+
+事件合同、接入请求和 Rail 精确证据规则见 [`docs/core-runtime-v1.md`](docs/core-runtime-v1.md)。
+
 ## 视觉语义
 
 - 浅青蓝：`agent-core`，负责 Agent 生命周期、ReAct、Context、Model、Tool 和 Rail。
@@ -76,7 +84,7 @@ src/
 ├─ types/                      # 兼容导出；稳定合同由 kernel 管理
 └─ workbench/                  # 组合默认插件并生成当前工作台快照
 services/
-└─ local-server/               # 路径白名单、Git 身份与 Python AST 索引
+└─ local-server/               # 路径白名单、Git/AST 只读索引与内存 Trace 采集
 ```
 
 扩展约束、数据流和新增场景步骤见 [`docs/architecture.md`](docs/architecture.md)。
