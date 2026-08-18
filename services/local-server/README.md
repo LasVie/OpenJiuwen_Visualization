@@ -51,6 +51,9 @@ python -B services/local-server/scripts/run_server.py `
 - 请求体有大小上限，文件、文件数量和边数量均有扫描上限。
 - Repository API 没有任何写、命令执行、模型调用或凭据接口。
 - Runtime Trace 使用高熵会话 ID 和独立写入令牌；数据有数量、请求体和过期限制，只保存在内存。
+- `agent-core` 会话只接受 Core 事件；`jiuwenswarm` 会话的非终止事件必须声明 `subject`，Context 还必须声明 `context.ownerId`，避免跨主体混合或无层级事件进入 UI。
+
+Trace 归一化协议分别见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md) 与 [`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)。
 
 仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 

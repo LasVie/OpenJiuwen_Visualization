@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 
 API_VERSION = "1.0.0"
-EVENT_KINDS = frozenset(
+CORE_EVENT_KINDS = frozenset(
     {
         "agent.invoke",
         "agent.user_message",
@@ -30,9 +30,26 @@ EVENT_KINDS = frozenset(
         "trace.status",
     }
 )
+SWARM_EVENT_KINDS = frozenset(
+    {
+        "swarm.team",
+        "swarm.member",
+        "swarm.task",
+        "swarm.message",
+        "swarm.workflow",
+        "swarm.phase",
+        "swarm.agent",
+        "swarm.human",
+        "swarm.subagent",
+    }
+)
+EVENT_KINDS = CORE_EVENT_KINDS | SWARM_EVENT_KINDS
 EVENT_PHASES = frozenset({"start", "end", "error", "instant"})
 TRACE_OWNERS = frozenset({"agent-core", "jiuwenswarm"})
 CONTEXT_ROLES = frozenset({"system", "user", "assistant", "tool", "summary"})
+SUBJECT_KINDS = frozenset(
+    {"team", "workflow", "phase", "member", "agent", "subagent", "human", "task"}
+)
 EVENT_FIELDS = frozenset(
     {
         "eventId",
@@ -51,6 +68,7 @@ EVENT_FIELDS = frozenset(
         "token",
         "context",
         "hook",
+        "subject",
         "definition",
         "payload",
     }
@@ -170,13 +188,15 @@ def _validate_context_message(message: Any, index: int) -> None:
 def _validate_context(context: Any) -> None:
     if not isinstance(context, dict):
         raise TraceStoreError("invalid_event", "context must be an object.")
-    unknown = set(context) - {"operation", "messages", "removeMessageIds"}
+    unknown = set(context) - {"operation", "ownerId", "messages", "removeMessageIds"}
     if unknown:
         raise TraceStoreError("invalid_event", f"context contains unsupported field: {sorted(unknown)[0]}")
     operation = _required_text(context.get("operation"), "context.operation", max_length=20)
     if operation not in {"append", "replace", "remove"}:
         raise TraceStoreError("invalid_event", f"Unsupported context operation: {operation}")
     context["operation"] = operation
+    if "ownerId" in context:
+        context["ownerId"] = _required_text(context["ownerId"], "context.ownerId")
     messages = context.get("messages", [])
     if not isinstance(messages, list) or len(messages) > 250:
         raise TraceStoreError("invalid_event", "context.messages must contain at most 250 items.")
@@ -184,6 +204,26 @@ def _validate_context(context: Any) -> None:
         _validate_context_message(message, index)
     if "removeMessageIds" in context:
         _validate_string_list(context["removeMessageIds"], "context.removeMessageIds", maximum=250)
+
+
+def _validate_subject(subject: Any) -> None:
+    if not isinstance(subject, dict):
+        raise TraceStoreError("invalid_event", "subject must be an object.")
+    allowed = {"id", "kind", "label", "parentId", "role", "contextOwnerId"}
+    unknown = set(subject) - allowed
+    if unknown:
+        raise TraceStoreError("invalid_event", f"subject contains unsupported field: {sorted(unknown)[0]}")
+    subject["id"] = _required_text(subject.get("id"), "subject.id")
+    kind = _required_text(subject.get("kind"), "subject.kind", max_length=40)
+    if kind not in SUBJECT_KINDS:
+        raise TraceStoreError("invalid_event", f"Unsupported subject kind: {kind}")
+    subject["kind"] = kind
+    subject["label"] = _required_text(subject.get("label"), "subject.label", max_length=240)
+    for field_name in ("parentId", "role", "contextOwnerId"):
+        if field_name in subject:
+            subject[field_name] = _required_text(subject[field_name], f"subject.{field_name}")
+    if subject.get("parentId") == subject["id"]:
+        raise TraceStoreError("invalid_event", "subject.parentId must differ from subject.id.")
 
 
 def _validate_hook(hook: Any) -> None:
@@ -296,6 +336,8 @@ def _validate_event(raw_event: Any) -> dict[str, Any]:
         _validate_context(event["context"])
     if "hook" in event:
         _validate_hook(event["hook"])
+    if "subject" in event:
+        _validate_subject(event["subject"])
     if kind == "rail.hook" and "hook" not in event:
         raise TraceStoreError("invalid_event", "rail.hook events require hook evidence.")
     if "definition" in event:
@@ -335,6 +377,7 @@ class _TraceSession:
     events: list[dict[str, Any]] = field(default_factory=list)
     event_ids: set[str] = field(default_factory=set)
     event_bytes: int = 0
+    subject_shapes: dict[str, tuple[str, str | None, str | None]] = field(default_factory=dict)
 
     def metadata(self) -> dict[str, Any]:
         return {
@@ -424,6 +467,23 @@ class RuntimeTraceStore:
                 raise TraceStoreError("invalid_trace_token", "Trace write token is missing or invalid.", status=403)
 
             validated = [_validate_event(event) for event in raw_events]
+            for event in validated:
+                if session.owner == "agent-core" and event["kind"] not in CORE_EVENT_KINDS:
+                    raise TraceStoreError(
+                        "invalid_event",
+                        f"Event kind {event['kind']} is not valid for an agent-core trace.",
+                    )
+                if session.owner == "jiuwenswarm":
+                    if event["kind"] != "trace.status" and "subject" not in event:
+                        raise TraceStoreError(
+                            "invalid_event",
+                            "jiuwenswarm events require a subject so hierarchy remains deterministic.",
+                        )
+                    if "context" in event and not event["context"].get("ownerId"):
+                        raise TraceStoreError(
+                            "invalid_event",
+                            "jiuwenswarm context events require context.ownerId.",
+                        )
 
             seen_event_ids = set(session.event_ids)
             unique: list[dict[str, Any]] = []
@@ -432,6 +492,54 @@ class RuntimeTraceStore:
                     continue
                 seen_event_ids.add(event["eventId"])
                 unique.append(event)
+
+            next_subject_shapes = dict(session.subject_shapes)
+            for event in unique:
+                subject = event.get("subject")
+                if not subject:
+                    continue
+                subject_id = subject["id"]
+                incoming = (
+                    subject["kind"],
+                    subject.get("parentId"),
+                    subject.get("contextOwnerId"),
+                )
+                existing = next_subject_shapes.get(subject_id)
+                if existing is None:
+                    next_subject_shapes[subject_id] = incoming
+                    continue
+                if existing[0] != incoming[0]:
+                    raise TraceStoreError(
+                        "invalid_event",
+                        f"subject {subject_id} changed kind within one trace.",
+                    )
+                if existing[1] and incoming[1] and existing[1] != incoming[1]:
+                    raise TraceStoreError(
+                        "invalid_event",
+                        f"subject {subject_id} changed parentId within one trace.",
+                    )
+                if existing[2] and incoming[2] and existing[2] != incoming[2]:
+                    raise TraceStoreError(
+                        "invalid_event",
+                        f"subject {subject_id} changed contextOwnerId within one trace.",
+                    )
+                next_subject_shapes[subject_id] = (
+                    existing[0],
+                    existing[1] or incoming[1],
+                    existing[2] or incoming[2],
+                )
+
+            for subject_id in next_subject_shapes:
+                cursor: str | None = subject_id
+                seen_subjects: set[str] = set()
+                while cursor and cursor in next_subject_shapes:
+                    if cursor in seen_subjects:
+                        raise TraceStoreError(
+                            "invalid_event",
+                            f"subject hierarchy contains a cycle at {cursor}.",
+                        )
+                    seen_subjects.add(cursor)
+                    cursor = next_subject_shapes[cursor][1]
             if session.status != "open":
                 if not unique:
                     return session.metadata(), []
@@ -463,6 +571,7 @@ class RuntimeTraceStore:
             if self._total_event_bytes_locked() + incoming_bytes > self._max_total_bytes:
                 raise TraceStoreError("trace_total_byte_limit", "The global trace byte limit has been reached.", status=413)
 
+            session.subject_shapes = next_subject_shapes
             accepted: list[dict[str, Any]] = []
             for event, encoded_size in zip(unique, encoded_sizes):
                 now = self._clock()

@@ -38,6 +38,11 @@ describe("visualization plugin registry", () => {
         owner: "agent-core",
         contributedBy: "openjiuwen.agent-core",
       }),
+      expect.objectContaining({
+        id: "openjiuwen.jiuwenswarm.runtime",
+        owner: "jiuwenswarm",
+        contributedBy: "openjiuwen.jiuwenswarm",
+      }),
     ]);
     expect(defaultWorkbench.plugins.map((item) => [item.id, item.state]))
       .toEqual([
@@ -49,6 +54,9 @@ describe("visualization plugin registry", () => {
       ]);
     expect(defaultWorkbench.capabilities["graph.rail"]).toEqual([
       "openjiuwen.agent-core",
+    ]);
+    expect(defaultWorkbench.capabilities["trace.context.ownership"]).toEqual([
+      "openjiuwen.jiuwenswarm",
     ]);
     expect(defaultWorkbench.graph.nodes.find((node) => node.id === "model"))
       .toMatchObject({

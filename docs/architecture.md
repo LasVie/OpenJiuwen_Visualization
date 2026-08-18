@@ -72,12 +72,12 @@ repository@revision:path:symbol
 | Plugin | Responsibility |
 |---|---|
 | `openjiuwen.agent-core` | DeepAgent、ReAct、Context、Model、Tool、Rail |
-| `openjiuwen.jiuwenswarm` | Swarm 请求与响应边界 |
+| `openjiuwen.jiuwenswarm` | Swarm 请求/响应定义与 Team/Workflow/Subagent Runtime |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务与静态定义图客户端，默认关闭 |
 
-`openjiuwen.agent-core` 同时注册 `openjiuwen.agent-core.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；网络连接、状态合并与 UI 生命周期由 `features/core-runtime/` 管理，组件不会读取 Python 对象或原始日志格式。
+`openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。组件不会读取 Python 对象或原始日志格式。
 
 后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
 
@@ -118,7 +118,7 @@ repository@revision:path:symbol
 
 1. Local Repository 插件：静态 AST 索引、源码证据、增量 revision 缓存。
 2. Core Runtime 插件：Span、Rail Hook、ContextDelta、Ability 注册事件。
-3. Swarm Runtime 插件：WorkflowProgressEvent、并行 Agent、Subagent 调用树。
+3. Swarm Runtime 插件：Team/WorkflowProgress、并行 Agent、Subagent 调用树与 Context owner 隔离。
 4. Model Provider 插件：流式模型调用、预算、取消和确定性录制回放。
 5. Git/GitHub 插件：工作树、commit、PR base/head 与节点级影响映射。
 
@@ -155,3 +155,17 @@ Core Runtime 使用 `traceId + sequence` 作为运行时顺序权威，并用 `s
 本地服务为每次运行创建有界、自动过期的内存会话：写入需要独立 token，读取依赖高熵 Trace ID，SSE 使用 `Last-Event-ID` 恢复。浏览器先按 sequence 幂等合并，再由 `features/core-runtime/model.ts` 投影为现有 `TraceScenario`；因此确定性 fixture 与真实 Runtime 共用画布、时间轴、Context 和 Rail 详情组件。
 
 框架 callback 只能生成 `rail.chain` 证据。`rail.hook` 的 mutation、control signal 和 examines 只有显式探针提供且标记 `exact=true` 时才作为单 Rail 决策展示，防止把链级耗时误标成某个 Rail 的内部过程。完整协议见 [`core-runtime-v1.md`](core-runtime-v1.md)。
+
+## Swarm Runtime V1
+
+Swarm Runtime 与 Core Runtime 共用 `traceId + sequence` 顺序和 loopback 内存服务，但增加稳定主体引用：
+
+```text
+subject.id + subject.kind + subject.parentId
+```
+
+`subject` 形成 Team → Workflow/Member → Phase/Task → Agent/Human/Subagent 的可渐进层级；消息和任务分配是跨主体关系，不改变结构父子关系。Swarm-owned Trace 的所有非 `trace.status` 事件必须带 `subject`，Context 事件还必须带 `context.ownerId`。这样一个任务可以结构上属于 Team，却明确读取某个 Member 的 Context；Subagent 也能拥有与父 Agent 完全不同的窗口。
+
+`features/swarm-runtime/model.ts` 只从显式 subject、payload relation 和 Context owner 投影，不从标签猜层级。静态源码路径仅标记为 `inferred`；生产者提供 `definition` 时才标记 `exact`。宏观视图只展示骨架、用户展开分支与当前活跃祖先链，微观视图展示当前步骤前已出现的全部主体。
+
+对 `jiuwenswarm` 的只读检视确认了两个真实边界：`TeamMonitorHandler` 输出 member/task/message，`WorkflowMonitorHandler` 聚合 WorkflowProgress 的 workflow/phase/agent/human。上游 `WorkflowAgentActivity` 当前明确保留 tool-call 字段但尚无结构化数据，因此 V1 不从日志、prompt 或 outcome 构造虚假 Tool 节点。完整协议见 [`swarm-runtime-v1.md`](swarm-runtime-v1.md)。

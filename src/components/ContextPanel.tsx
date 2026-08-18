@@ -22,6 +22,7 @@ interface ContextPanelProps {
   runInput: string;
   open: boolean;
   onToggle: () => void;
+  scopeLabel?: string;
 }
 
 const roleLabels: Record<ContextRole, string> = {
@@ -43,6 +44,7 @@ export function ContextPanel({
   runInput,
   open,
   onToggle,
+  scopeLabel,
 }: ContextPanelProps) {
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(
     new Set(),
@@ -115,6 +117,9 @@ export function ContextPanel({
         <div>
           <span className="section-kicker">LIVE SNAPSHOT</span>
           <h2>Context Window</h2>
+          {scopeLabel ? (
+            <span className="context-panel__scope">OWNER · {scopeLabel}</span>
+          ) : null}
         </div>
         <button
           type="button"

@@ -1,0 +1,663 @@
+.stage-column--swarm {
+  grid-template-rows: 64px 50px 50px minmax(240px, 1fr) auto 128px;
+}
+
+.swarm-runtime-session {
+  position: relative;
+  z-index: 14;
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) auto minmax(180px, auto) auto auto;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+  padding: 9px 14px;
+  background: var(--swarm-surface);
+  border-bottom: 1px solid #d8d0ec;
+}
+
+.swarm-runtime-session__identity,
+.swarm-runtime-session__metrics,
+.swarm-runtime-session__metrics > span {
+  display: flex;
+  align-items: center;
+}
+
+.swarm-runtime-session__identity {
+  min-width: 0;
+  gap: 9px;
+  color: var(--swarm);
+}
+
+.swarm-runtime-session__identity > span {
+  display: grid;
+  min-width: 0;
+}
+
+.swarm-runtime-session__identity small {
+  color: var(--swarm);
+  font-family: var(--mono);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+
+.swarm-runtime-session__identity strong {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swarm-runtime-session__metrics {
+  min-width: 0;
+  gap: 9px;
+}
+
+.swarm-runtime-session__metrics > span {
+  flex: 0 0 auto;
+  gap: 4px;
+  color: var(--swarm-ink);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.swarm-runtime-session__metrics code,
+.swarm-runtime-session > p {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swarm-runtime-session__connection {
+  position: relative;
+}
+
+.swarm-runtime-session__connection summary {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  gap: 5px;
+  padding: 0 9px;
+  color: var(--swarm-ink);
+  background: rgb(255 255 255 / 0.66);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px rgb(107 86 166 / 0.14);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.swarm-runtime-session__connection summary::-webkit-details-marker {
+  display: none;
+}
+
+.swarm-runtime-session__connection > div {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  display: grid;
+  width: 420px;
+  gap: 6px;
+  padding: 12px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: 11px;
+  box-shadow: var(--shadow-border-hover), 0 12px 32px rgb(51 38 87 / 0.16);
+}
+
+.swarm-runtime-session__connection > div span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.swarm-runtime-session__connection > div code {
+  padding: 6px 8px;
+  overflow-wrap: anywhere;
+  color: var(--swarm-ink);
+  background: var(--swarm-surface);
+  border-radius: 6px;
+  font-size: 8px;
+  user-select: all;
+}
+
+.swarm-runtime-session__create {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  gap: 5px;
+  padding: 0 11px;
+  color: white;
+  background: var(--swarm);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.swarm-runtime-session__create:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.runtime-source-toggle button.runtime-source-toggle--swarm {
+  color: var(--swarm-ink);
+  background: var(--swarm-surface);
+}
+
+.swarm-context-scope {
+  position: relative;
+  z-index: 9;
+  display: grid;
+  grid-template-columns: auto minmax(230px, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+  padding: 6px 14px;
+  background: #f5f3fa;
+  border-bottom: 1px solid #ddd7eb;
+}
+
+.swarm-context-scope__title,
+.swarm-context-scope__title > span,
+.swarm-context-scope label,
+.swarm-context-scope__metrics {
+  display: flex;
+  align-items: center;
+}
+
+.swarm-context-scope__title {
+  gap: 7px;
+  color: var(--swarm);
+}
+
+.swarm-context-scope__title > span {
+  display: grid;
+  line-height: 1;
+}
+
+.swarm-context-scope__title small {
+  color: var(--swarm);
+  font-family: var(--mono);
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+
+.swarm-context-scope__title strong {
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.swarm-context-scope label {
+  min-width: 0;
+  height: 34px;
+  gap: 7px;
+  padding: 0 9px;
+  color: var(--swarm);
+  background: white;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgb(107 86 166 / 0.15);
+}
+
+.swarm-context-scope select {
+  width: 100%;
+  min-width: 0;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.swarm-context-scope__metrics {
+  gap: 10px;
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.swarm-context-scope__metrics code {
+  max-width: 170px;
+  overflow: hidden;
+  color: var(--swarm-ink);
+  text-overflow: ellipsis;
+}
+
+.swarm-runtime-canvas {
+  background:
+    radial-gradient(circle at 12% 8%, rgb(107 86 166 / 0.08), transparent 30%),
+    linear-gradient(90deg, rgb(255 255 255 / 0.32), transparent 42%),
+    #f1f1f6;
+}
+
+.swarm-runtime-loading {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  color: var(--swarm-ink);
+  background: #f1f1f6;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.swarm-runtime-node {
+  position: relative;
+  width: 252px;
+  min-height: 112px;
+  padding: 11px 12px 9px;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgb(61 46 102 / 0.12), 0 4px 12px rgb(47 38 74 / 0.07);
+  transition: box-shadow 140ms ease, translate 140ms ease, opacity 140ms ease;
+}
+
+.swarm-runtime-node::before {
+  position: absolute;
+  top: 11px;
+  bottom: 11px;
+  left: 0;
+  width: 4px;
+  background: #aa9bd0;
+  border-radius: 0 4px 4px 0;
+  content: "";
+}
+
+.swarm-runtime-node--team {
+  background: linear-gradient(135deg, #eeeafb, white 58%);
+  box-shadow: 0 0 0 1px rgb(80 61 130 / 0.24), 0 6px 16px rgb(47 38 74 / 0.1);
+}
+
+.swarm-runtime-node--team::before {
+  background: var(--swarm);
+}
+
+.swarm-runtime-node--workflow,
+.swarm-runtime-node--phase {
+  background: linear-gradient(135deg, #f4f1fb, white 62%);
+}
+
+.swarm-runtime-node--workflow::before,
+.swarm-runtime-node--phase::before {
+  background: #856fc0;
+}
+
+.swarm-runtime-node--member,
+.swarm-runtime-node--agent {
+  background: linear-gradient(135deg, #edf3f8, white 62%);
+}
+
+.swarm-runtime-node--member::before,
+.swarm-runtime-node--agent::before {
+  background: #6a8eaa;
+}
+
+.swarm-runtime-node--subagent {
+  background: linear-gradient(135deg, #f2edfb, white 64%);
+  box-shadow: 0 0 0 1px rgb(107 86 166 / 0.18), 0 4px 12px rgb(47 38 74 / 0.07);
+}
+
+.swarm-runtime-node--subagent::before {
+  background: #9e6bc0;
+}
+
+.swarm-runtime-node--human::before {
+  background: #4f8c78;
+}
+
+.swarm-runtime-node--task {
+  background: linear-gradient(135deg, #faf4ea, white 64%);
+}
+
+.swarm-runtime-node--task::before {
+  background: #b78a55;
+}
+
+.swarm-runtime-node--active {
+  translate: 0 -1px;
+  box-shadow: 0 0 0 2px rgb(107 86 166 / 0.75), 0 9px 22px rgb(70 50 120 / 0.2);
+}
+
+.swarm-runtime-node--context {
+  box-shadow: 0 0 0 2px rgb(92 99 168 / 0.58), 0 7px 18px rgb(68 73 133 / 0.14);
+}
+
+.swarm-runtime-node--active.swarm-runtime-node--context {
+  box-shadow: 0 0 0 2px var(--swarm), 0 0 0 5px rgb(92 99 168 / 0.15), 0 9px 22px rgb(70 50 120 / 0.2);
+}
+
+.swarm-runtime-node--failed {
+  box-shadow: 0 0 0 1px rgb(183 74 74 / 0.5), 0 5px 14px rgb(130 54 54 / 0.12);
+}
+
+.swarm-runtime-node__header {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.swarm-runtime-node__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--swarm);
+  background: var(--swarm-surface);
+  border-radius: 9px;
+}
+
+.swarm-runtime-node--task .swarm-runtime-node__icon {
+  color: #8a5e2e;
+  background: var(--amber-soft);
+}
+
+.swarm-runtime-node__identity {
+  display: grid;
+  min-width: 0;
+}
+
+.swarm-runtime-node__identity small {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swarm-runtime-node__identity strong {
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swarm-runtime-node__status {
+  padding: 3px 5px;
+  color: var(--muted);
+  background: var(--surface-muted);
+  border-radius: 5px;
+  font-size: 7px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.swarm-runtime-node__status--running {
+  color: var(--swarm-ink);
+  background: var(--swarm-surface-strong);
+}
+
+.swarm-runtime-node__status--waiting {
+  color: #875923;
+  background: var(--amber-soft);
+}
+
+.swarm-runtime-node__status--completed {
+  color: var(--success);
+  background: #e3efe9;
+}
+
+.swarm-runtime-node__status--failed {
+  color: var(--fault);
+  background: var(--fault-soft);
+}
+
+.swarm-runtime-node__meta,
+.swarm-runtime-node__meta > span,
+.swarm-runtime-node__footer,
+.swarm-runtime-node__expand {
+  display: flex;
+  align-items: center;
+}
+
+.swarm-runtime-node__meta {
+  min-height: 27px;
+  gap: 7px;
+  margin-top: 7px;
+  padding: 0 7px;
+  color: var(--muted);
+  background: rgb(239 241 243 / 0.7);
+  border-radius: 7px;
+  font-size: 7px;
+}
+
+.swarm-runtime-node__meta > span {
+  gap: 4px;
+}
+
+.swarm-runtime-node__meta code {
+  padding: 2px 4px;
+  color: var(--context);
+  background: var(--context-soft);
+  border-radius: 4px;
+  font-size: 6px;
+  font-weight: 700;
+}
+
+.swarm-runtime-node__meta b {
+  margin-left: auto;
+  color: var(--context);
+  font-size: 7px;
+}
+
+.swarm-runtime-node__footer {
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.swarm-runtime-node__event {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--swarm-ink);
+  font-family: var(--mono);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swarm-runtime-node__expand {
+  margin-left: auto;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 7px;
+  white-space: nowrap;
+}
+
+.swarm-runtime-handle {
+  width: 8px !important;
+  height: 8px !important;
+  background: var(--swarm) !important;
+  border: 2px solid white !important;
+}
+
+.react-flow__node-swarmSubject.selected .swarm-runtime-node {
+  box-shadow: 0 0 0 2px var(--swarm), 0 8px 20px rgb(70 50 120 / 0.17);
+}
+
+.swarm-runtime-legend {
+  border-color: #d8d0ec;
+}
+
+.swarm-legend-line {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 2px solid #a9a0c3;
+}
+
+.swarm-legend-line--message {
+  border-color: #6a8eaa;
+  border-top-style: dashed;
+}
+
+.swarm-legend-line--assignment {
+  border-color: #b99a72;
+}
+
+.swarm-runtime-empty {
+  padding: 8px 12px;
+  color: var(--swarm-ink);
+  background: rgb(255 255 255 / 0.86);
+  border-radius: 9px;
+  box-shadow: var(--shadow-border);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.swarm-runtime-inspector {
+  border-top-color: #d8d0ec;
+}
+
+.swarm-runtime-inspector .inspector__event code {
+  color: var(--swarm-ink);
+  background: var(--swarm-surface);
+}
+
+.swarm-runtime-inspector__grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr 0.8fr 1.15fr;
+  height: calc(100% - 55px);
+  min-height: 0;
+}
+
+.swarm-runtime-inspector__grid > article {
+  min-width: 0;
+  padding: 10px 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+}
+
+.swarm-runtime-inspector__grid > article:last-child {
+  border-right: 0;
+}
+
+.swarm-runtime-inspector__grid article > p {
+  color: var(--ink-soft);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.swarm-runtime-inspector__grid article > strong,
+.swarm-runtime-inspector__grid article > small {
+  display: block;
+}
+
+.swarm-runtime-inspector__grid article > strong {
+  margin-top: 6px;
+  font-size: 10px;
+}
+
+.swarm-runtime-inspector__grid article > small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 7px;
+}
+
+.swarm-runtime-inspector__grid dl {
+  display: grid;
+  gap: 4px;
+  margin: 7px 0 0;
+}
+
+.swarm-runtime-inspector__grid dl > div {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 5px;
+}
+
+.swarm-runtime-inspector__grid dt {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 7px;
+}
+
+.swarm-runtime-inspector__grid dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swarm-runtime-activity-list {
+  display: grid;
+  gap: 4px;
+}
+
+.swarm-runtime-activity-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--swarm-surface);
+  border-radius: 5px;
+}
+
+.swarm-runtime-activity-list code {
+  overflow: hidden;
+  color: var(--swarm-ink);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swarm-runtime-activity-list strong,
+.swarm-runtime-activity-list span {
+  color: var(--muted);
+  font-size: 7px;
+}
+
+.context-panel__scope {
+  display: block;
+  max-width: 220px;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--context);
+  font-family: var(--mono);
+  font-size: 7px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1280px) {
+  .swarm-runtime-session {
+    grid-template-columns: minmax(180px, 1fr) auto auto auto;
+  }
+
+  .swarm-runtime-session__metrics,
+  .swarm-context-scope__metrics code {
+    display: none;
+  }
+
+  .swarm-runtime-inspector__grid {
+    grid-template-columns: 1.1fr 0.9fr 0.9fr;
+  }
+
+  .swarm-runtime-inspector__activity {
+    display: none;
+  }
+}

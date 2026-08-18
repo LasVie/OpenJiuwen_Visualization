@@ -1,0 +1,362 @@
+{
+  "events": [
+    {
+      "eventId": "swarm-example-01",
+      "kind": "swarm.team",
+      "phase": "start",
+      "timestampMs": 1000,
+      "spanId": "team",
+      "title": "Create Alpha team",
+      "subject": { "id": "team:alpha", "kind": "team", "label": "Alpha Team" },
+      "payload": { "status": "running", "teamId": "alpha" }
+    },
+    {
+      "eventId": "swarm-example-02",
+      "kind": "swarm.member",
+      "phase": "start",
+      "timestampMs": 1001,
+      "spanId": "leader",
+      "parentSpanId": "team",
+      "title": "Leader online",
+      "subject": {
+        "id": "member:leader",
+        "kind": "member",
+        "label": "Team Leader",
+        "parentId": "team:alpha",
+        "role": "leader",
+        "contextOwnerId": "ctx:leader"
+      },
+      "payload": { "status": "running", "teamId": "alpha" }
+    },
+    {
+      "eventId": "swarm-example-03",
+      "kind": "swarm.member",
+      "phase": "start",
+      "timestampMs": 1002,
+      "spanId": "worker",
+      "parentSpanId": "team",
+      "title": "Worker online",
+      "subject": {
+        "id": "member:worker",
+        "kind": "member",
+        "label": "Repository Worker",
+        "parentId": "team:alpha",
+        "role": "teammate",
+        "contextOwnerId": "ctx:worker"
+      },
+      "payload": { "status": "running", "teamId": "alpha" }
+    },
+    {
+      "eventId": "swarm-example-04",
+      "kind": "swarm.workflow",
+      "phase": "start",
+      "timestampMs": 1003,
+      "spanId": "workflow",
+      "parentSpanId": "team",
+      "title": "Review workflow starts",
+      "subject": {
+        "id": "workflow:review",
+        "kind": "workflow",
+        "label": "Repository Review",
+        "parentId": "team:alpha"
+      },
+      "payload": { "status": "running", "runId": "run-review-1" }
+    },
+    {
+      "eventId": "swarm-example-05",
+      "kind": "swarm.phase",
+      "phase": "start",
+      "timestampMs": 1004,
+      "spanId": "phase",
+      "parentSpanId": "workflow",
+      "title": "Inspect phase",
+      "subject": {
+        "id": "phase:inspect",
+        "kind": "phase",
+        "label": "Inspect Changes",
+        "parentId": "workflow:review"
+      },
+      "payload": { "status": "running", "runId": "run-review-1", "nodeType": "author" }
+    },
+    {
+      "eventId": "swarm-example-06",
+      "kind": "swarm.agent",
+      "phase": "start",
+      "timestampMs": 1005,
+      "spanId": "reviewer",
+      "parentSpanId": "phase",
+      "title": "Reviewer agent starts",
+      "subject": {
+        "id": "agent:reviewer",
+        "kind": "agent",
+        "label": "Reviewer Agent",
+        "parentId": "phase:inspect",
+        "role": "reviewer",
+        "contextOwnerId": "ctx:reviewer"
+      },
+      "payload": { "status": "running", "runId": "run-review-1", "correlationId": "turn-17" }
+    },
+    {
+      "eventId": "swarm-example-07",
+      "kind": "context.delta",
+      "phase": "instant",
+      "timestampMs": 1006,
+      "spanId": "leader-context",
+      "parentSpanId": "leader",
+      "title": "Leader receives request",
+      "subject": {
+        "id": "member:leader",
+        "kind": "member",
+        "label": "Team Leader",
+        "parentId": "team:alpha",
+        "role": "leader",
+        "contextOwnerId": "ctx:leader"
+      },
+      "context": {
+        "operation": "append",
+        "ownerId": "ctx:leader",
+        "messages": [
+          {
+            "id": "leader-system",
+            "role": "system",
+            "label": "Team policy",
+            "raw": "Coordinate the repository review and never expose secrets.",
+            "preview": "Coordinate review under team policy.",
+            "tokens": 11,
+            "source": "team.runtime"
+          },
+          {
+            "id": "leader-user",
+            "role": "user",
+            "label": "User request",
+            "raw": "Review PR 42 for alice@example.com and summarize the risky changes.",
+            "preview": "Review PR [id] for [email] and summarize risky changes.",
+            "tokens": 17,
+            "source": "team.message"
+          }
+        ]
+      },
+      "token": { "used": 28, "delta": 28, "budget": 4096 }
+    },
+    {
+      "eventId": "swarm-example-08",
+      "kind": "swarm.message",
+      "phase": "instant",
+      "timestampMs": 1007,
+      "spanId": "message",
+      "parentSpanId": "leader",
+      "title": "Leader delegates review",
+      "subject": {
+        "id": "member:leader",
+        "kind": "member",
+        "label": "Team Leader",
+        "parentId": "team:alpha",
+        "role": "leader",
+        "contextOwnerId": "ctx:leader"
+      },
+      "payload": {
+        "fromSubjectId": "member:leader",
+        "toSubjectId": "member:worker",
+        "protocol": "plain",
+        "teamId": "alpha"
+      }
+    },
+    {
+      "eventId": "swarm-example-09",
+      "kind": "swarm.task",
+      "phase": "start",
+      "timestampMs": 1008,
+      "spanId": "task",
+      "parentSpanId": "team",
+      "title": "Assign repository inspection",
+      "subject": {
+        "id": "task:inspect-pr",
+        "kind": "task",
+        "label": "Inspect PR 42",
+        "parentId": "team:alpha",
+        "contextOwnerId": "ctx:worker"
+      },
+      "payload": { "status": "in_progress", "taskId": "task-42", "assigneeId": "member:worker" }
+    },
+    {
+      "eventId": "swarm-example-10",
+      "kind": "context.delta",
+      "phase": "instant",
+      "timestampMs": 1009,
+      "spanId": "worker-context",
+      "parentSpanId": "worker",
+      "title": "Worker receives task",
+      "subject": {
+        "id": "member:worker",
+        "kind": "member",
+        "label": "Repository Worker",
+        "parentId": "team:alpha",
+        "role": "teammate",
+        "contextOwnerId": "ctx:worker"
+      },
+      "context": {
+        "operation": "append",
+        "ownerId": "ctx:worker",
+        "messages": [
+          {
+            "id": "worker-system",
+            "role": "system",
+            "label": "Worker role",
+            "raw": "Inspect the repository diff and report evidence to the leader.",
+            "preview": "Inspect diff and report evidence.",
+            "tokens": 12,
+            "source": "member.runtime"
+          },
+          {
+            "id": "worker-task",
+            "role": "user",
+            "label": "Delegated task",
+            "raw": "Inspect PR 42. Focus on authentication and persistence changes.",
+            "preview": "Inspect delegated PR. Focus on sensitive changes.",
+            "tokens": 16,
+            "source": "team.task"
+          }
+        ]
+      },
+      "token": { "used": 28, "delta": 28, "budget": 4096 }
+    },
+    {
+      "eventId": "swarm-example-11",
+      "kind": "swarm.subagent",
+      "phase": "start",
+      "timestampMs": 1010,
+      "spanId": "explore",
+      "parentSpanId": "worker",
+      "title": "Explore subagent starts",
+      "subject": {
+        "id": "subagent:explore",
+        "kind": "subagent",
+        "label": "Explore Agent",
+        "parentId": "member:worker",
+        "role": "explorer",
+        "contextOwnerId": "ctx:explore"
+      },
+      "payload": { "status": "running", "correlationId": "sub-1" }
+    },
+    {
+      "eventId": "swarm-example-12",
+      "kind": "context.snapshot",
+      "phase": "instant",
+      "timestampMs": 1011,
+      "spanId": "explore-context",
+      "parentSpanId": "explore",
+      "title": "Explore context snapshot",
+      "subject": {
+        "id": "subagent:explore",
+        "kind": "subagent",
+        "label": "Explore Agent",
+        "parentId": "member:worker",
+        "role": "explorer",
+        "contextOwnerId": "ctx:explore"
+      },
+      "context": {
+        "operation": "replace",
+        "ownerId": "ctx:explore",
+        "messages": [
+          {
+            "id": "explore-system",
+            "role": "system",
+            "label": "Subagent contract",
+            "raw": "Search only the authentication paths and return file-level evidence.",
+            "preview": "Search scoped paths and return evidence.",
+            "tokens": 13,
+            "source": "subagent.session"
+          },
+          {
+            "id": "explore-task",
+            "role": "user",
+            "label": "Subtask",
+            "raw": "Find every changed authentication branch in PR 42.",
+            "preview": "Find changed authentication branches.",
+            "tokens": 11,
+            "source": "subagent.task"
+          }
+        ]
+      },
+      "token": { "used": 24, "delta": 24, "budget": 2048 }
+    },
+    {
+      "eventId": "swarm-example-13",
+      "kind": "model.call",
+      "phase": "start",
+      "timestampMs": 1012,
+      "spanId": "explore-model",
+      "parentSpanId": "explore",
+      "title": "Explore model boundary",
+      "subject": {
+        "id": "subagent:explore",
+        "kind": "subagent",
+        "label": "Explore Agent",
+        "parentId": "member:worker",
+        "role": "explorer",
+        "contextOwnerId": "ctx:explore"
+      },
+      "token": { "used": 24, "delta": 0, "budget": 2048 }
+    },
+    {
+      "eventId": "swarm-example-14",
+      "kind": "swarm.subagent",
+      "phase": "end",
+      "timestampMs": 1013,
+      "spanId": "explore",
+      "parentSpanId": "worker",
+      "title": "Explore subagent completes",
+      "subject": {
+        "id": "subagent:explore",
+        "kind": "subagent",
+        "label": "Explore Agent",
+        "parentId": "member:worker",
+        "role": "explorer",
+        "contextOwnerId": "ctx:explore"
+      },
+      "payload": { "status": "completed", "correlationId": "sub-1" }
+    },
+    {
+      "eventId": "swarm-example-15",
+      "kind": "swarm.agent",
+      "phase": "end",
+      "timestampMs": 1014,
+      "spanId": "reviewer",
+      "parentSpanId": "phase",
+      "title": "Reviewer agent completes",
+      "subject": {
+        "id": "agent:reviewer",
+        "kind": "agent",
+        "label": "Reviewer Agent",
+        "parentId": "phase:inspect",
+        "role": "reviewer",
+        "contextOwnerId": "ctx:reviewer"
+      },
+      "payload": { "status": "completed", "runId": "run-review-1" }
+    },
+    {
+      "eventId": "swarm-example-16",
+      "kind": "swarm.workflow",
+      "phase": "end",
+      "timestampMs": 1015,
+      "spanId": "workflow",
+      "parentSpanId": "team",
+      "title": "Review workflow completes",
+      "subject": {
+        "id": "workflow:review",
+        "kind": "workflow",
+        "label": "Repository Review",
+        "parentId": "team:alpha"
+      },
+      "payload": { "status": "completed", "runId": "run-review-1" }
+    },
+    {
+      "eventId": "swarm-example-17",
+      "kind": "trace.status",
+      "phase": "end",
+      "timestampMs": 1016,
+      "spanId": "trace",
+      "title": "Trace complete"
+    }
+  ]
+}

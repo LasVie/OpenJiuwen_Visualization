@@ -9,7 +9,9 @@ import type {
   TraceDetail,
 } from "./trace";
 
-export const CORE_RUNTIME_API_VERSION = "1.0.0" as const;
+export const RUNTIME_TRACE_API_VERSION = "1.0.0" as const;
+/** Backward-compatible name retained for existing Agent Core collectors. */
+export const CORE_RUNTIME_API_VERSION = RUNTIME_TRACE_API_VERSION;
 
 export const CORE_RUNTIME_EVENT_KINDS = [
   "agent.invoke",
@@ -27,11 +29,58 @@ export const CORE_RUNTIME_EVENT_KINDS = [
 ] as const;
 
 export type CoreRuntimeEventKind = (typeof CORE_RUNTIME_EVENT_KINDS)[number];
+
+export const SWARM_RUNTIME_EVENT_KINDS = [
+  "swarm.team",
+  "swarm.member",
+  "swarm.task",
+  "swarm.message",
+  "swarm.workflow",
+  "swarm.phase",
+  "swarm.agent",
+  "swarm.human",
+  "swarm.subagent",
+] as const;
+
+export type SwarmRuntimeEventKind = (typeof SWARM_RUNTIME_EVENT_KINDS)[number];
+
+export const RUNTIME_TRACE_EVENT_KINDS = [
+  ...CORE_RUNTIME_EVENT_KINDS,
+  ...SWARM_RUNTIME_EVENT_KINDS,
+] as const;
+
+export type RuntimeTraceEventKind =
+  (typeof RUNTIME_TRACE_EVENT_KINDS)[number];
+
 export type CoreRuntimeEventPhase =
   | "start"
   | "end"
   | "error"
   | "instant";
+
+export const RUNTIME_SUBJECT_KINDS = [
+  "team",
+  "workflow",
+  "phase",
+  "member",
+  "agent",
+  "subagent",
+  "human",
+  "task",
+] as const;
+
+export type RuntimeSubjectKind = (typeof RUNTIME_SUBJECT_KINDS)[number];
+
+export interface RuntimeSubjectReference {
+  /** Stable within one trace. Use runtime IDs instead of display labels. */
+  id: string;
+  kind: RuntimeSubjectKind;
+  label: string;
+  parentId?: string;
+  role?: string;
+  /** Context owner may differ from the structural node (for example a task). */
+  contextOwnerId?: string;
+}
 
 export interface RuntimeTokenState {
   used: number;
@@ -52,6 +101,8 @@ export interface RuntimeContextMessage {
 
 export interface RuntimeContextDelta {
   operation: "append" | "replace" | "remove";
+  /** Required by the local collector for jiuwenswarm-owned traces. */
+  ownerId?: string;
   messages?: RuntimeContextMessage[];
   removeMessageIds?: string[];
 }
@@ -71,9 +122,11 @@ export interface RuntimeHookObservation {
   examines?: string[];
 }
 
-export interface CoreRuntimeEventInput {
+export interface RuntimeTraceEventInput<
+  Kind extends RuntimeTraceEventKind = RuntimeTraceEventKind,
+> {
   eventId: string;
-  kind: CoreRuntimeEventKind;
+  kind: Kind;
   phase: CoreRuntimeEventPhase;
   timestampMs: number;
   spanId: string;
@@ -88,15 +141,27 @@ export interface CoreRuntimeEventInput {
   token?: RuntimeTokenState;
   context?: RuntimeContextDelta;
   hook?: RuntimeHookObservation;
+  subject?: RuntimeSubjectReference;
   definition?: GraphSourceReference;
   payload?: Readonly<Record<string, JsonValue>>;
 }
 
-export interface CoreRuntimeEvent extends CoreRuntimeEventInput {
+export interface RuntimeTraceEvent<
+  Kind extends RuntimeTraceEventKind = RuntimeTraceEventKind,
+> extends RuntimeTraceEventInput<Kind> {
   traceId: string;
   sequence: number;
   receivedAt: string;
 }
+
+export type CoreRuntimeEventInput = RuntimeTraceEventInput<CoreRuntimeEventKind>;
+export type CoreRuntimeEvent = RuntimeTraceEvent<CoreRuntimeEventKind>;
+
+export type SwarmTraceEventKind =
+  | SwarmRuntimeEventKind
+  | CoreRuntimeEventKind;
+export type SwarmRuntimeEventInput = RuntimeTraceEventInput<SwarmTraceEventKind>;
+export type SwarmRuntimeEvent = RuntimeTraceEvent<SwarmTraceEventKind>;
 
 export type RuntimeTraceStatus = "open" | "completed" | "failed";
 
@@ -114,7 +179,7 @@ export interface RuntimeTraceSession {
 }
 
 export interface CreatedRuntimeTrace {
-  apiVersion: typeof CORE_RUNTIME_API_VERSION;
+  apiVersion: typeof RUNTIME_TRACE_API_VERSION;
   trace: RuntimeTraceSession;
   writeToken: string;
   endpoints: {
@@ -126,9 +191,9 @@ export interface CreatedRuntimeTrace {
 }
 
 export interface RuntimeTraceSnapshot {
-  apiVersion: typeof CORE_RUNTIME_API_VERSION;
+  apiVersion: typeof RUNTIME_TRACE_API_VERSION;
   trace: RuntimeTraceSession;
-  events: CoreRuntimeEvent[];
+  events: RuntimeTraceEvent[];
   storage: "memory-only";
 }
 
@@ -138,7 +203,7 @@ export interface RuntimeSourceDefinition {
   label: string;
   description: string;
   transport: "loopback-sse";
-  eventKinds: readonly CoreRuntimeEventKind[];
+  eventKinds: readonly RuntimeTraceEventKind[];
 }
 
 export interface RegisteredRuntimeSource extends RuntimeSourceDefinition {
@@ -156,5 +221,23 @@ export function isCoreRuntimeEventKind(value: unknown): value is CoreRuntimeEven
   return (
     typeof value === "string" &&
     (CORE_RUNTIME_EVENT_KINDS as readonly string[]).includes(value)
+  );
+}
+
+export function isSwarmRuntimeEventKind(value: unknown): value is SwarmRuntimeEventKind {
+  return (
+    typeof value === "string" &&
+    (SWARM_RUNTIME_EVENT_KINDS as readonly string[]).includes(value)
+  );
+}
+
+export function isRuntimeTraceEventKind(value: unknown): value is RuntimeTraceEventKind {
+  return isCoreRuntimeEventKind(value) || isSwarmRuntimeEventKind(value);
+}
+
+export function isRuntimeSubjectKind(value: unknown): value is RuntimeSubjectKind {
+  return (
+    typeof value === "string" &&
+    (RUNTIME_SUBJECT_KINDS as readonly string[]).includes(value)
   );
 }

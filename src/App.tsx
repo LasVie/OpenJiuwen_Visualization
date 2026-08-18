@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
 import {
   Activity,
   Braces,
@@ -24,8 +24,24 @@ import {
   type RuntimeSourceMode,
 } from "./features/core-runtime";
 import { MagnetControls } from "./features/trace-graph";
+import {
+  SwarmContextScopeBar,
+  SwarmRuntimeSessionBar,
+  useSwarmRuntimeSession,
+} from "./features/swarm-runtime";
 import { RuntimeBadge } from "./shared/ui/RuntimeBadge";
 import { useReplayStore } from "./state/replay-store";
+
+const SwarmFlowCanvas = lazy(() =>
+  import("./features/swarm-runtime/SwarmFlowCanvas").then((module) => ({
+    default: module.SwarmFlowCanvas,
+  })),
+);
+const SwarmRuntimeInspector = lazy(() =>
+  import("./features/swarm-runtime/SwarmRuntimeInspector").then((module) => ({
+    default: module.SwarmRuntimeInspector,
+  })),
+);
 
 export default function App() {
   const [workbenchMode, setWorkbenchMode] = useState<"runtime" | "definition">(
@@ -34,9 +50,11 @@ export default function App() {
   const [runtimeSource, setRuntimeSource] =
     useState<RuntimeSourceMode>("fixture");
   const [coreTraceLabel, setCoreTraceLabel] = useState("Agent Core local run");
+  const [swarmTraceLabel, setSwarmTraceLabel] = useState("JiuwenSwarm local run");
   const [liveStepIndex, setLiveStepIndex] = useState(0);
   const [followLive, setFollowLive] = useState(true);
   const coreRuntime = useCoreRuntimeSession();
+  const swarmRuntime = useSwarmRuntimeSession();
   const {
     scenarioId,
     stepIndex: fixtureStepIndex,
@@ -70,19 +88,26 @@ export default function App() {
   const fixtureScenario = getScenario(scenarioId);
   const scenario = runtimeSource === "core-runtime"
     ? coreRuntime.scenario
-    : fixtureScenario;
+    : runtimeSource === "swarm-runtime"
+      ? swarmRuntime.scenario
+      : fixtureScenario;
   const liveLastStep = Math.max(0, scenario.steps.length - 1);
-  const stepIndex = runtimeSource === "core-runtime"
-    ? Math.min(liveStepIndex, liveLastStep)
-    : fixtureStepIndex;
+  const stepIndex = runtimeSource === "fixture"
+    ? fixtureStepIndex
+    : Math.min(liveStepIndex, liveLastStep);
   const step = scenario.steps[stepIndex];
-  const activeRunInput = runtimeSource === "core-runtime" ? "" : runInput;
+  const activeRunInput = runtimeSource === "fixture" ? runInput : "";
+  const runtimeEventCount = runtimeSource === "core-runtime"
+    ? coreRuntime.events.length
+    : runtimeSource === "swarm-runtime"
+      ? swarmRuntime.events.length
+      : 0;
   const railCanvasDefinition = graphNodes.find(
     (node) => node.id === railCanvasRailId && node.type === "rail",
   );
 
   useEffect(() => {
-    if (runtimeSource !== "core-runtime") return;
+    if (runtimeSource === "fixture") return;
     setLiveStepIndex((current) => followLive
       ? liveLastStep
       : Math.min(current, liveLastStep));
@@ -151,12 +176,23 @@ export default function App() {
     await coreRuntime.startSession(coreTraceLabel.trim() || "Agent Core local run");
   }
 
+  async function createSwarmTrace() {
+    setLiveStepIndex(0);
+    setFollowLive(true);
+    selectNode(null);
+    if (inspectorOpen) toggleInspector();
+    closeRailCanvas();
+    await swarmRuntime.startSession(
+      swarmTraceLabel.trim() || "JiuwenSwarm local run",
+    );
+  }
+
   function changeRuntimeSource(value: RuntimeSourceMode) {
     setRuntimeSource(value);
     closeRailCanvas();
     selectNode(null);
     if (inspectorOpen) toggleInspector();
-    if (value === "core-runtime") {
+    if (value !== "fixture") {
       setLiveStepIndex(0);
       setFollowLive(true);
     }
@@ -166,6 +202,8 @@ export default function App() {
     event.preventDefault();
     if (runtimeSource === "core-runtime") {
       void createCoreTrace();
+    } else if (runtimeSource === "swarm-runtime") {
+      void createSwarmTrace();
     } else {
       startRun();
     }
@@ -208,29 +246,41 @@ export default function App() {
         {workbenchMode === "runtime" ? (
           <form className="run-composer" onSubmit={submitRun}>
             <label className="sr-only" htmlFor="simulation-input">
-              {runtimeSource === "core-runtime" ? "Trace 标签" : "模拟输入"}
+              {runtimeSource === "fixture" ? "模拟输入" : "Trace 标签"}
             </label>
             <span className="run-composer__icon" aria-hidden="true">
               <Braces size={17} strokeWidth={1.8} />
             </span>
             <input
               id="simulation-input"
-              value={runtimeSource === "core-runtime" ? coreTraceLabel : draftInput}
+              value={runtimeSource === "core-runtime"
+                ? coreTraceLabel
+                : runtimeSource === "swarm-runtime"
+                  ? swarmTraceLabel
+                  : draftInput}
               onChange={(event) => runtimeSource === "core-runtime"
                 ? setCoreTraceLabel(event.target.value)
-                : setDraftInput(event.target.value)}
-              placeholder={runtimeSource === "core-runtime"
-                ? "填写 Trace 标签；采集器不会执行 Agent"
-                : "输入一段文字，按确定性轨迹模拟运行"}
+                : runtimeSource === "swarm-runtime"
+                  ? setSwarmTraceLabel(event.target.value)
+                  : setDraftInput(event.target.value)}
+              placeholder={runtimeSource === "fixture"
+                ? "输入一段文字，按确定性轨迹模拟运行"
+                : "填写 Trace 标签；采集器不会执行 Agent 或模型"}
               autoComplete="off"
             />
             <button
               type="submit"
               className="run-button"
-              disabled={coreRuntime.connection === "creating"}
+              disabled={
+                runtimeSource === "core-runtime"
+                  ? coreRuntime.connection === "creating"
+                  : runtimeSource === "swarm-runtime"
+                    ? swarmRuntime.connection === "creating"
+                    : false
+              }
             >
               <Play size={16} strokeWidth={2} fill="currentColor" aria-hidden="true" />
-              {runtimeSource === "core-runtime" ? "开始监听" : "开始模拟"}
+              {runtimeSource === "fixture" ? "开始模拟" : "开始监听"}
             </button>
           </form>
         ) : (
@@ -251,20 +301,32 @@ export default function App() {
       </header>
 
       {workbenchMode === "runtime" ? <div className="content-shell">
-        <section className="stage-column">
+        <section className={
+          runtimeSource === "swarm-runtime"
+            ? "stage-column stage-column--swarm"
+            : "stage-column"
+        }>
           {runtimeSource === "fixture" ? (
             <ScenarioTabs
               scenarios={scenarios}
               activeId={scenarioId}
               onChange={setScenario}
             />
-          ) : (
+          ) : runtimeSource === "core-runtime" ? (
             <CoreRuntimeSessionBar
               created={coreRuntime.created}
               trace={coreRuntime.trace}
               connection={coreRuntime.connection}
               error={coreRuntime.error}
               onCreate={() => void createCoreTrace()}
+            />
+          ) : (
+            <SwarmRuntimeSessionBar
+              created={swarmRuntime.created}
+              trace={swarmRuntime.trace}
+              connection={swarmRuntime.connection}
+              error={swarmRuntime.error}
+              onCreate={() => void createSwarmTrace()}
             />
           )}
           <div className="scenario-note">
@@ -315,26 +377,63 @@ export default function App() {
               </button>
             </div>
           </div>
-          <FlowCanvas
-            scenario={scenario}
-            stepIndex={stepIndex}
-            playbackRevision={playbackRevision + coreRuntime.events.length}
-            selectedNodeId={selectedNodeId}
-            viewMode={viewMode}
-            deepAgentExpanded={deepAgentExpanded}
-            onExpandDeepAgent={expandDeepAgent}
-            onSelectNode={selectNode}
-            onOpenRail={openRailCanvas}
-            magnetEnabled={magnetEnabled}
-            magnetStrength={magnetStrength}
-          />
-          <InspectorPanel
-            step={step}
-            selectedNodeId={selectedNodeId}
-            runInput={activeRunInput}
-            open={inspectorOpen}
-            onToggle={toggleInspector}
-          />
+          {runtimeSource === "swarm-runtime" ? (
+            <SwarmContextScopeBar
+              scopes={swarmRuntime.projection.contextScopes}
+              activeId={swarmRuntime.contextOwnerId}
+              activeTokenUsed={step.tokenUsed}
+              onChange={swarmRuntime.setContextOwnerId}
+            />
+          ) : null}
+          {runtimeSource === "swarm-runtime" ? (
+            <Suspense fallback={<div className="swarm-runtime-loading">加载 Swarm 层级画布…</div>}>
+              <SwarmFlowCanvas
+                projection={swarmRuntime.projection}
+                stepIndex={stepIndex}
+                selectedNodeId={selectedNodeId}
+                viewMode={viewMode}
+                activeContextOwnerId={swarmRuntime.contextOwnerId}
+                onSelectNode={selectNode}
+                onActivateContext={swarmRuntime.setContextOwnerId}
+                magnetEnabled={magnetEnabled}
+                magnetStrength={magnetStrength}
+              />
+            </Suspense>
+          ) : (
+            <FlowCanvas
+              scenario={scenario}
+              stepIndex={stepIndex}
+              playbackRevision={playbackRevision + runtimeEventCount}
+              selectedNodeId={selectedNodeId}
+              viewMode={viewMode}
+              deepAgentExpanded={deepAgentExpanded}
+              onExpandDeepAgent={expandDeepAgent}
+              onSelectNode={selectNode}
+              onOpenRail={openRailCanvas}
+              magnetEnabled={magnetEnabled}
+              magnetStrength={magnetStrength}
+            />
+          )}
+          {runtimeSource === "swarm-runtime" ? (
+            <Suspense fallback={<div className="inspector inspector--collapsed swarm-runtime-loading">加载步骤详情…</div>}>
+              <SwarmRuntimeInspector
+                projection={swarmRuntime.projection}
+                step={step}
+                stepIndex={stepIndex}
+                selectedNodeId={selectedNodeId}
+                open={inspectorOpen}
+                onToggle={toggleInspector}
+              />
+            </Suspense>
+          ) : (
+            <InspectorPanel
+              step={step}
+              selectedNodeId={selectedNodeId}
+              runInput={activeRunInput}
+              open={inspectorOpen}
+              onToggle={toggleInspector}
+            />
+          )}
           <TimelineControls
             scenario={scenario}
             step={step}
@@ -352,6 +451,11 @@ export default function App() {
           runInput={activeRunInput}
           open={contextOpen}
           onToggle={toggleContext}
+          scopeLabel={runtimeSource === "swarm-runtime"
+            ? swarmRuntime.projection.contextScopes.find(
+                (scope) => scope.id === swarmRuntime.contextOwnerId,
+              )?.label
+            : undefined}
         />
       </div> : (
         <RepositoryWorkspace
@@ -362,7 +466,9 @@ export default function App() {
         />
       )}
 
-      {workbenchMode === "runtime" && railCanvasDefinition?.type === "rail" ? (
+      {workbenchMode === "runtime" &&
+      runtimeSource !== "swarm-runtime" &&
+      railCanvasDefinition?.type === "rail" ? (
         <RailDecisionCanvas
           key={railCanvasDefinition.id}
           definition={railCanvasDefinition}

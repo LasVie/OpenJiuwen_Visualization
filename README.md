@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的确定性运行链路工作台。当前版本聚焦单 Agent：展示 Swarm 请求边界、Agent Core 的 DeepAgent/ReAct 内部链路、Context 累积、Rail/Hook 审查和逐步回放。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义和运行链路工作台。当前版本支持确定性演示、Agent Core 实时 Trace 与 Swarm 实时 Trace：既能查看 DeepAgent/ReAct、Context、Rail/Hook，也能按 Team → Workflow/Member → Phase/Task → Agent/Subagent 层级逐步回放，并把不同执行主体的 Context Window 完全分开。
 
 ## 本地运行
 
@@ -45,11 +45,19 @@ python -B services/local-server/scripts/scan_repository.py `
 
 ## Core Runtime
 
-运行链路的数据源可以在“演示 / Core Trace”之间切换。Core Trace 创建一个本机内存会话，通过 SSE 接收归一化的 Agent、ReAct、Rail、Context、Model、Tool 和 Ability 事件；它不会自行执行 `agent-core`、工具或模型。
+运行链路的数据源可以在“演示 / Core Trace / Swarm Trace”之间切换。Core Trace 创建一个本机内存会话，通过 SSE 接收归一化的 Agent、ReAct、Rail、Context、Model、Tool 和 Ability 事件；它不会自行执行 `agent-core`、工具或模型。
 
 页面把事件顺序直接映射到已有的上一步/下一步、节点高亮、Rail 决策画布和 ContextWindow。停留在最新步骤时自动跟随新事件；回退查看历史后保持当前位置。Context 的分段模式默认脱敏，展开显示原文，连续原文始终保留完整消息。
 
 事件合同、接入请求和 Rail 精确证据规则见 [`docs/core-runtime-v1.md`](docs/core-runtime-v1.md)。
+
+## Swarm Runtime
+
+Swarm Trace 复用同一个内存采集服务，但要求每个非终止事件声明稳定 `subject`。画布按真实层级区分 Team、Workflow、Phase、Member、Agent、Human、Task 与 Subagent；成员消息和任务分配显示为不同关系边。宏观模式保留团队骨架并允许逐层点开，运行到深层主体时自动显露当前路径；微观模式一次展开所有已出现主体。
+
+Context 事件必须携带 `context.ownerId`。Team/Member/Agent/Subagent 可以拥有彼此独立的窗口，点击有 Context 的节点或使用 owner 选择器即可切换，消息和 Token 不会跨主体混合。`jiuwenswarm` 现有 WorkflowProgress 尚未提供结构化 tool-call activity，页面不会把日志或 outcome 猜成工具调用。
+
+完整事件矩阵、层级规则和可直接投递的示例见 [`docs/swarm-runtime-v1.md`](docs/swarm-runtime-v1.md) 与 [`examples/swarm-runtime-v1.events.json`](examples/swarm-runtime-v1.events.json)。
 
 ## 视觉语义
 
@@ -76,7 +84,10 @@ src/
 │  └─ scenarios/               # 一个文件一个演示轨迹
 ├─ features/
 │  ├─ context-window/          # 脱敏、原文和展示 Token 模型
+│  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
+│  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期
+│  ├─ swarm-runtime/           # Swarm 层级、主体 Context 与动态画布
 │  └─ trace-graph/             # 可调磁吸、实时节点避碰与共享画布控件
 ├─ plugins/                    # Core、Swarm、集成边与轨迹数据贡献者
 ├─ shared/ui/                  # 无业务状态的通用 UI
@@ -85,6 +96,7 @@ src/
 └─ workbench/                  # 组合默认插件并生成当前工作台快照
 services/
 └─ local-server/               # 路径白名单、Git/AST 只读索引与内存 Trace 采集
+examples/                       # 可直接投递的归一化事件示例
 ```
 
 扩展约束、数据流和新增场景步骤见 [`docs/architecture.md`](docs/architecture.md)。

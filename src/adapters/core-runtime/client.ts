@@ -1,10 +1,11 @@
 import {
   CORE_RUNTIME_API_VERSION,
-  isCoreRuntimeEventKind,
-  type CoreRuntimeEvent,
-  type CoreRuntimeEventInput,
+  isRuntimeSubjectKind,
+  isRuntimeTraceEventKind,
   type CreatedRuntimeTrace,
   type RuntimeOwner,
+  type RuntimeTraceEvent,
+  type RuntimeTraceEventInput,
   type RuntimeTraceSession,
   type RuntimeTraceSnapshot,
 } from "../../kernel";
@@ -25,7 +26,7 @@ interface CreateTraceOptions {
 }
 
 export interface RuntimeSubscriptionHandlers {
-  onEvent: (event: CoreRuntimeEvent) => void;
+  onEvent: (event: RuntimeTraceEvent) => void;
   onOpen?: () => void;
   onReconnect?: () => void;
   onEnd?: (trace: RuntimeTraceSession) => void;
@@ -75,9 +76,22 @@ function validContext(value: unknown) {
   return (
     isRecord(value) &&
     ["append", "replace", "remove"].includes(String(value.operation)) &&
+    (value.ownerId === undefined || typeof value.ownerId === "string") &&
     (value.messages === undefined ||
       (Array.isArray(value.messages) && value.messages.every(validContextMessage))) &&
     (value.removeMessageIds === undefined || stringArray(value.removeMessageIds))
+  );
+}
+
+function validSubject(value: unknown) {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    isRuntimeSubjectKind(value.kind) &&
+    typeof value.label === "string" &&
+    (value.parentId === undefined || typeof value.parentId === "string") &&
+    (value.role === undefined || typeof value.role === "string") &&
+    (value.contextOwnerId === undefined || typeof value.contextOwnerId === "string")
   );
 }
 
@@ -144,11 +158,11 @@ function traceSession(value: unknown): RuntimeTraceSession {
   return value as unknown as RuntimeTraceSession;
 }
 
-function runtimeEvent(value: unknown): CoreRuntimeEvent {
+function runtimeEvent(value: unknown): RuntimeTraceEvent {
   if (
     !isRecord(value) ||
     typeof value.eventId !== "string" ||
-    !isCoreRuntimeEventKind(value.kind) ||
+    !isRuntimeTraceEventKind(value.kind) ||
     !["start", "end", "error", "instant"].includes(String(value.phase)) ||
     !finiteNumber(value.timestampMs, 0) ||
     typeof value.spanId !== "string" ||
@@ -164,13 +178,14 @@ function runtimeEvent(value: unknown): CoreRuntimeEvent {
     (value.token !== undefined && !validToken(value.token)) ||
     (value.context !== undefined && !validContext(value.context)) ||
     (value.hook !== undefined && !validHook(value.hook)) ||
+    (value.subject !== undefined && !validSubject(value.subject)) ||
     (value.kind === "rail.hook" && !validHook(value.hook)) ||
     (value.definition !== undefined && !validDefinition(value.definition)) ||
     (value.payload !== undefined && !isRecord(value.payload))
   ) {
-    throw new TypeError("Runtime event does not match Core Runtime V1.");
+    throw new TypeError("Runtime event does not match Runtime Trace V1.");
   }
-  return value as unknown as CoreRuntimeEvent;
+  return value as unknown as RuntimeTraceEvent;
 }
 
 function createdTrace(value: unknown): CreatedRuntimeTrace {
@@ -256,7 +271,7 @@ export class CoreRuntimeClient {
   async appendEvents(
     traceId: string,
     writeToken: string,
-    events: readonly CoreRuntimeEventInput[],
+    events: readonly RuntimeTraceEventInput[],
     signal?: AbortSignal,
   ) {
     if (!events.length) throw new TypeError("At least one runtime event is required.");

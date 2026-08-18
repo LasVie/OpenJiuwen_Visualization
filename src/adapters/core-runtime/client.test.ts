@@ -100,6 +100,46 @@ describe("CoreRuntimeClient", () => {
     expect(result.events[0]).toMatchObject({ sequence: 1, kind: "model.call" });
   });
 
+  it("validates Swarm subjects and Context ownership frames", async () => {
+    const swarmTrace = { ...trace, owner: "jiuwenswarm" };
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({
+      apiVersion: "1.0.0",
+      trace: { ...swarmTrace, eventCount: 1, lastSequence: 1 },
+      events: [
+        {
+          eventId: "swarm-context-1",
+          traceId: trace.id,
+          sequence: 1,
+          receivedAt: "2026-08-18T00:00:01Z",
+          kind: "context.delta",
+          phase: "instant",
+          timestampMs: 10,
+          spanId: "member-1",
+          subject: {
+            id: "member:leader",
+            kind: "member",
+            label: "Leader",
+            contextOwnerId: "ctx:leader",
+          },
+          context: {
+            operation: "append",
+            ownerId: "ctx:leader",
+            messages: [],
+          },
+        },
+      ],
+      storage: "memory-only",
+    }));
+    const client = new CoreRuntimeClient({ fetcher: fetcher as typeof fetch });
+
+    const result = await client.getSnapshot(trace.id, 0);
+
+    expect(result.events[0]).toMatchObject({
+      subject: { id: "member:leader", kind: "member" },
+      context: { ownerId: "ctx:leader" },
+    });
+  });
+
   it("rejects malformed nested Rail evidence before projection", async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       jsonResponse({
@@ -122,6 +162,6 @@ describe("CoreRuntimeClient", () => {
       }));
     const client = new CoreRuntimeClient({ fetcher: fetcher as typeof fetch });
 
-    await expect(client.getSnapshot(trace.id)).rejects.toThrow(/Runtime V1/);
+    await expect(client.getSnapshot(trace.id)).rejects.toThrow(/Runtime Trace V1/);
   });
 });
