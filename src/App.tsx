@@ -1,6 +1,8 @@
-import { useEffect, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
+  Activity,
   Braces,
+  Database,
   Layers2,
   Play,
   Route,
@@ -14,11 +16,15 @@ import { ScenarioTabs } from "./components/ScenarioTabs";
 import { TimelineControls } from "./components/TimelineControls";
 import { getScenario, graphNodes, scenarios } from "./data/scenarios";
 import { RailDecisionCanvas } from "./features/rail-review";
+import { RepositoryWorkspace } from "./features/repository-browser";
 import { MagnetControls } from "./features/trace-graph";
 import { RuntimeBadge } from "./shared/ui/RuntimeBadge";
 import { useReplayStore } from "./state/replay-store";
 
 export default function App() {
+  const [workbenchMode, setWorkbenchMode] = useState<"runtime" | "definition">(
+    "runtime",
+  );
   const {
     scenarioId,
     stepIndex,
@@ -57,6 +63,7 @@ export default function App() {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (workbenchMode !== "runtime") return;
       const target = event.target as HTMLElement | null;
       if (
         target?.matches("input, textarea, select, button") ||
@@ -76,7 +83,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [nextStep, previousStep]);
+  }, [nextStep, previousStep, workbenchMode]);
 
   function submitRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,33 +99,60 @@ export default function App() {
           </span>
           <span className="brand__text">
             <strong>OpenJiuwen Trace</strong>
-            <small>Agent execution workbench</small>
-          </span>
-          <span className="mode-badge">
-            <span />
-            SINGLE AGENT
+            <small>Architecture & execution workbench</small>
           </span>
         </div>
 
-        <form className="run-composer" onSubmit={submitRun}>
-          <label className="sr-only" htmlFor="simulation-input">
-            模拟输入
-          </label>
-          <span className="run-composer__icon" aria-hidden="true">
-            <Braces size={17} strokeWidth={1.8} />
-          </span>
-          <input
-            id="simulation-input"
-            value={draftInput}
-            onChange={(event) => setDraftInput(event.target.value)}
-            placeholder="输入一段文字，按确定性轨迹模拟运行"
-            autoComplete="off"
-          />
-          <button type="submit" className="run-button">
-            <Play size={16} strokeWidth={2} fill="currentColor" aria-hidden="true" />
-            开始模拟
+        <nav className="workbench-mode-switch" aria-label="工作台数据平面">
+          <button
+            type="button"
+            className={workbenchMode === "runtime" ? "workbench-mode--active" : ""}
+            onClick={() => setWorkbenchMode("runtime")}
+            aria-pressed={workbenchMode === "runtime"}
+          >
+            <Activity size={15} />
+            <span><strong>运行链路</strong><small>RUNTIME</small></span>
           </button>
-        </form>
+          <button
+            type="button"
+            className={workbenchMode === "definition" ? "workbench-mode--active" : ""}
+            onClick={() => setWorkbenchMode("definition")}
+            aria-pressed={workbenchMode === "definition"}
+          >
+            <Database size={15} />
+            <span><strong>定义图</strong><small>DEFINITION</small></span>
+          </button>
+        </nav>
+
+        {workbenchMode === "runtime" ? (
+          <form className="run-composer" onSubmit={submitRun}>
+            <label className="sr-only" htmlFor="simulation-input">
+              模拟输入
+            </label>
+            <span className="run-composer__icon" aria-hidden="true">
+              <Braces size={17} strokeWidth={1.8} />
+            </span>
+            <input
+              id="simulation-input"
+              value={draftInput}
+              onChange={(event) => setDraftInput(event.target.value)}
+              placeholder="输入一段文字，按确定性轨迹模拟运行"
+              autoComplete="off"
+            />
+            <button type="submit" className="run-button">
+              <Play size={16} strokeWidth={2} fill="currentColor" aria-hidden="true" />
+              开始模拟
+            </button>
+          </form>
+        ) : (
+          <div className="definition-header-summary">
+            <Database size={17} />
+            <span>
+              <strong>Repository Definition Plane</strong>
+              <small>本地 AST 索引 · 分层加载 · 源码证据</small>
+            </span>
+          </div>
+        )}
 
         <div className="runtime-key" aria-label="节点来源颜色图例">
           <span className="runtime-key__label">NODE SOURCE</span>
@@ -127,7 +161,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="content-shell">
+      {workbenchMode === "runtime" ? <div className="content-shell">
         <section className="stage-column">
           <ScenarioTabs
             scenarios={scenarios}
@@ -216,9 +250,16 @@ export default function App() {
           open={contextOpen}
           onToggle={toggleContext}
         />
-      </div>
+      </div> : (
+        <RepositoryWorkspace
+          magnetEnabled={magnetEnabled}
+          magnetStrength={magnetStrength}
+          onToggleMagnet={toggleMagnet}
+          onMagnetStrengthChange={setMagnetStrength}
+        />
+      )}
 
-      {railCanvasDefinition?.type === "rail" ? (
+      {workbenchMode === "runtime" && railCanvasDefinition?.type === "rail" ? (
         <RailDecisionCanvas
           key={railCanvasDefinition.id}
           definition={railCanvasDefinition}

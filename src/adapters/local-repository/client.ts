@@ -44,6 +44,12 @@ export interface LocalRepositoryHealth {
   mode: "read-only";
 }
 
+export interface LocalRepositoryCatalog {
+  allowedRoots: string[];
+  repositories: LocalRepositoryIdentity[];
+  writeOperations: false;
+}
+
 interface ClientOptions {
   baseUrl?: string;
   fetcher?: typeof fetch;
@@ -106,6 +112,20 @@ function scanResult(value: unknown): LocalRepositoryScanResult {
   return value as unknown as LocalRepositoryScanResult;
 }
 
+function repositoryIdentity(value: unknown): value is LocalRepositoryIdentity {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.owner === "string" &&
+    typeof value.path === "string" &&
+    typeof value.scanScope === "string" &&
+    typeof value.revision === "string" &&
+    typeof value.branch === "string" &&
+    typeof value.dirty === "boolean"
+  );
+}
+
 export class LocalRepositoryClientError extends Error {
   constructor(
     message: string,
@@ -125,7 +145,7 @@ export class LocalRepositoryClient {
     this.baseUrl = loopbackBaseUrl(
       options.baseUrl ?? DEFAULT_LOCAL_REPOSITORY_SERVER,
     );
-    this.fetcher = options.fetcher ?? fetch;
+    this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   }
 
   async health(signal?: AbortSignal): Promise<LocalRepositoryHealth> {
@@ -139,6 +159,21 @@ export class LocalRepositoryClient {
       throw new TypeError("Local repository health response is invalid.");
     }
     return value as unknown as LocalRepositoryHealth;
+  }
+
+  async listRepositories(signal?: AbortSignal): Promise<LocalRepositoryCatalog> {
+    const value = await this.request("/api/v1/repositories", { signal });
+    if (
+      !isRecord(value) ||
+      !Array.isArray(value.allowedRoots) ||
+      !value.allowedRoots.every((root) => typeof root === "string") ||
+      !Array.isArray(value.repositories) ||
+      !value.repositories.every(repositoryIdentity) ||
+      value.writeOperations !== false
+    ) {
+      throw new TypeError("Local repository catalog response is invalid.");
+    }
+    return value as unknown as LocalRepositoryCatalog;
   }
 
   async scan(

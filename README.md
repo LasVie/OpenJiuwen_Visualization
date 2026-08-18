@@ -33,7 +33,15 @@ python -B services/local-server/scripts/scan_repository.py `
   --summary
 ```
 
-服务默认地址为 `http://127.0.0.1:8765`。当前已提供健康检查、允许根目录查询和仓库扫描 API；页面绑定入口将在下一增量接入。
+服务默认地址为 `http://127.0.0.1:8765`。进入页面顶部“定义图”后，可直接选择允许根目录下发现的 `agent-core` 或 `jiuwenswarm`，也可输入白名单范围内的仓库/子目录绝对路径。生成后的定义图支持：
+
+- repository → package → module → class/function 的分层浏览与面包屑回退；
+- Agent、Rail、Tool、Context、Workflow、Model、Team 语义分类；
+- 全局符号/源码路径搜索、类型过滤和大层级分页；
+- `contains`、`imports`、`inherits` 关系与源码行证据；
+- 节点详情、拖拽、实时防重叠、磁性调节、缩放和缩略图。
+
+页面每次只投影当前焦点和有限数量的子节点，不会把完整仓库的数千节点同时交给 ReactFlow。
 
 ## 视觉语义
 

@@ -80,6 +80,10 @@ class LocalRepositoryApi:
                 HTTPStatus.OK,
                 {
                     "allowedRoots": [str(root) for root in self.config.allowed_roots],
+                    "repositories": [
+                        identity.to_api_dict()
+                        for identity in self._resolver.discover()
+                    ],
                     "writeOperations": False,
                 },
             )
@@ -205,7 +209,10 @@ class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        try:
+            self.wfile.write(payload)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            LOGGER.debug("Client disconnected before the response completed")
 
     def _write_common_headers(self, origin: str | None) -> None:
         self.send_header("Cache-Control", "no-store")

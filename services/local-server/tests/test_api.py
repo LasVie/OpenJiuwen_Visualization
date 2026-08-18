@@ -23,6 +23,11 @@ class LocalRepositoryApiTests(unittest.TestCase):
 
     def test_reports_read_only_health_and_scans_an_authorized_scope(self) -> None:
         health = self.api.dispatch("GET", "/api/v1/health", origin=ALLOWED_ORIGIN)
+        catalog = self.api.dispatch(
+            "GET",
+            "/api/v1/repositories",
+            origin=ALLOWED_ORIGIN,
+        )
         scan = self.api.dispatch(
             "POST",
             "/api/v1/repositories/scan",
@@ -32,6 +37,14 @@ class LocalRepositoryApiTests(unittest.TestCase):
 
         self.assertEqual(health.status, 200)
         self.assertEqual(health.body["mode"], "read-only")
+        self.assertEqual(catalog.status, 200)
+        self.assertFalse(catalog.body["writeOperations"])
+        self.assertTrue(
+            any(
+                repository["path"] == str(REPOSITORY_ROOT)
+                for repository in catalog.body["repositories"]
+            )
+        )
         self.assertEqual(scan.status, 200)
         self.assertGreater(scan.body["statistics"]["nodes"], 5)
         self.assertEqual(scan.body["repository"]["scanScope"], str(FIXTURE_ROOT))

@@ -42,6 +42,7 @@ const fallbackSizes: Record<string, { width: number; height: number }> = {
   agentSummary: { width: 300, height: 180 },
   agentGroup: { width: 1100, height: 475 },
   railDecision: { width: 252, height: 150 },
+  definition: { width: 264, height: 154 },
 };
 
 function clamp(value: number, minimum: number, maximum: number) {

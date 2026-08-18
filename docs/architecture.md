@@ -134,3 +134,14 @@ repository@revision:path:symbol
 6. 生成 `contains`、可解析的本地 `imports` 与无歧义 `inherits` 边。
 
 OpenJiuwen 的 Agent、Rail、Tool、Context、Workflow、Model 与 Team 目前通过名称和基类信号分类，并保留 `static/exact` 源码证据。动态注册和运行时装饰结果不会被静态扫描伪装为确定事实；后续由 Runtime 插件用 `runtime-confirmed` 证据覆盖或补充。
+
+### Definition Workbench 投影
+
+页面不会把仓库完整图直接渲染为一个 ReactFlow 实例。`features/repository-browser/model.ts` 先建立父子、入边和出边索引，再以当前焦点节点生成最多 16 个成员的可见子图：
+
+- 有子节点时显示焦点与直接子节点；叶节点显示一跳非 `contains` 关系。
+- 面包屑沿 `parentId` 回溯，搜索则在完整图上按 label、kind、source path、symbol 与 summary 排序。
+- 类型过滤和分页只改变视图投影，不修改 Graph Kernel snapshot。
+- Definition 画布复用 Trace 画布的磁吸与实时避碰算法，但位置仍是临时 View State，不写回语义图。
+
+这样单仓数千节点仍可渐进浏览，也为未来把 Runtime span、Tool registry 与 Git change 叠加到同一稳定节点保留了空间。

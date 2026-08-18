@@ -19,7 +19,7 @@ python -B services/local-server/scripts/run_server.py `
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/v1/health` | 返回 API 版本与 `read-only` 模式 |
-| `GET` | `/api/v1/repositories` | 返回启动时配置的允许根目录 |
+| `GET` | `/api/v1/repositories` | 返回允许根目录及根目录/一级子目录中发现的 Git 仓库 |
 | `POST` | `/api/v1/repositories/scan` | 解析一个允许范围内的 Git 仓库或子目录 |
 
 扫描请求：
@@ -46,6 +46,8 @@ python -B services/local-server/scripts/run_server.py `
 - 浏览器 Origin 必须在启动白名单中；响应禁止缓存并设置 `nosniff`。
 - 请求体有大小上限，文件、文件数量和边数量均有扫描上限。
 - 当前没有任何写、命令执行、模型调用或凭据接口。
+
+仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 
 ## 验证
 

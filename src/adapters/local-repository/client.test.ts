@@ -48,6 +48,20 @@ describe("local repository client", () => {
     expect(new LocalRepositoryClient().baseUrl).toBe("http://127.0.0.1:8765");
   });
 
+  it("binds the browser fetch implementation to the global object", async () => {
+    const browserFetch = vi.fn(async function (this: unknown) {
+      expect(this).toBe(globalThis);
+      return response({ status: "ok", apiVersion: "1.0.0", mode: "read-only" });
+    });
+    vi.stubGlobal("fetch", browserFetch);
+    try {
+      const client = new LocalRepositoryClient();
+      await expect(client.health()).resolves.toMatchObject({ mode: "read-only" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("requests a typed read-only repository scan", async () => {
     const fetcher = vi.fn(
       async (_input: string | URL | Request, _init?: RequestInit) =>
@@ -70,6 +84,29 @@ describe("local repository client", () => {
       path: "C:\\workspace\\agent-core",
       options: { includeTests: false },
     });
+  });
+
+  it("lists discovered repositories without write capabilities", async () => {
+    const fetcher = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
+        response({
+          allowedRoots: ["C:\\workspace"],
+          repositories: [scanPayload.repository],
+          writeOperations: false,
+        }),
+    );
+    const client = new LocalRepositoryClient({
+      fetcher: fetcher as typeof fetch,
+    });
+
+    const catalog = await client.listRepositories();
+
+    expect(catalog.repositories[0].name).toBe("agent-core");
+    expect(catalog.writeOperations).toBe(false);
+    expect(fetcher).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/api/v1/repositories",
+      expect.objectContaining({ cache: "no-store" }),
+    );
   });
 
   it("preserves structured service errors", async () => {

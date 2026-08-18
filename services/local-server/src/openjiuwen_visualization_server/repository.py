@@ -90,6 +90,47 @@ class RepositoryResolver:
             dirty=dirty,
         )
 
+    def discover(self, *, max_candidates_per_root: int = 200) -> tuple[RepositoryIdentity, ...]:
+        """Find Git repositories at an allowed root or one directory below it."""
+        discovered: dict[str, RepositoryIdentity] = {}
+        for allowed_root in self._config.allowed_roots:
+            candidates: list[Path] = []
+            if (allowed_root / ".git").exists():
+                candidates.append(allowed_root)
+
+            try:
+                children = sorted(allowed_root.iterdir(), key=lambda path: path.name.casefold())
+            except OSError:
+                children = []
+            for child in children[:max_candidates_per_root]:
+                is_junction = getattr(child, "is_junction", None)
+                if child.is_symlink() or bool(is_junction and is_junction()):
+                    continue
+                try:
+                    if child.is_dir() and (child / ".git").exists():
+                        candidates.append(child)
+                except OSError:
+                    continue
+
+            for candidate in candidates:
+                try:
+                    identity = self.resolve(candidate)
+                except (OSError, PathAccessError, RepositoryResolutionError):
+                    continue
+                discovered[identity.id] = identity
+
+        owner_order = {"agent-core": 0, "jiuwenswarm": 1}
+        return tuple(
+            sorted(
+                discovered.values(),
+                key=lambda item: (
+                    owner_order.get(item.owner, 2),
+                    item.name.casefold(),
+                    str(item.root).casefold(),
+                ),
+            )
+        )
+
     def _git(self, cwd: Path, *args: str) -> str:
         try:
             completed = subprocess.run(
