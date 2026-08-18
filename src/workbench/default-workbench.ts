@@ -3,6 +3,7 @@ import { VisualizationPluginRegistry } from "../kernel";
 import { agentCorePlugin } from "../plugins/agent-core";
 import { deterministicReplayPlugin } from "../plugins/deterministic-replay";
 import { jiuwenSwarmPlugin } from "../plugins/jiuwenswarm";
+import { localRepositoryPlugin } from "../plugins/local-repository";
 import { openJiuwenIntegrationPlugin } from "../plugins/openjiuwen-integration";
 
 export function createDefaultPluginRegistry() {
@@ -11,6 +12,7 @@ export function createDefaultPluginRegistry() {
     jiuwenSwarmPlugin,
     openJiuwenIntegrationPlugin,
     deterministicReplayPlugin,
+    localRepositoryPlugin,
   ]);
 }
 

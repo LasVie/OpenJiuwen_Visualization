@@ -15,6 +15,26 @@ npm run dev
 npm run check
 ```
 
+## 绑定本地仓库
+
+本地仓读取通过独立的只读服务完成。启动时必须明确给出允许访问的目录；服务只监听 loopback，不导入或执行目标仓代码：
+
+```powershell
+python -B services/local-server/scripts/run_server.py `
+  --allow-root "C:\Users\soong\Documents\OpenJiuwen_Visualization"
+```
+
+只读扫描烟测：
+
+```powershell
+python -B services/local-server/scripts/scan_repository.py `
+  --allow-root "C:\Users\soong\Documents\OpenJiuwen_Visualization" `
+  --path "C:\Users\soong\Documents\OpenJiuwen_Visualization\agent-core" `
+  --summary
+```
+
+服务默认地址为 `http://127.0.0.1:8765`。当前已提供健康检查、允许根目录查询和仓库扫描 API；页面绑定入口将在下一增量接入。
+
 ## 视觉语义
 
 - 浅青蓝：`agent-core`，负责 Agent 生命周期、ReAct、Context、Model、Tool 和 Rail。
@@ -29,6 +49,7 @@ Context 的“消息分段”默认显示脱敏精简摘要，用户可逐条展
 
 ```text
 src/
+├─ adapters/                   # 本地服务等外部数据源客户端
 ├─ components/                 # 页面编排与 ReactFlow 适配组件
 ├─ kernel/                     # 版本化图协议、插件协议与注册器
 ├─ domain/
@@ -46,6 +67,8 @@ src/
 ├─ state/                      # 回放状态与纯工具函数
 ├─ types/                      # 兼容导出；稳定合同由 kernel 管理
 └─ workbench/                  # 组合默认插件并生成当前工作台快照
+services/
+└─ local-server/               # 路径白名单、Git 身份与 Python AST 索引
 ```
 
 扩展约束、数据流和新增场景步骤见 [`docs/architecture.md`](docs/architecture.md)。

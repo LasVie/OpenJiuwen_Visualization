@@ -75,6 +75,7 @@ repository@revision:path:symbol
 | `openjiuwen.jiuwenswarm` | Swarm 请求与响应边界 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
+| `openjiuwen.local-repository` | 只读本地仓服务与静态定义图客户端，默认关闭 |
 
 后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
 
@@ -120,3 +121,16 @@ repository@revision:path:symbol
 5. Git/GitHub 插件：工作树、commit、PR base/head 与节点级影响映射。
 
 所有上游格式必须在 adapter 层归一化；Web 组件不得直接读取 Python 日志、Git 输出或 Provider 响应结构。
+
+## Local Repository V1
+
+`services/local-server/` 是浏览器与本地文件系统之间的安全边界。服务启动时显式接收允许根目录，只绑定 loopback，并提供版本化 JSON API。首版扫描器执行以下只读流程：
+
+1. 规范化请求目录，确认请求目录及其 Git 根均位于允许范围。
+2. 通过无 shell 的 Git 参数调用读取 root、HEAD、branch 与 working-tree 状态。
+3. 遍历限制范围内的 Python 文件，跳过测试目录、缓存、构建目录、symlink 和 junction。
+4. 使用 `ast.parse` 提取 package、module、class 和可选 top-level function。
+5. 将命名、基类、装饰器和方法签名归一化为 JSON attributes。
+6. 生成 `contains`、可解析的本地 `imports` 与无歧义 `inherits` 边。
+
+OpenJiuwen 的 Agent、Rail、Tool、Context、Workflow、Model 与 Team 目前通过名称和基类信号分类，并保留 `static/exact` 源码证据。动态注册和运行时装饰结果不会被静态扫描伪装为确定事实；后续由 Runtime 插件用 `runtime-confirmed` 证据覆盖或补充。

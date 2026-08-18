@@ -6,3 +6,6 @@ dist/
 Thumbs.db
 *.local
 *.log
+__pycache__/
+*.py[cod]
+.venv/

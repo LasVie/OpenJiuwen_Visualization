@@ -32,8 +32,14 @@ describe("visualization plugin registry", () => {
     expect(defaultWorkbench.graph.nodes).toHaveLength(15);
     expect(defaultWorkbench.graph.edges).toHaveLength(14);
     expect(defaultWorkbench.scenarios).toHaveLength(4);
-    expect(defaultWorkbench.plugins.every((item) => item.state === "enabled"))
-      .toBe(true);
+    expect(defaultWorkbench.plugins.map((item) => [item.id, item.state]))
+      .toEqual([
+        ["openjiuwen.agent-core", "enabled"],
+        ["openjiuwen.jiuwenswarm", "enabled"],
+        ["openjiuwen.integration", "enabled"],
+        ["openjiuwen.deterministic-replay", "enabled"],
+        ["openjiuwen.local-repository", "disabled"],
+      ]);
     expect(defaultWorkbench.capabilities["graph.rail"]).toEqual([
       "openjiuwen.agent-core",
     ]);
@@ -58,6 +64,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.jiuwenswarm": "enabled",
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",
+      "openjiuwen.local-repository": "disabled",
     });
     expect(snapshot.graph.nodes.map((node) => node.id)).toEqual([
       "input",

@@ -2,13 +2,13 @@
 
 ## Repository scope
 
-- This Git repository owns only the standalone visualization web application.
+- This Git repository owns the standalone visualization workbench, including its web application and read-only local companion service.
 - Treat sibling `agent-core` and `jiuwenswarm` repositories as source references; never vendor, stage, commit, or modify them as part of this repository unless the user explicitly changes that boundary.
 - Keep product features modular and expose cross-feature behavior through typed public entry points rather than importing feature internals.
 
 ## Verification
 
-- Run `npm run check` before publishing implementation changes.
+- Run `npm run check` before publishing implementation changes; it covers frontend tests, local-service tests, TypeScript, and the production build.
 - If browser-visible behavior changes, also verify the affected interaction in a real browser and report any unverified surface.
 
 ## Commit and push policy
