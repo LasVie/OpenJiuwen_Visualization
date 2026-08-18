@@ -7,7 +7,7 @@ export const localRepositoryPlugin: VisualizationPlugin = {
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "通过只读本地服务把 Python 仓库静态索引为定义图。",
-    defaultEnabled: false,
+    defaultEnabled: true,
     capabilities: ["repository.local.read", "graph.definition.static"],
   },
   contribute: () => ({}),

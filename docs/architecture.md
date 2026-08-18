@@ -74,9 +74,10 @@ repository@revision:path:symbol
 | `openjiuwen.agent-core` | DeepAgent、ReAct、Context、Model、Tool、Rail |
 | `openjiuwen.jiuwenswarm` | Swarm 请求/响应定义与 Team/Workflow/Subagent Runtime |
 | `openjiuwen.model-provider` | Provider 流、用量、取消与确定性录制回放 |
+| `openjiuwen.git-change` | 工作树、commit refs 与节点级影响映射 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
-| `openjiuwen.local-repository` | 只读本地仓服务与静态定义图客户端，默认关闭 |
+| `openjiuwen.local-repository` | 只读本地仓服务、静态定义图与 Git Change 客户端，默认开启 |
 
 `openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。组件不会读取 Python 对象或原始日志格式。
 
@@ -176,3 +177,9 @@ subject.id + subject.kind + subject.parentId
 Model Provider 作为独立插件注册 adapter 与确定性 recording，不把厂商 SDK 或凭据带入 React。Runtime 协议在 `model.call` 基础上增加 `model.stream`、`model.usage` 和 `model.cancel`，并用稳定 `invocationId` 把输出 delta、Token/费用、预算、结束原因和取消原因归并到同一次调用。
 
 `features/model-runtime/` 按当前 Trace sequence 重建调用，因此上一步不会看到未来 delta。输出默认脱敏，完整输出需要显式展开；费用以整数微单位保存，页面不推断价格。默认 recording 通过同一个 loopback 内存 Trace endpoint 加载，验证整条 Provider 观测链但不执行真实模型请求。实时 Provider、密钥来源与取消实现必须留在本地服务 adapter，完整合同见 [`model-provider-v1.md`](model-provider-v1.md)。
+
+## Git Change Plane V1
+
+Git Change 插件把 `working-tree` 与本地 `base/head` 比较归一化为 change set。服务端只通过无 shell 参数调用读取 porcelain status、name-status、numstat、merge-base 和零上下文 patch；ref 先解析为 commit SHA，路径再规范化，所有响应均声明 `writeOperations: false`。
+
+前端并行取得 change set 与当前 Python AST Definition snapshot。hunk 与完整符号范围相交形成 direct impact，祖先形成 container impact，非 contains 关系形成 dependent impact。只有当前检出与比较 head 对齐时行号证据才是 exact；历史 ref、脏检出、删除、重命名和二进制会降级为 inferred。完整协议见 [`git-change-plane-v1.md`](git-change-plane-v1.md)。

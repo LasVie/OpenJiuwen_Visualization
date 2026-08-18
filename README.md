@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义和运行链路工作台。当前版本支持确定性演示、Agent Core 实时 Trace、Swarm 实时 Trace 与 Model Provider 录制回放：既能查看 DeepAgent/ReAct、Context、Rail/Hook，也能按 Team → Workflow/Member → Phase/Task → Agent/Subagent 层级逐步回放，并把不同执行主体的 Context Window 完全分开。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、Model Provider 录制回放，以及工作树或 commit range 的节点影响图。
 
 ## 本地运行
 
@@ -60,6 +60,10 @@ Context 事件必须携带 `context.ownerId`。Team/Member/Agent/Subagent 可以
 ### Model Provider 录制
 
 Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，不访问任何模型 API。`model.stream`、`model.usage` 与 `model.cancel` 会被投影成流式输出、Token/费用预算、完成或取消状态，并与主时间轴同步回放。输出默认脱敏，显式点击后才展示完整原文；录制帧、Provider、模型和 invocation 身份都由服务端校验。完整合同见 [`docs/model-provider-v1.md`](docs/model-provider-v1.md)。
+
+### Git Change Plane
+
+顶部“变更图”通过本地服务只读比较 `HEAD ↔ 工作树` 或 `merge-base ↔ head`，再把文件 hunk 映射到 AST 符号、上层容器和 imports/inherits 等关系节点。页面明确区分 exact 与 inferred，不会 fetch、checkout 或修改仓库。完整合同见 [`docs/git-change-plane-v1.md`](docs/git-change-plane-v1.md)。
 
 完整事件矩阵、层级规则和可直接投递的示例见 [`docs/swarm-runtime-v1.md`](docs/swarm-runtime-v1.md) 与 [`examples/swarm-runtime-v1.events.json`](examples/swarm-runtime-v1.events.json)。
 

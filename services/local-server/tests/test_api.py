@@ -70,6 +70,24 @@ class LocalRepositoryApiTests(unittest.TestCase):
         self.assertEqual(path_response.status, 403)
         self.assertEqual(path_response.body["error"]["code"], "path_not_allowed")
 
+    def test_reports_worktree_changes_without_git_writes(self) -> None:
+        changes = self.api.dispatch(
+            "POST",
+            "/api/v1/repositories/changes",
+            body={
+                "path": str(REPOSITORY_ROOT),
+                "mode": "working-tree",
+                "options": {"includeUntracked": True, "maxFiles": 100},
+            },
+            origin=ALLOWED_ORIGIN,
+        )
+
+        self.assertEqual(changes.status, 200)
+        self.assertEqual(changes.body["apiVersion"], "1.0.0")
+        self.assertEqual(changes.body["comparison"]["mode"], "working-tree")
+        self.assertFalse(changes.body["writeOperations"])
+        self.assertIsInstance(changes.body["files"], list)
+
     def test_creates_memory_only_trace_and_accepts_token_scoped_events(self) -> None:
         created = self.api.dispatch(
             "POST",

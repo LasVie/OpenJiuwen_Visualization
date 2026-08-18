@@ -3,6 +3,7 @@ import {
   Activity,
   Braces,
   Database,
+  GitCompareArrows,
   Layers2,
   Play,
   Route,
@@ -17,6 +18,7 @@ import { TimelineControls } from "./components/TimelineControls";
 import { getScenario, graphNodes, scenarios } from "./data/scenarios";
 import { RailDecisionCanvas } from "./features/rail-review";
 import { RepositoryWorkspace } from "./features/repository-browser";
+import { ChangeWorkspace } from "./features/change-plane";
 import {
   CoreRuntimeSessionBar,
   RuntimeSourceToggle,
@@ -48,7 +50,7 @@ const SwarmRuntimeInspector = lazy(() =>
 const defaultModelRecording = defaultWorkbench.modelRecordings[0];
 
 export default function App() {
-  const [workbenchMode, setWorkbenchMode] = useState<"runtime" | "definition">(
+  const [workbenchMode, setWorkbenchMode] = useState<"runtime" | "definition" | "change">(
     "runtime",
   );
   const [runtimeSource, setRuntimeSource] =
@@ -286,6 +288,15 @@ export default function App() {
             <Database size={15} />
             <span><strong>定义图</strong><small>DEFINITION</small></span>
           </button>
+          <button
+            type="button"
+            className={workbenchMode === "change" ? "workbench-mode--active" : ""}
+            onClick={() => setWorkbenchMode("change")}
+            aria-pressed={workbenchMode === "change"}
+          >
+            <GitCompareArrows size={15} />
+            <span><strong>变更图</strong><small>CHANGE</small></span>
+          </button>
         </nav>
 
         {workbenchMode === "runtime" ? (
@@ -328,12 +339,20 @@ export default function App() {
               {runtimeSource === "fixture" ? "开始模拟" : "开始监听"}
             </button>
           </form>
-        ) : (
+        ) : workbenchMode === "definition" ? (
           <div className="definition-header-summary">
             <Database size={17} />
             <span>
               <strong>Repository Definition Plane</strong>
               <small>本地 AST 索引 · 分层加载 · 源码证据</small>
+            </span>
+          </div>
+        ) : (
+          <div className="definition-header-summary change-header-summary">
+            <GitCompareArrows size={17} />
+            <span>
+              <strong>Git Change Plane</strong>
+              <small>工作树 / commit refs · 节点影响映射 · 只读</small>
             </span>
           </div>
         )}
@@ -509,8 +528,15 @@ export default function App() {
               )?.label
             : undefined}
         />
-      </div> : (
+      </div> : workbenchMode === "definition" ? (
         <RepositoryWorkspace
+          magnetEnabled={magnetEnabled}
+          magnetStrength={magnetStrength}
+          onToggleMagnet={toggleMagnet}
+          onMagnetStrengthChange={setMagnetStrength}
+        />
+      ) : (
+        <ChangeWorkspace
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
           onToggleMagnet={toggleMagnet}

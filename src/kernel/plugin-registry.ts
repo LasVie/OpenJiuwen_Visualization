@@ -18,6 +18,7 @@ import type {
   RegisteredModelProvider,
   RegisteredModelRuntimeRecording,
 } from "./contracts/model-provider";
+import type { RegisteredGitChangeSource } from "./contracts/change";
 
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 
@@ -35,6 +36,7 @@ export class PluginRegistryError extends Error {
       | "duplicate-runtime-source"
       | "duplicate-model-provider"
       | "duplicate-model-recording"
+      | "duplicate-change-source"
       | "dangling-edge"
       | "invalid-scenario-reference",
   ) {
@@ -83,12 +85,14 @@ export class VisualizationPluginRegistry {
     const runtimeSources: RegisteredRuntimeSource[] = [];
     const modelProviders: RegisteredModelProvider[] = [];
     const modelRecordings: RegisteredModelRuntimeRecording[] = [];
+    const changeSources: RegisteredGitChangeSource[] = [];
     const nodeIds = new Set<string>();
     const edgeIds = new Set<string>();
     const scenarioIds = new Set<string>();
     const runtimeSourceIds = new Set<string>();
     const modelProviderIds = new Set<string>();
     const modelRecordingIds = new Set<string>();
+    const changeSourceIds = new Set<string>();
     const capabilities = new Map<string, string[]>();
 
     orderedPlugins.forEach((plugin) => {
@@ -126,6 +130,10 @@ export class VisualizationPluginRegistry {
         this.assertUnique(modelRecordingIds, recording.id, "model-recording", pluginId);
         modelRecordings.push({ ...recording, contributedBy: pluginId });
       });
+      (contribution.changeSources ?? []).forEach((source) => {
+        this.assertUnique(changeSourceIds, source.id, "change-source", pluginId);
+        changeSources.push({ ...source, contributedBy: pluginId });
+      });
     });
 
     this.validateEdges(edges, nodeIds);
@@ -142,6 +150,7 @@ export class VisualizationPluginRegistry {
       runtimeSources,
       modelProviders,
       modelRecordings,
+      changeSources,
       plugins: statuses,
       capabilities: Object.fromEntries(capabilities),
     };
@@ -228,7 +237,8 @@ export class VisualizationPluginRegistry {
       | "scenario"
       | "runtime-source"
       | "model-provider"
-      | "model-recording",
+      | "model-recording"
+      | "change-source",
     pluginId: string,
   ) {
     if (ids.has(id)) {
@@ -238,7 +248,8 @@ export class VisualizationPluginRegistry {
         | "duplicate-scenario"
         | "duplicate-runtime-source"
         | "duplicate-model-provider"
-        | "duplicate-model-recording";
+        | "duplicate-model-recording"
+        | "duplicate-change-source";
       throw new PluginRegistryError(
         `${entity} "${id}" contributed by "${pluginId}" is duplicated.`,
         code,

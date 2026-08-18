@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from .config import LocalServiceConfig, PathAccessError
+from .git_changes import GitChangeError, GitChangeInspector, GitChangeOptions
 from .repository import RepositoryResolutionError, RepositoryResolver
 from .scanner import PythonRepositoryScanner, ScanOptions
 from .trace_store import API_VERSION as TRACE_API_VERSION
@@ -61,11 +62,13 @@ class LocalRepositoryApi:
         resolver: RepositoryResolver | None = None,
         scanner: PythonRepositoryScanner | None = None,
         trace_store: RuntimeTraceStore | None = None,
+        change_inspector: GitChangeInspector | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
         self._scanner = scanner or PythonRepositoryScanner()
         self.trace_store = trace_store or RuntimeTraceStore()
+        self._change_inspector = change_inspector or GitChangeInspector()
 
     def dispatch(
         self,
@@ -88,7 +91,7 @@ class LocalRepositoryApi:
                     "status": "ok",
                     "apiVersion": "1.0.0",
                     "mode": "read-only",
-                    "capabilities": ["repository.read", "trace.ephemeral"],
+                    "capabilities": ["repository.read", "git.change.read", "trace.ephemeral"],
                     "traceStorage": "memory-only",
                 },
             )
@@ -106,6 +109,8 @@ class LocalRepositoryApi:
             )
         if method == "POST" and route == "/api/v1/repositories/scan":
             return self._scan(body or {})
+        if method == "POST" and route == "/api/v1/repositories/changes":
+            return self._changes(body or {})
         if method == "POST" and route == "/api/v1/traces":
             return self._create_trace(body or {})
         trace_match = TRACE_ROUTE.fullmatch(route)
@@ -215,6 +220,52 @@ class LocalRepositoryApi:
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 "scan_failed",
                 "Repository scan failed without modifying the target repository.",
+            )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _changes(self, body: dict[str, Any]) -> ApiResponse:
+        repository_path = body.get("path")
+        if not isinstance(repository_path, str) or not repository_path.strip():
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_path", "path must be a non-empty string.")
+        raw_options = body.get("options", {})
+        if not isinstance(raw_options, dict):
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_options", "options must be an object.")
+        mode = body.get("mode", "working-tree")
+        if not isinstance(mode, str):
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_change_mode", "mode must be a string.")
+        base = body.get("base")
+        head = body.get("head")
+        if base is not None and not isinstance(base, str):
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_git_ref", "base must be a string.")
+        if head is not None and not isinstance(head, str):
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_git_ref", "head must be a string.")
+
+        try:
+            identity = self._resolver.resolve(repository_path)
+            result = self._change_inspector.inspect(
+                identity,
+                GitChangeOptions(
+                    mode=mode,
+                    base=base,
+                    head=head,
+                    include_untracked=_boolean_option(raw_options, "includeUntracked", True),
+                    max_files=_integer_option(raw_options, "maxFiles", 500),
+                ),
+            )
+        except PathAccessError as exc:
+            return _error(HTTPStatus.FORBIDDEN, "path_not_allowed", str(exc))
+        except RepositoryResolutionError as exc:
+            return _error(HTTPStatus.UNPROCESSABLE_ENTITY, "repository_unavailable", str(exc))
+        except GitChangeError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        except ValueError as exc:
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_options", str(exc))
+        except Exception:
+            LOGGER.exception("Git comparison failed")
+            return _error(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "git_change_failed",
+                "Git comparison failed without modifying the target repository.",
             )
         return ApiResponse(HTTPStatus.OK, result)
 

@@ -109,6 +109,59 @@ describe("local repository client", () => {
     );
   });
 
+  it("requests and validates a read-only Git comparison", async () => {
+    const fetcher = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
+        response({
+          apiVersion: "1.0.0",
+          repository: scanPayload.repository,
+          comparison: {
+            mode: "compare",
+            base: { requested: "main", resolved: "a".repeat(40) },
+            head: { requested: "HEAD", resolved: "b".repeat(40) },
+            mergeBase: "a".repeat(40),
+          },
+          files: [
+            {
+              id: "git-file:one",
+              path: "src/main.py",
+              status: "modified",
+              statusCode: "M",
+              staged: false,
+              unstaged: false,
+              untracked: false,
+              binary: false,
+              additions: 3,
+              deletions: 1,
+              hunks: [{ oldStart: 4, oldLines: 1, newStart: 4, newLines: 3 }],
+            },
+          ],
+          statistics: { files: 1, additions: 3, deletions: 1, binaryFiles: 0, truncated: false },
+          warnings: [],
+          writeOperations: false,
+        }),
+    );
+    const client = new LocalRepositoryClient({ fetcher: fetcher as typeof fetch });
+
+    const result = await client.changes("C:\\workspace\\agent-core", {
+      mode: "compare",
+      base: "main",
+      head: "HEAD",
+    });
+
+    expect(result.files[0]).toMatchObject({ path: "src/main.py", additions: 3 });
+    expect(fetcher).toHaveBeenCalledWith(
+      "http://127.0.0.1:8765/api/v1/repositories/changes",
+      expect.objectContaining({ method: "POST", cache: "no-store" }),
+    );
+    expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string)).toMatchObject({
+      path: "C:\\workspace\\agent-core",
+      mode: "compare",
+      base: "main",
+      head: "HEAD",
+    });
+  });
+
   it("preserves structured service errors", async () => {
     const fetcher = vi.fn(
       async (_input: string | URL | Request, _init?: RequestInit) =>

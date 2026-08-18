@@ -7,6 +7,10 @@ import type {
   RegisteredModelProvider,
   RegisteredModelRuntimeRecording,
 } from "./model-provider";
+import type {
+  GitChangeSourceDefinition,
+  RegisteredGitChangeSource,
+} from "./change";
 
 export const PLUGIN_API_VERSION = "1.0.0" as const;
 
@@ -27,6 +31,7 @@ export interface VisualizationPluginContribution {
   runtimeSources?: readonly RuntimeSourceDefinition[];
   modelProviders?: readonly ModelProviderDefinition[];
   modelRecordings?: readonly ModelRuntimeRecording[];
+  changeSources?: readonly GitChangeSourceDefinition[];
 }
 
 export interface VisualizationPlugin {
@@ -56,6 +61,7 @@ export interface WorkbenchSnapshot {
   runtimeSources: readonly RegisteredRuntimeSource[];
   modelProviders: readonly RegisteredModelProvider[];
   modelRecordings: readonly RegisteredModelRuntimeRecording[];
+  changeSources: readonly RegisteredGitChangeSource[];
   plugins: readonly ResolvedPluginStatus[];
   capabilities: Readonly<Record<string, readonly string[]>>;
 }

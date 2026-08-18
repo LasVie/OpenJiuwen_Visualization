@@ -1,4 +1,10 @@
-import type { GraphSnapshot } from "../../kernel";
+import type {
+  GitChangeComparison,
+  GitChangedFile,
+  GitChangeMode,
+  GitChangeStatistics,
+  GraphSnapshot,
+} from "../../kernel";
 import { loopbackHttpOrigin } from "../local-service/base-url";
 
 export const DEFAULT_LOCAL_REPOSITORY_SERVER = "http://127.0.0.1:8765";
@@ -48,6 +54,26 @@ export interface LocalRepositoryHealth {
 export interface LocalRepositoryCatalog {
   allowedRoots: string[];
   repositories: LocalRepositoryIdentity[];
+  writeOperations: false;
+}
+
+export interface GitChangeRequest {
+  mode: GitChangeMode;
+  base?: string;
+  head?: string;
+  options?: {
+    includeUntracked?: boolean;
+    maxFiles?: number;
+  };
+}
+
+export interface LocalGitChangeResult {
+  apiVersion: "1.0.0";
+  repository: LocalRepositoryIdentity;
+  comparison: GitChangeComparison;
+  files: GitChangedFile[];
+  statistics: GitChangeStatistics;
+  warnings: string[];
   writeOperations: false;
 }
 
@@ -108,6 +134,72 @@ function repositoryIdentity(value: unknown): value is LocalRepositoryIdentity {
     typeof value.branch === "string" &&
     typeof value.dirty === "boolean"
   );
+}
+
+function nonNegativeInteger(value: unknown) {
+  return Number.isInteger(value) && Number(value) >= 0;
+}
+
+function revisionReference(value: unknown) {
+  return (
+    isRecord(value) &&
+    typeof value.requested === "string" &&
+    (value.resolved === null || typeof value.resolved === "string")
+  );
+}
+
+function changedFile(value: unknown): value is GitChangedFile {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.path === "string" &&
+    (value.previousPath === undefined || typeof value.previousPath === "string") &&
+    ["added", "modified", "deleted", "renamed", "copied", "conflicted", "untracked"]
+      .includes(String(value.status)) &&
+    typeof value.statusCode === "string" &&
+    typeof value.staged === "boolean" &&
+    typeof value.unstaged === "boolean" &&
+    typeof value.untracked === "boolean" &&
+    typeof value.binary === "boolean" &&
+    (value.additions === null || nonNegativeInteger(value.additions)) &&
+    (value.deletions === null || nonNegativeInteger(value.deletions)) &&
+    Array.isArray(value.hunks) &&
+    value.hunks.every((hunk) =>
+      isRecord(hunk) &&
+      nonNegativeInteger(hunk.oldStart) &&
+      nonNegativeInteger(hunk.oldLines) &&
+      nonNegativeInteger(hunk.newStart) &&
+      nonNegativeInteger(hunk.newLines))
+  );
+}
+
+function changeResult(value: unknown): LocalGitChangeResult {
+  if (!isRecord(value)) throw new TypeError("Git change response is not an object.");
+  const comparison = value.comparison;
+  const statistics = value.statistics;
+  if (
+    value.apiVersion !== "1.0.0" ||
+    !repositoryIdentity(value.repository) ||
+    !isRecord(comparison) ||
+    (comparison.mode !== "working-tree" && comparison.mode !== "compare") ||
+    !revisionReference(comparison.base) ||
+    !revisionReference(comparison.head) ||
+    typeof comparison.mergeBase !== "string" ||
+    !Array.isArray(value.files) ||
+    !value.files.every(changedFile) ||
+    !isRecord(statistics) ||
+    !nonNegativeInteger(statistics.files) ||
+    !nonNegativeInteger(statistics.additions) ||
+    !nonNegativeInteger(statistics.deletions) ||
+    !nonNegativeInteger(statistics.binaryFiles) ||
+    typeof statistics.truncated !== "boolean" ||
+    !Array.isArray(value.warnings) ||
+    !value.warnings.every((warning) => typeof warning === "string") ||
+    value.writeOperations !== false
+  ) {
+    throw new TypeError("Git change response does not match API version 1.0.0.");
+  }
+  return value as unknown as LocalGitChangeResult;
 }
 
 export class LocalRepositoryClientError extends Error {
@@ -173,6 +265,21 @@ export class LocalRepositoryClient {
       signal,
     });
     return scanResult(value);
+  }
+
+  async changes(
+    path: string,
+    request: GitChangeRequest,
+    signal?: AbortSignal,
+  ): Promise<LocalGitChangeResult> {
+    if (!path.trim()) throw new TypeError("Repository path is required.");
+    const value = await this.request("/api/v1/repositories/changes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, ...request }),
+      signal,
+    });
+    return changeResult(value);
   }
 
   private async request(path: string, init: RequestInit) {

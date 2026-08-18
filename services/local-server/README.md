@@ -21,6 +21,7 @@ python -B services/local-server/scripts/run_server.py `
 | `GET` | `/api/v1/health` | 返回 API 版本与 `read-only` 模式 |
 | `GET` | `/api/v1/repositories` | 返回允许根目录及根目录/一级子目录中发现的 Git 仓库 |
 | `POST` | `/api/v1/repositories/scan` | 解析一个允许范围内的 Git 仓库或子目录 |
+| `POST` | `/api/v1/repositories/changes` | 只读比较工作树或本地 commit refs |
 | `POST` | `/api/v1/traces` | 创建内存 Trace 会话 |
 | `POST` | `/api/v1/traces/{id}/events` | 使用会话令牌追加归一化事件 |
 | `GET` | `/api/v1/traces/{id}` | 读取增量事件快照 |
@@ -53,8 +54,9 @@ python -B services/local-server/scripts/run_server.py `
 - Runtime Trace 使用高熵会话 ID 和独立写入令牌；数据有数量、请求体和过期限制，只保存在内存。
 - `agent-core` 会话只接受 Core 事件；`jiuwenswarm` 会话的非终止事件必须声明 `subject`，Context 还必须声明 `context.ownerId`，避免跨主体混合或无层级事件进入 UI。
 - Model Provider 事件会校验 invocation 身份、录制帧单调性、Token/费用预算和取消原因；服务不读取 Provider 凭据，完整输出不写日志或磁盘。
+- Git Change API 只读取 porcelain status、merge-base、name-status、numstat 与零上下文 patch；不会 fetch、checkout、merge 或写 refs，返回始终声明 `writeOperations: false`。
 
-Trace 归一化协议分别见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md) 与 [`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)。
+Trace 与变更协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md) 与 [`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)。
 
 仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 

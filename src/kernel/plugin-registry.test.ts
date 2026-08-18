@@ -58,6 +58,14 @@ describe("visualization plugin registry", () => {
         contributedBy: "openjiuwen.model-provider",
       }),
     ]);
+    expect(defaultWorkbench.changeSources).toEqual([
+      expect.objectContaining({
+        id: "openjiuwen.local-git-change",
+        readOnly: true,
+        remoteFetch: false,
+        contributedBy: "openjiuwen.git-change",
+      }),
+    ]);
     expect(defaultWorkbench.plugins.map((item) => [item.id, item.state]))
       .toEqual([
         ["openjiuwen.agent-core", "enabled"],
@@ -65,7 +73,8 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.jiuwenswarm", "enabled"],
         ["openjiuwen.integration", "enabled"],
         ["openjiuwen.deterministic-replay", "enabled"],
-        ["openjiuwen.local-repository", "disabled"],
+        ["openjiuwen.local-repository", "enabled"],
+        ["openjiuwen.git-change", "enabled"],
       ]);
     expect(defaultWorkbench.capabilities["graph.rail"]).toEqual([
       "openjiuwen.agent-core",
@@ -75,6 +84,9 @@ describe("visualization plugin registry", () => {
     ]);
     expect(defaultWorkbench.capabilities["runtime.model.recording.v1"]).toEqual([
       "openjiuwen.model-provider",
+    ]);
+    expect(defaultWorkbench.capabilities["graph.change.impact.v1"]).toEqual([
+      "openjiuwen.git-change",
     ]);
     expect(defaultWorkbench.graph.nodes.find((node) => node.id === "model"))
       .toMatchObject({
@@ -98,7 +110,8 @@ describe("visualization plugin registry", () => {
       "openjiuwen.jiuwenswarm": "enabled",
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",
-      "openjiuwen.local-repository": "disabled",
+      "openjiuwen.local-repository": "enabled",
+      "openjiuwen.git-change": "enabled",
     });
     expect(snapshot.graph.nodes.map((node) => node.id)).toEqual([
       "input",
@@ -117,6 +130,15 @@ describe("visualization plugin registry", () => {
       coreOnly.plugins.find((item) => item.id === "openjiuwen.integration")
         ?.state,
     ).toBe("blocked");
+
+    const withoutLocalGit = createDefaultPluginRegistry().resolve({
+      pluginStates: { "openjiuwen.local-repository": false },
+    });
+    expect(
+      withoutLocalGit.plugins.find((item) => item.id === "openjiuwen.git-change")
+        ?.state,
+    ).toBe("blocked");
+    expect(withoutLocalGit.changeSources).toEqual([]);
   });
 
   it("keeps the canonical graph independent from its ReactFlow projection", () => {
