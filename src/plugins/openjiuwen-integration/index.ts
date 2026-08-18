@@ -38,6 +38,7 @@ export const openJiuwenIntegrationPlugin: VisualizationPlugin = {
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "连接 JiuWenSwarm 边界与 Agent Core 执行链路。",
+    group: "integration",
     defaultEnabled: true,
     dependencies: ["openjiuwen.agent-core", "openjiuwen.jiuwenswarm"],
     capabilities: ["graph.definition.integration"],

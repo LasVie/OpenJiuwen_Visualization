@@ -6,12 +6,12 @@ import {
   CornerDownRight,
   Timer,
 } from "lucide-react";
-import { graphNodes } from "../data/scenarios";
 import { RailReviewPanel } from "../features/rail-review";
 import { RuntimeBadge } from "../shared/ui/RuntimeBadge";
-import type { TraceStep } from "../types/trace";
+import type { TraceNodeDefinition, TraceStep } from "../types/trace";
 
 interface InspectorPanelProps {
+  graphNodes: readonly TraceNodeDefinition[];
   step: TraceStep;
   selectedNodeId: string | null;
   runInput: string;
@@ -20,6 +20,7 @@ interface InspectorPanelProps {
 }
 
 export function InspectorPanel({
+  graphNodes,
   step,
   selectedNodeId,
   runInput,

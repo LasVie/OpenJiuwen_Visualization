@@ -18,6 +18,7 @@ function plugin(
       version: "0.1.0",
       apiVersion: PLUGIN_API_VERSION,
       description: "test plugin",
+      group: "workspace",
       defaultEnabled: true,
       capabilities: [],
     },
@@ -92,6 +93,14 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.tool-catalog", "enabled"],
         ["openjiuwen.git-change", "enabled"],
       ]);
+    expect(defaultWorkbench.plugins[0]).toMatchObject({
+      id: "openjiuwen.agent-core",
+      group: "agent-core",
+      requestedEnabled: true,
+      defaultEnabled: true,
+      dependencies: [],
+      description: expect.any(String),
+    });
     expect(defaultWorkbench.capabilities["graph.rail"]).toEqual([
       "openjiuwen.agent-core",
     ]);
@@ -193,6 +202,7 @@ describe("visualization plugin registry", () => {
         version: "0.1.0",
         apiVersion: PLUGIN_API_VERSION,
         description: "test plugin",
+        group: "workspace",
         defaultEnabled: true,
         dependencies: ["test.missing"],
         capabilities: [],

@@ -18,6 +18,7 @@ interface SwarmRuntimeSessionBarProps {
   onCreate: () => void;
   onLoadRecording: () => void;
   recordingLabel: string;
+  recordingAvailable: boolean;
   recordingLoading: boolean;
   recordingError: string | null;
 }
@@ -39,6 +40,7 @@ export function SwarmRuntimeSessionBar({
   onCreate,
   onLoadRecording,
   recordingLabel,
+  recordingAvailable,
   recordingLoading,
   recordingError,
 }: SwarmRuntimeSessionBarProps) {
@@ -85,11 +87,11 @@ export function SwarmRuntimeSessionBar({
         type="button"
         className="swarm-runtime-session__recording"
         onClick={onLoadRecording}
-        disabled={connection === "creating" || recordingLoading}
+        disabled={!recordingAvailable || connection === "creating" || recordingLoading}
         title={recordingLabel}
       >
         <PlayCircle size={14} strokeWidth={2} aria-hidden="true" />
-        {recordingLoading ? "载入中" : "Subagent 演示"}
+        {recordingLoading ? "载入中" : recordingAvailable ? "Subagent 演示" : "Subagent 模块已关闭"}
       </button>
 
       <button

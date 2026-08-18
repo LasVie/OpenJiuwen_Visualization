@@ -18,6 +18,7 @@ interface CoreRuntimeSessionBarProps {
   onCreate: () => void;
   onLoadRecording: () => void;
   recordingLabel: string;
+  recordingAvailable: boolean;
   recordingLoading: boolean;
   recordingError: string | null;
 }
@@ -39,6 +40,7 @@ export function CoreRuntimeSessionBar({
   onCreate,
   onLoadRecording,
   recordingLabel,
+  recordingAvailable,
   recordingLoading,
   recordingError,
 }: CoreRuntimeSessionBarProps) {
@@ -85,11 +87,11 @@ export function CoreRuntimeSessionBar({
         type="button"
         className="core-runtime-session__replay"
         onClick={onLoadRecording}
-        disabled={connection === "creating" || recordingLoading}
+        disabled={!recordingAvailable || connection === "creating" || recordingLoading}
         title={recordingError ?? `载入：${recordingLabel}`}
       >
         <RotateCcw size={14} strokeWidth={2} aria-hidden="true" />
-        {recordingLoading ? "载入中" : "模型录制"}
+        {recordingLoading ? "载入中" : recordingAvailable ? "模型录制" : "模型模块已关闭"}
       </button>
 
       <button

@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、Model Provider 录制回放，以及工作树或 commit range 的节点影响图。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、Model Provider 录制回放、工作树或 commit range 的节点影响图，以及带依赖解析的模块开关。
 
 ## 本地运行
 
@@ -73,6 +73,12 @@ Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，
 
 顶部“变更图”通过本地服务只读比较 `HEAD ↔ 工作树` 或 `merge-base ↔ head`，再把文件 hunk 映射到 AST 符号、上层容器和 imports/inherits 等关系节点。页面明确区分 exact 与 inferred，不会 fetch、checkout 或修改仓库。完整合同见 [`docs/git-change-plane-v1.md`](docs/git-change-plane-v1.md)。
 
+### 模块控制中心
+
+顶部“模块”进入插件依赖配电盘。每个模块可独立请求开启或关闭；依赖缺失时，模块显示为“等待依赖”但保留用户的开启意图，依赖恢复后自动重新启用。Runtime 来源、Definition/Change 导航、Tool 注册表、Model 录制、Rail 和 Subagent 深入入口都从当前 Workbench 快照推导，不会继续暴露已关闭模块的数据贡献。
+
+偏好只保存在当前浏览器，并可一键恢复 manifest 默认值；不会保存仓库路径、Trace 原文或凭据。状态合同、依赖图和扩展边界见 [`docs/plugin-control-v1.md`](docs/plugin-control-v1.md)。
+
 完整事件矩阵、层级规则和可直接投递的示例见 [`docs/swarm-runtime-v1.md`](docs/swarm-runtime-v1.md) 与 [`examples/swarm-runtime-v1.events.json`](examples/swarm-runtime-v1.events.json)。
 
 ## 视觉语义
@@ -102,6 +108,7 @@ src/
 │  ├─ context-window/          # 脱敏、原文和展示 Token 模型
 │  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
+│  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
 │  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期
 │  ├─ swarm-runtime/           # Swarm 层级、主体 Context 与动态画布

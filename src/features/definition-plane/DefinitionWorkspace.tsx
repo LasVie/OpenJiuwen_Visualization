@@ -6,6 +6,7 @@ import { ToolCatalogWorkspace } from "../tool-catalog";
 
 interface DefinitionWorkspaceProps {
   runtimeEvents: readonly RuntimeTraceEvent[];
+  toolsEnabled: boolean;
   magnetEnabled: boolean;
   magnetStrength: number;
   onToggleMagnet: () => void;
@@ -20,8 +21,8 @@ export function DefinitionWorkspace(props: DefinitionWorkspaceProps) {
         <button type="button" className={view === "architecture" ? "active" : ""} aria-pressed={view === "architecture"} onClick={() => setView("architecture")}>
           <Database size={14} /><span><strong>代码定义</strong><small>AST GRAPH</small></span>
         </button>
-        <button type="button" className={view === "tools" ? "active" : ""} aria-pressed={view === "tools"} onClick={() => setView("tools")}>
-          <Braces size={14} /><span><strong>Tool 注册表</strong><small>REGISTRY</small></span>
+        <button type="button" className={view === "tools" ? "active" : ""} aria-pressed={view === "tools"} onClick={() => setView("tools")} disabled={!props.toolsEnabled}>
+          <Braces size={14} /><span><strong>Tool 注册表</strong><small>{props.toolsEnabled ? "REGISTRY" : "MODULE OFF"}</small></span>
         </button>
         <p>{view === "architecture" ? "仓库 → Package → Module → Symbol" : "声明 → 静态注册路径 → 运行确认"}</p>
       </nav>

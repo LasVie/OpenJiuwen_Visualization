@@ -52,6 +52,11 @@
   border-color: rgb(35 132 137 / 0.16);
 }
 
+.definition-workbench__tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 .definition-workbench__tabs p {
   margin: 0 0 0 auto;
   color: var(--muted);

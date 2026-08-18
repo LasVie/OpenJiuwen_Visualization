@@ -23,12 +23,19 @@ import type {
 
 export const PLUGIN_API_VERSION = "1.0.0" as const;
 
+export type VisualizationPluginGroup =
+  | "agent-core"
+  | "jiuwenswarm"
+  | "integration"
+  | "workspace";
+
 export interface VisualizationPluginManifest {
   id: string;
   name: string;
   version: string;
   apiVersion: typeof PLUGIN_API_VERSION;
   description: string;
+  group: VisualizationPluginGroup;
   defaultEnabled: boolean;
   dependencies?: readonly string[];
   capabilities: readonly string[];
@@ -56,7 +63,12 @@ export interface ResolvedPluginStatus {
   id: string;
   name: string;
   version: string;
+  description: string;
+  group: VisualizationPluginGroup;
   state: PluginResolutionState;
+  requestedEnabled: boolean;
+  defaultEnabled: boolean;
+  dependencies: readonly string[];
   reason?: string;
   capabilities: readonly string[];
 }

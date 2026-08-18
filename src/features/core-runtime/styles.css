@@ -229,6 +229,11 @@
   box-shadow: var(--shadow-border);
 }
 
+.runtime-source-toggle button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
 @media (max-width: 1240px) {
   .core-runtime-session {
     grid-template-columns: minmax(180px, 1fr) auto auto auto;

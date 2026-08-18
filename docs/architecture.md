@@ -2,11 +2,12 @@
 
 ## 产品边界
 
-项目面向 OpenJiuwen 的代码理解、运行调试与变更影响分析。一个工作台最终组合三种相互关联的数据平面：
+项目面向 OpenJiuwen 的代码理解、运行调试与变更影响分析。一个工作台组合三种相互关联的数据平面，并由一个控制平面决定当前装配：
 
 - Definition：从仓库、配置和注册表得到的定义图。
 - Runtime：确定性回放或真实 Agent/Workflow 运行事件。
 - Change：本地 Git、commit 和 GitHub PR 的变更与影响关系。
+- Modules：插件启停、依赖状态与 capability 可见性。
 
 浏览器只负责交互与渲染。未来读取本地仓库、运行 Python、执行 Git 或调用模型的能力必须进入独立本地服务，不允许 React 组件直接访问凭据或执行目标仓代码。
 
@@ -61,11 +62,13 @@ repository@revision:path:symbol
 每个插件提供 manifest 和纯 `contribute()`：
 
 - `id`、版本、Plugin API 版本。
-- 默认启用状态与依赖插件。
+- 默认启用状态、稳定 group 与依赖插件。
 - 能力列表，例如 `graph.definition.agent-core`、`trace.replay`。
 - 可选图节点、边和轨迹场景。
 
 注册器按依赖拓扑顺序解析插件。关闭一个插件时，依赖它的插件进入 `blocked`，不会留下悬空边或半可用场景。注册器拒绝重复 ID、缺失依赖、依赖环、悬空边和无效轨迹引用。
+
+`features/plugin-control/` 保存最小浏览器覆盖项，并在每次变化后重新调用同一个注册器生成 Workbench snapshot。`requestedEnabled` 表示用户意图，`state` 表示解析后的实际状态；被依赖阻塞的模块不会丢失开启意图。页面导航、Runtime source、图投影和录制入口只读取当前 snapshot。完整合同见 [`plugin-control-v1.md`](plugin-control-v1.md)。
 
 当前默认模块：
 

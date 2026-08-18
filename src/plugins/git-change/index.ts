@@ -7,6 +7,7 @@ export const gitChangePlugin: VisualizationPlugin = {
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "提供工作树、commit range 与本地 PR refs 的只读变更和节点影响映射。",
+    group: "workspace",
     defaultEnabled: true,
     dependencies: ["openjiuwen.local-repository"],
     capabilities: ["git.change.local.read", "graph.change.impact.v1"],

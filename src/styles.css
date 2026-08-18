@@ -203,6 +203,11 @@ kbd,
   box-shadow: var(--shadow-border);
 }
 
+.workbench-mode-switch button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
 .definition-header-summary {
   display: flex;
   align-items: center;
@@ -237,6 +242,10 @@ kbd,
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.module-header-summary {
+  color: var(--success);
 }
 
 .brand {
@@ -3412,7 +3421,7 @@ kbd {
 
 @media (max-width: 1240px) {
   .app-header {
-    grid-template-columns: 190px auto minmax(310px, 1fr) auto;
+    grid-template-columns: 175px auto minmax(260px, 1fr) auto;
     gap: 10px;
   }
 
@@ -3421,8 +3430,8 @@ kbd {
   }
 
   .workbench-mode-switch button {
-    padding-right: 8px;
-    padding-left: 8px;
+    padding-right: 7px;
+    padding-left: 7px;
   }
 
   .context-panel {

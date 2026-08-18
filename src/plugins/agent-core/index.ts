@@ -12,6 +12,7 @@ export const agentCorePlugin: VisualizationPlugin = {
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "提供 DeepAgent、ReAct、Context、Model、Tool 与 Rail 定义图。",
+    group: "agent-core",
     defaultEnabled: true,
     capabilities: [
       "graph.definition.agent-core",

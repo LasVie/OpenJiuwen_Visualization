@@ -7,6 +7,7 @@ export const toolCatalogPlugin: VisualizationPlugin = {
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "提供 Tool 声明、静态注册路径与 ability.register 运行确认视图。",
+    group: "workspace",
     defaultEnabled: true,
     dependencies: ["openjiuwen.local-repository"],
     capabilities: [

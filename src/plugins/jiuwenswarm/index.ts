@@ -13,6 +13,7 @@ export const jiuwenSwarmPlugin: VisualizationPlugin = {
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "提供 Swarm 请求入口、会话边界和响应出口定义图。",
+    group: "jiuwenswarm",
     defaultEnabled: true,
     capabilities: [
       "graph.definition.jiuwenswarm",

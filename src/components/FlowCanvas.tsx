@@ -13,7 +13,6 @@ import {
   type NodeTypes,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { graphEdges, graphNodes } from "../data/scenarios";
 import {
   magneticProfile,
   magnetizeNode,
@@ -26,6 +25,7 @@ import {
 import type {
   StageNodeDefinition,
   TraceEdgeDefinition,
+  TraceNodeDefinition,
   TraceNodeStatus,
   TraceScenario,
   TraceViewMode,
@@ -94,6 +94,8 @@ const collapsedPositions: Record<string, { x: number; y: number }> = {
 };
 
 interface FlowCanvasProps {
+  graphNodes: readonly TraceNodeDefinition[];
+  graphEdges: readonly TraceEdgeDefinition[];
   scenario: TraceScenario;
   stepIndex: number;
   playbackRevision: number;
@@ -107,11 +109,15 @@ interface FlowCanvasProps {
   magnetStrength: number;
 }
 
-function definitionById(id: string) {
+function definitionById(
+  graphNodes: readonly TraceNodeDefinition[],
+  id: string,
+) {
   return graphNodes.find((node) => node.id === id);
 }
 
 function visibleDefinitions(
+  graphNodes: readonly TraceNodeDefinition[],
   scenario: TraceScenario,
   expanded: boolean,
 ) {
@@ -128,10 +134,14 @@ function visibleDefinitions(
   });
 }
 
-function currentInternalStage(scenario: TraceScenario, stepIndex: number) {
+function currentInternalStage(
+  graphNodes: readonly TraceNodeDefinition[],
+  scenario: TraceScenario,
+  stepIndex: number,
+) {
   const step = scenario.steps[stepIndex];
   const activeDefinition = step.activeNodeIds
-    .map(definitionById)
+    .map((id) => definitionById(graphNodes, id))
     .find(
       (definition): definition is StageNodeDefinition =>
         definition?.type === "stage" && internalNodeIds.has(definition.id),
@@ -185,6 +195,7 @@ function nodeStatus(
 }
 
 function buildNodes(
+  graphNodes: readonly TraceNodeDefinition[],
   scenario: TraceScenario,
   stepIndex: number,
   selectedNodeId: string | null,
@@ -192,13 +203,13 @@ function buildNodes(
   previous: TraceFlowNode[] = [],
 ): TraceFlowNode[] {
   const step = scenario.steps[stepIndex];
-  const currentStage = currentInternalStage(scenario, stepIndex);
+  const currentStage = currentInternalStage(graphNodes, scenario, stepIndex);
   const previousPositions = new Map(
     previous.map((node) => [node.id, node.position]),
   );
   const defaultPositions = expanded ? expandedPositions : collapsedPositions;
 
-  return visibleDefinitions(scenario, expanded).map((definition) => {
+  return visibleDefinitions(graphNodes, scenario, expanded).map((definition) => {
     const status = nodeStatus(definition.id, scenario, stepIndex);
     const fallbackPosition =
       defaultPositions[definition.id] ?? definition.position;
@@ -286,7 +297,14 @@ function buildNodes(
   });
 }
 
-function collapsedEdges(scenario: TraceScenario): TraceEdgeDefinition[] {
+export function collapsedEdges(
+  graphEdges: readonly TraceEdgeDefinition[],
+  scenario: TraceScenario,
+): TraceEdgeDefinition[] {
+  const ingressEdge = graphEdges.find((edge) => edge.id === "e-input-deep");
+  const responseEdge = graphEdges.find(
+    (edge) => edge.id === "e-decision-output",
+  );
   const railDefinitions = graphEdges.filter(
     (edge) =>
       edge.kind === "rail" &&
@@ -294,19 +312,16 @@ function collapsedEdges(scenario: TraceScenario): TraceEdgeDefinition[] {
   );
 
   return [
-    {
-      id: "e-input-deep",
-      source: "input",
-      target: "deep-agent",
-      kind: "causal",
-    },
-    {
-      id: "e-deep-output-macro",
-      source: "deep-agent",
-      target: "output",
-      label: "response",
-      kind: "causal",
-    },
+    ...(ingressEdge ? [ingressEdge] : []),
+    ...(responseEdge
+      ? [{
+          id: "e-deep-output-macro",
+          source: "deep-agent",
+          target: "output",
+          label: responseEdge.label ?? "response",
+          kind: "causal" as const,
+        }]
+      : []),
     ...railDefinitions.map((edge) =>
       edge.id === "e-rail-safety-input" || edge.id === "e-rail-init-deep"
         ? edge
@@ -320,12 +335,14 @@ function collapsedEdges(scenario: TraceScenario): TraceEdgeDefinition[] {
 }
 
 function buildEdges(
+  graphNodes: readonly TraceNodeDefinition[],
+  graphEdges: readonly TraceEdgeDefinition[],
   scenario: TraceScenario,
   stepIndex: number,
   pulseKey: number,
   expanded: boolean,
 ): TraceFlowEdge[] {
-  const definitions = visibleDefinitions(scenario, expanded);
+  const definitions = visibleDefinitions(graphNodes, scenario, expanded);
   const visibleNodeIds = new Set(definitions.map((node) => node.id));
   const step = scenario.steps[stepIndex];
   const active = new Set(step.activeEdgeIds);
@@ -334,7 +351,9 @@ function buildEdges(
       .slice(0, stepIndex)
       .flatMap((traceStep) => traceStep.activeEdgeIds),
   );
-  const edgeDefinitions = expanded ? graphEdges : collapsedEdges(scenario);
+  const edgeDefinitions = expanded
+    ? graphEdges
+    : collapsedEdges(graphEdges, scenario);
 
   return edgeDefinitions
     .filter(
@@ -392,6 +411,8 @@ function buildEdges(
 }
 
 export function FlowCanvas({
+  graphNodes,
+  graphEdges,
   scenario,
   stepIndex,
   playbackRevision,
@@ -421,10 +442,17 @@ export function FlowCanvas({
     (expanded ? "expanded" : "collapsed");
   const previousLayoutKey = useRef(layoutKey);
   const [nodes, setNodes, onNodesChange] = useNodesState<TraceFlowNode>(
-    buildNodes(scenario, stepIndex, selectedNodeId, expanded),
+    buildNodes(graphNodes, scenario, stepIndex, selectedNodeId, expanded),
   );
   const [edges, setEdges, onEdgesChange] = useEdgesState<TraceFlowEdge>(
-    buildEdges(scenario, stepIndex, playbackRevision, expanded),
+    buildEdges(
+      graphNodes,
+      graphEdges,
+      scenario,
+      stepIndex,
+      playbackRevision,
+      expanded,
+    ),
   );
   const fitViewOptions = useMemo(
     () => ({
@@ -443,6 +471,7 @@ export function FlowCanvas({
     const preservePositions = previousLayoutKey.current === layoutKey;
     setNodes((current) =>
       buildNodes(
+        graphNodes,
         scenario,
         stepIndex,
         selectedNodeId,
@@ -450,10 +479,19 @@ export function FlowCanvas({
         preservePositions ? current : [],
       ),
     );
-    setEdges(buildEdges(scenario, stepIndex, playbackRevision, expanded));
+    setEdges(buildEdges(
+      graphNodes,
+      graphEdges,
+      scenario,
+      stepIndex,
+      playbackRevision,
+      expanded,
+    ));
     previousLayoutKey.current = layoutKey;
   }, [
     expanded,
+    graphEdges,
+    graphNodes,
     layoutKey,
     playbackRevision,
     scenario,
@@ -507,7 +545,7 @@ export function FlowCanvas({
             onExpandDeepAgent();
             return;
           }
-          if (definitionById(node.id)?.type === "rail") {
+          if (definitionById(graphNodes, node.id)?.type === "rail") {
             onOpenRail(node.id);
             return;
           }

@@ -25,6 +25,12 @@ import type { RegisteredGitChangeSource } from "./contracts/change";
 import type { RegisteredToolCatalogSource } from "./contracts/tool-catalog";
 
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
+const PLUGIN_GROUPS = new Set([
+  "agent-core",
+  "jiuwenswarm",
+  "integration",
+  "workspace",
+]);
 
 export class PluginRegistryError extends Error {
   constructor(
@@ -64,6 +70,7 @@ export class VisualizationPluginRegistry {
       !PLUGIN_ID_PATTERN.test(manifest.id) ||
       !manifest.name.trim() ||
       !manifest.version.trim() ||
+      !PLUGIN_GROUPS.has(manifest.group) ||
       manifest.apiVersion !== PLUGIN_API_VERSION
     ) {
       throw new PluginRegistryError(
@@ -249,7 +256,12 @@ export class VisualizationPluginRegistry {
         id: manifest.id,
         name: manifest.name,
         version: manifest.version,
+        description: manifest.description,
+        group: manifest.group,
         state,
+        requestedEnabled: requested,
+        defaultEnabled: manifest.defaultEnabled,
+        dependencies: manifest.dependencies ?? [],
         reason,
         capabilities: manifest.capabilities,
       });

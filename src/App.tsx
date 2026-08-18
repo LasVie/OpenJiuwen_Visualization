@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Activity,
+  Box,
   Braces,
   Database,
   GitCompareArrows,
@@ -15,7 +16,7 @@ import { FlowCanvas } from "./components/FlowCanvas";
 import { InspectorPanel } from "./components/InspectorPanel";
 import { ScenarioTabs } from "./components/ScenarioTabs";
 import { TimelineControls } from "./components/TimelineControls";
-import { getScenario, graphNodes, scenarios } from "./data/scenarios";
+import { projectTraceGraph } from "./domain/trace/projection";
 import { RailDecisionCanvas } from "./features/rail-review";
 import {
   SubagentExecutionCanvas,
@@ -31,6 +32,11 @@ import {
 } from "./features/core-runtime";
 import { MagnetControls } from "./features/trace-graph";
 import { ModelRuntimePanel, projectModelRuntime } from "./features/model-runtime";
+import {
+  PluginControlWorkspace,
+  usePluginWorkbench,
+  workbenchAvailability,
+} from "./features/plugin-control";
 import {
   SwarmContextScopeBar,
   SwarmRuntimeSessionBar,
@@ -51,15 +57,10 @@ const SwarmRuntimeInspector = lazy(() =>
   })),
 );
 
-const defaultModelRecording = defaultWorkbench.modelRecordings[0];
-const defaultSwarmRecording = defaultWorkbench.runtimeRecordings.find(
-  (recording) => recording.owner === "jiuwenswarm",
-);
+type WorkbenchMode = "runtime" | "definition" | "change" | "modules";
 
 export default function App() {
-  const [workbenchMode, setWorkbenchMode] = useState<"runtime" | "definition" | "change">(
-    "runtime",
-  );
+  const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>("runtime");
   const [runtimeSource, setRuntimeSource] =
     useState<RuntimeSourceMode>("fixture");
   const [coreTraceLabel, setCoreTraceLabel] = useState("Agent Core local run");
@@ -71,6 +72,20 @@ export default function App() {
   const [swarmRecordingLoading, setSwarmRecordingLoading] = useState(false);
   const [swarmRecordingError, setSwarmRecordingError] = useState<string | null>(null);
   const [subagentCanvasSubjectId, setSubagentCanvasSubjectId] = useState<string | null>(null);
+  const pluginWorkbench = usePluginWorkbench();
+  const { workbench } = pluginWorkbench;
+  const availability = useMemo(
+    () => workbenchAvailability(workbench),
+    [workbench],
+  );
+  const traceGraph = useMemo(
+    () => projectTraceGraph(workbench.graph),
+    [workbench.graph],
+  );
+  const defaultModelRecording = workbench.modelRecordings[0];
+  const defaultSwarmRecording = workbench.runtimeRecordings.find(
+    (recording) => recording.owner === "jiuwenswarm",
+  );
   const coreRuntime = useCoreRuntimeSession();
   const swarmRuntime = useSwarmRuntimeSession();
   const {
@@ -103,7 +118,16 @@ export default function App() {
     toggleMagnet,
     setMagnetStrength,
   } = useReplayStore();
-  const fixtureScenario = getScenario(scenarioId);
+  const runtimeSourceAvailability = useMemo<
+    Readonly<Record<RuntimeSourceMode, boolean>>
+  >(() => ({
+    fixture: availability.runtimeSources.fixture,
+    "core-runtime": availability.runtimeSources.core,
+    "swarm-runtime": availability.runtimeSources.swarm,
+  }), [availability.runtimeSources]);
+  const fixtureScenario = workbench.scenarios.find(
+    (item) => item.id === scenarioId,
+  ) ?? workbench.scenarios[0] ?? defaultWorkbench.scenarios[0]!;
   const scenario = runtimeSource === "core-runtime"
     ? coreRuntime.scenario
     : runtimeSource === "swarm-runtime"
@@ -127,26 +151,49 @@ export default function App() {
       : [];
   const modelProjection = useMemo(
     () => projectModelRuntime(
-      activeRuntimeEvents,
-      activeRuntimeEvents[stepIndex]?.sequence ?? 0,
+      availability.modelRuntime ? activeRuntimeEvents : [],
+      availability.modelRuntime
+        ? activeRuntimeEvents[stepIndex]?.sequence ?? 0
+        : 0,
     ),
-    [activeRuntimeEvents, stepIndex],
+    [activeRuntimeEvents, availability.modelRuntime, stepIndex],
   );
   const currentSwarmSequence = runtimeSource === "swarm-runtime"
     ? swarmRuntime.events[stepIndex]?.sequence ?? 0
     : 0;
   const subagentExecutions = useMemo(
-    () => projectSubagentExecutions(
-      swarmRuntime.events.filter((event) => event.sequence <= currentSwarmSequence),
-    ),
-    [currentSwarmSequence, swarmRuntime.events],
+    () => availability.subagentRuntime
+      ? projectSubagentExecutions(
+          swarmRuntime.events.filter(
+            (event) => event.sequence <= currentSwarmSequence,
+          ),
+        )
+      : [],
+    [availability.subagentRuntime, currentSwarmSequence, swarmRuntime.events],
   );
   const subagentCanvasExecution = subagentExecutions.find(
     (execution) => execution.subjectId === subagentCanvasSubjectId,
   );
-  const railCanvasDefinition = graphNodes.find(
+  const railCanvasDefinition = traceGraph.nodes.find(
     (node) => node.id === railCanvasRailId && node.type === "rail",
   );
+
+  useEffect(() => {
+    if (runtimeSourceAvailability[runtimeSource]) return;
+    const fallback = (Object.entries(runtimeSourceAvailability) as Array<
+      [RuntimeSourceMode, boolean]
+    >).find(([, available]) => available)?.[0];
+    if (fallback) changeRuntimeSource(fallback);
+  }, [runtimeSource, runtimeSourceAvailability]);
+
+  useEffect(() => {
+    const currentModeAvailable =
+      workbenchMode === "modules" ||
+      (workbenchMode === "runtime" && availability.runtime) ||
+      (workbenchMode === "definition" && availability.definition) ||
+      (workbenchMode === "change" && availability.change);
+    if (!currentModeAvailable) setWorkbenchMode("modules");
+  }, [availability.change, availability.definition, availability.runtime, workbenchMode]);
 
   useEffect(() => {
     if (runtimeSource === "fixture") return;
@@ -327,6 +374,7 @@ export default function App() {
             className={workbenchMode === "runtime" ? "workbench-mode--active" : ""}
             onClick={() => setWorkbenchMode("runtime")}
             aria-pressed={workbenchMode === "runtime"}
+            disabled={!availability.runtime}
           >
             <Activity size={15} />
             <span><strong>运行链路</strong><small>RUNTIME</small></span>
@@ -336,6 +384,7 @@ export default function App() {
             className={workbenchMode === "definition" ? "workbench-mode--active" : ""}
             onClick={() => setWorkbenchMode("definition")}
             aria-pressed={workbenchMode === "definition"}
+            disabled={!availability.definition}
           >
             <Database size={15} />
             <span><strong>定义图</strong><small>DEFINITION</small></span>
@@ -345,9 +394,19 @@ export default function App() {
             className={workbenchMode === "change" ? "workbench-mode--active" : ""}
             onClick={() => setWorkbenchMode("change")}
             aria-pressed={workbenchMode === "change"}
+            disabled={!availability.change}
           >
             <GitCompareArrows size={15} />
             <span><strong>变更图</strong><small>CHANGE</small></span>
+          </button>
+          <button
+            type="button"
+            className={workbenchMode === "modules" ? "workbench-mode--active" : ""}
+            onClick={() => setWorkbenchMode("modules")}
+            aria-pressed={workbenchMode === "modules"}
+          >
+            <Box size={15} />
+            <span><strong>模块</strong><small>MODULES</small></span>
           </button>
         </nav>
 
@@ -399,12 +458,20 @@ export default function App() {
               <small>本地 AST 索引 · 分层加载 · 源码证据</small>
             </span>
           </div>
-        ) : (
+        ) : workbenchMode === "change" ? (
           <div className="definition-header-summary change-header-summary">
             <GitCompareArrows size={17} />
             <span>
               <strong>Git Change Plane</strong>
               <small>工作树 / commit refs · 节点影响映射 · 只读</small>
+            </span>
+          </div>
+        ) : (
+          <div className="definition-header-summary module-header-summary">
+            <Box size={17} />
+            <span>
+              <strong>Module Control Plane</strong>
+              <small>插件开关 · 依赖解析 · 浏览器持久化</small>
             </span>
           </div>
         )}
@@ -424,7 +491,7 @@ export default function App() {
         ].filter(Boolean).join(" ")}>
           {runtimeSource === "fixture" ? (
             <ScenarioTabs
-              scenarios={scenarios}
+              scenarios={workbench.scenarios}
               activeId={scenarioId}
               onChange={setScenario}
             />
@@ -437,6 +504,7 @@ export default function App() {
               onCreate={() => void createCoreTrace()}
               onLoadRecording={() => void loadModelRecording()}
               recordingLabel={defaultModelRecording?.label ?? "无可用模型录制"}
+              recordingAvailable={Boolean(defaultModelRecording)}
               recordingLoading={recordingLoading}
               recordingError={recordingError}
             />
@@ -449,6 +517,7 @@ export default function App() {
               onCreate={() => void createSwarmTrace()}
               onLoadRecording={() => void loadSwarmRecording()}
               recordingLabel={defaultSwarmRecording?.label ?? "无可用 Subagent 录制"}
+              recordingAvailable={Boolean(defaultSwarmRecording)}
               recordingLoading={swarmRecordingLoading}
               recordingError={swarmRecordingError}
             />
@@ -457,6 +526,7 @@ export default function App() {
             <ShieldCheck size={14} strokeWidth={1.8} aria-hidden="true" />
             <RuntimeSourceToggle
               value={runtimeSource}
+              available={runtimeSourceAvailability}
               onChange={changeRuntimeSource}
             />
             <span>{scenario.description}</span>
@@ -530,6 +600,8 @@ export default function App() {
             </Suspense>
           ) : (
             <FlowCanvas
+              graphNodes={traceGraph.nodes}
+              graphEdges={traceGraph.edges}
               scenario={scenario}
               stepIndex={stepIndex}
               playbackRevision={playbackRevision + runtimeEventCount}
@@ -556,6 +628,7 @@ export default function App() {
             </Suspense>
           ) : (
             <InspectorPanel
+              graphNodes={traceGraph.nodes}
               step={step}
               selectedNodeId={selectedNodeId}
               runInput={activeRunInput}
@@ -589,22 +662,31 @@ export default function App() {
       </div> : workbenchMode === "definition" ? (
         <DefinitionWorkspace
           runtimeEvents={activeRuntimeEvents}
+          toolsEnabled={availability.tools}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
           onToggleMagnet={toggleMagnet}
           onMagnetStrengthChange={setMagnetStrength}
         />
-      ) : (
+      ) : workbenchMode === "change" ? (
         <ChangeWorkspace
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
           onToggleMagnet={toggleMagnet}
           onMagnetStrengthChange={setMagnetStrength}
         />
+      ) : (
+        <PluginControlWorkspace
+          plugins={workbench.plugins}
+          hasOverrides={pluginWorkbench.hasOverrides}
+          onSetEnabled={pluginWorkbench.setPluginEnabled}
+          onReset={pluginWorkbench.resetPluginStates}
+        />
       )}
 
       {workbenchMode === "runtime" &&
       runtimeSource !== "swarm-runtime" &&
+      availability.railReview &&
       railCanvasDefinition?.type === "rail" ? (
         <RailDecisionCanvas
           key={railCanvasDefinition.id}
@@ -621,6 +703,7 @@ export default function App() {
       ) : null}
       {workbenchMode === "runtime" &&
       runtimeSource === "swarm-runtime" &&
+      availability.subagentRuntime &&
       subagentCanvasExecution ? (
         <SubagentExecutionCanvas
           key={subagentCanvasExecution.invocationId}

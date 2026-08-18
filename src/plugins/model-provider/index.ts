@@ -11,6 +11,7 @@ export const modelProviderPlugin: VisualizationPlugin = {
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "提供厂商无关的模型流、用量、取消与确定性录制回放合同。",
+    group: "agent-core",
     defaultEnabled: true,
     dependencies: ["openjiuwen.agent-core"],
     capabilities: [

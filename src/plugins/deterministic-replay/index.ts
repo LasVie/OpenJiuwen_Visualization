@@ -11,6 +11,7 @@ export const deterministicReplayPlugin: VisualizationPlugin = {
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "提供无需模型网络调用即可重复播放的确定性轨迹。",
+    group: "integration",
     defaultEnabled: true,
     dependencies: ["openjiuwen.integration"],
     capabilities: ["trace.fixture", "trace.replay"],
