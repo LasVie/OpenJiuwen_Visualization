@@ -220,4 +220,54 @@ describe("CoreRuntimeClient", () => {
     }));
     await expect(client.getSnapshot(trace.id)).rejects.toThrow(/Runtime Trace V1/);
   });
+
+  it("validates structured Subagent isolation evidence before projection", async () => {
+    const swarmTrace = { ...trace, owner: "jiuwenswarm" };
+    const subagent = {
+      invocationId: "invoke:explore",
+      subagentType: "explore_agent",
+      dispatcher: "task-tool",
+      runMode: "foreground",
+      parentSessionId: "session:parent",
+      sessionId: "session:child",
+      contextOwnerId: "ctx:explore",
+      sessionPolicy: "ephemeral",
+      workspaceIsolation: "subdirectory",
+      toolPolicy: "configured",
+    };
+    const response = (evidence: unknown) => jsonResponse({
+      apiVersion: "1.0.0",
+      trace: { ...swarmTrace, eventCount: 1, lastSequence: 1 },
+      events: [{
+        eventId: "subagent-start",
+        traceId: trace.id,
+        sequence: 1,
+        receivedAt: "2026-08-18T00:00:01Z",
+        kind: "swarm.subagent",
+        phase: "start",
+        timestampMs: 10,
+        spanId: "subagent-1",
+        subject: {
+          id: "subagent:explore",
+          kind: "subagent",
+          label: "Explore",
+          contextOwnerId: "ctx:explore",
+        },
+        subagent: evidence,
+      }],
+      storage: "memory-only",
+    });
+    const fetcher = vi.fn(async () => response(subagent));
+    const client = new CoreRuntimeClient({ fetcher: fetcher as typeof fetch });
+
+    await expect(client.getSnapshot(trace.id)).resolves.toMatchObject({
+      events: [{ subagent: { sessionId: "session:child" } }],
+    });
+
+    fetcher.mockImplementationOnce(async () => response({
+      ...subagent,
+      contextOwnerId: "ctx:other",
+    }));
+    await expect(client.getSnapshot(trace.id)).rejects.toThrow(/Runtime Trace V1/);
+  });
 });

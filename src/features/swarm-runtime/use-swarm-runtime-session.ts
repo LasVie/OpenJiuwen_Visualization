@@ -33,7 +33,7 @@ export function useSwarmRuntimeSession(
 
   const startSession = useCallback(async (label: string) => {
     setContextOwnerId(null);
-    await session.startSession(label);
+    return await session.startSession(label);
   }, [session.startSession]);
 
   return {

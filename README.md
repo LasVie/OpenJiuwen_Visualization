@@ -63,6 +63,8 @@ Swarm Trace 复用同一个内存采集服务，但要求每个非终止事件�
 
 Context 事件必须携带 `context.ownerId`。Team/Member/Agent/Subagent 可以拥有彼此独立的窗口，点击有 Context 的节点或使用 owner 选择器即可切换，消息和 Token 不会跨主体混合。`jiuwenswarm` 现有 WorkflowProgress 尚未提供结构化 tool-call activity，页面不会把日志或 outcome 猜成工具调用。
 
+结构化 Subagent 卡片可以进入独立执行画布，按同一时间轴查看 `dispatcher → child session → Context / Agent / Rail / Model / Tool → result`。派发器、前后台模式、父/子 session、workspace 隔离与 Tool 策略都来自显式事件；父 Context 与 child Context 不会合并。页面内置一段不执行 Agent/模型的确定性录制用于验证，完整合同见 [`docs/subagent-runtime-v1.md`](docs/subagent-runtime-v1.md)。
+
 ### Model Provider 录制
 
 Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，不访问任何模型 API。`model.stream`、`model.usage` 与 `model.cancel` 会被投影成流式输出、Token/费用预算、完成或取消状态，并与主时间轴同步回放。输出默认脱敏，显式点击后才展示完整原文；录制帧、Provider、模型和 invocation 身份都由服务端校验。完整合同见 [`docs/model-provider-v1.md`](docs/model-provider-v1.md)。
@@ -103,6 +105,7 @@ src/
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
 │  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期
 │  ├─ swarm-runtime/           # Swarm 层级、主体 Context 与动态画布
+│  ├─ subagent-runtime/        # Subagent 派发、隔离 session 与内部执行画布
 │  ├─ tool-catalog/            # Tool 声明、注册路径与 Runtime 观察画布
 │  └─ trace-graph/             # 可调磁吸、实时节点避碰与共享画布控件
 ├─ plugins/                    # Core、Swarm、集成边与轨迹数据贡献者

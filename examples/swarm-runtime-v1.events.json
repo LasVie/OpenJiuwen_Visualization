@@ -236,6 +236,18 @@
         "role": "explorer",
         "contextOwnerId": "ctx:explore"
       },
+      "subagent": {
+        "invocationId": "sub-1",
+        "subagentType": "explore_agent",
+        "dispatcher": "task-tool",
+        "runMode": "foreground",
+        "parentSessionId": "session:worker",
+        "sessionId": "session:worker_sub_explore_agent_a1b2c3d4",
+        "contextOwnerId": "ctx:explore",
+        "sessionPolicy": "ephemeral",
+        "workspaceIsolation": "subdirectory",
+        "toolPolicy": "configured"
+      },
       "payload": { "status": "running", "correlationId": "sub-1" }
     },
     {
@@ -313,6 +325,19 @@
         "parentId": "member:worker",
         "role": "explorer",
         "contextOwnerId": "ctx:explore"
+      },
+      "subagent": {
+        "invocationId": "sub-1",
+        "subagentType": "explore_agent",
+        "dispatcher": "task-tool",
+        "runMode": "foreground",
+        "parentSessionId": "session:worker",
+        "sessionId": "session:worker_sub_explore_agent_a1b2c3d4",
+        "contextOwnerId": "ctx:explore",
+        "sessionPolicy": "ephemeral",
+        "workspaceIsolation": "subdirectory",
+        "toolPolicy": "configured",
+        "resultPreview": "Authentication branches and file evidence returned."
       },
       "payload": { "status": "completed", "correlationId": "sub-1" }
     },

@@ -17,6 +17,10 @@ import { ScenarioTabs } from "./components/ScenarioTabs";
 import { TimelineControls } from "./components/TimelineControls";
 import { getScenario, graphNodes, scenarios } from "./data/scenarios";
 import { RailDecisionCanvas } from "./features/rail-review";
+import {
+  SubagentExecutionCanvas,
+  projectSubagentExecutions,
+} from "./features/subagent-runtime";
 import { DefinitionWorkspace } from "./features/definition-plane";
 import { ChangeWorkspace } from "./features/change-plane";
 import {
@@ -48,6 +52,9 @@ const SwarmRuntimeInspector = lazy(() =>
 );
 
 const defaultModelRecording = defaultWorkbench.modelRecordings[0];
+const defaultSwarmRecording = defaultWorkbench.runtimeRecordings.find(
+  (recording) => recording.owner === "jiuwenswarm",
+);
 
 export default function App() {
   const [workbenchMode, setWorkbenchMode] = useState<"runtime" | "definition" | "change">(
@@ -61,6 +68,9 @@ export default function App() {
   const [followLive, setFollowLive] = useState(true);
   const [recordingLoading, setRecordingLoading] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [swarmRecordingLoading, setSwarmRecordingLoading] = useState(false);
+  const [swarmRecordingError, setSwarmRecordingError] = useState<string | null>(null);
+  const [subagentCanvasSubjectId, setSubagentCanvasSubjectId] = useState<string | null>(null);
   const coreRuntime = useCoreRuntimeSession();
   const swarmRuntime = useSwarmRuntimeSession();
   const {
@@ -121,6 +131,18 @@ export default function App() {
       activeRuntimeEvents[stepIndex]?.sequence ?? 0,
     ),
     [activeRuntimeEvents, stepIndex],
+  );
+  const currentSwarmSequence = runtimeSource === "swarm-runtime"
+    ? swarmRuntime.events[stepIndex]?.sequence ?? 0
+    : 0;
+  const subagentExecutions = useMemo(
+    () => projectSubagentExecutions(
+      swarmRuntime.events.filter((event) => event.sequence <= currentSwarmSequence),
+    ),
+    [currentSwarmSequence, swarmRuntime.events],
+  );
+  const subagentCanvasExecution = subagentExecutions.find(
+    (execution) => execution.subjectId === subagentCanvasSubjectId,
   );
   const railCanvasDefinition = graphNodes.find(
     (node) => node.id === railCanvasRailId && node.type === "rail",
@@ -229,14 +251,44 @@ export default function App() {
     selectNode(null);
     if (inspectorOpen) toggleInspector();
     closeRailCanvas();
+    setSubagentCanvasSubjectId(null);
+    setSwarmRecordingError(null);
     await swarmRuntime.startSession(
       swarmTraceLabel.trim() || "JiuwenSwarm local run",
     );
   }
 
+  async function loadSwarmRecording() {
+    if (!defaultSwarmRecording) return;
+    setLiveStepIndex(0);
+    setFollowLive(true);
+    selectNode(null);
+    closeRailCanvas();
+    setSubagentCanvasSubjectId(null);
+    setSwarmRecordingLoading(true);
+    setSwarmRecordingError(null);
+    setSwarmTraceLabel(defaultSwarmRecording.label);
+    try {
+      const created = await swarmRuntime.startSession(defaultSwarmRecording.label);
+      if (!created) return;
+      await swarmRuntime.client.appendEvents(
+        created.trace.id,
+        created.writeToken,
+        defaultSwarmRecording.events,
+      );
+    } catch (caught) {
+      setSwarmRecordingError(
+        caught instanceof Error ? caught.message : "无法载入 Subagent 录制。",
+      );
+    } finally {
+      setSwarmRecordingLoading(false);
+    }
+  }
+
   function changeRuntimeSource(value: RuntimeSourceMode) {
     setRuntimeSource(value);
     closeRailCanvas();
+    setSubagentCanvasSubjectId(null);
     selectNode(null);
     if (inspectorOpen) toggleInspector();
     if (value !== "fixture") {
@@ -395,6 +447,10 @@ export default function App() {
               connection={swarmRuntime.connection}
               error={swarmRuntime.error}
               onCreate={() => void createSwarmTrace()}
+              onLoadRecording={() => void loadSwarmRecording()}
+              recordingLabel={defaultSwarmRecording?.label ?? "无可用 Subagent 录制"}
+              recordingLoading={swarmRecordingLoading}
+              recordingError={swarmRecordingError}
             />
           )}
           <div className="scenario-note">
@@ -450,6 +506,7 @@ export default function App() {
               scopes={swarmRuntime.projection.contextScopes}
               activeId={swarmRuntime.contextOwnerId}
               activeTokenUsed={step.tokenUsed}
+              stepIndex={stepIndex}
               onChange={swarmRuntime.setContextOwnerId}
             />
           ) : null}
@@ -466,6 +523,7 @@ export default function App() {
                 activeContextOwnerId={swarmRuntime.contextOwnerId}
                 onSelectNode={selectNode}
                 onActivateContext={swarmRuntime.setContextOwnerId}
+                onOpenSubagent={setSubagentCanvasSubjectId}
                 magnetEnabled={magnetEnabled}
                 magnetStrength={magnetStrength}
               />
@@ -555,6 +613,25 @@ export default function App() {
           currentStepIndex={stepIndex}
           runInput={activeRunInput}
           onClose={closeRailCanvas}
+          magnetEnabled={magnetEnabled}
+          magnetStrength={magnetStrength}
+          onToggleMagnet={toggleMagnet}
+          onMagnetStrengthChange={setMagnetStrength}
+        />
+      ) : null}
+      {workbenchMode === "runtime" &&
+      runtimeSource === "swarm-runtime" &&
+      subagentCanvasExecution ? (
+        <SubagentExecutionCanvas
+          key={subagentCanvasExecution.invocationId}
+          execution={subagentCanvasExecution}
+          throughSequence={currentSwarmSequence}
+          onClose={() => setSubagentCanvasSubjectId(null)}
+          onActivateContext={swarmRuntime.setContextOwnerId}
+          onPrevious={previousStep}
+          onNext={nextStep}
+          canPrevious={stepIndex > 0}
+          canNext={stepIndex < liveLastStep}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
           onToggleMagnet={toggleMagnet}

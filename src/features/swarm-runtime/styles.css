@@ -6,7 +6,7 @@
   position: relative;
   z-index: 14;
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto minmax(180px, auto) auto auto;
+  grid-template-columns: minmax(210px, 1fr) auto minmax(180px, auto) auto auto auto;
   align-items: center;
   min-width: 0;
   gap: 12px;
@@ -145,6 +145,39 @@
   font-size: 9px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.swarm-runtime-session__recording {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #c5b7df;
+  border-radius: 9px;
+  color: #5b438f;
+  background: #f1ebfa;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.swarm-runtime-session__recording:hover:not(:disabled) {
+  border-color: #8d73c5;
+  background: #e8def6;
+}
+
+.swarm-runtime-session__recording:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.swarm-runtime-session__error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #a64242 !important;
+  font-size: 11px !important;
 }
 
 .swarm-runtime-session__create:disabled {
@@ -427,6 +460,12 @@
 .swarm-runtime-node__expand {
   display: flex;
   align-items: center;
+}
+
+.swarm-runtime-node__drilldown {
+  color: #634d9e;
+  font-size: 9px;
+  font-weight: 800;
 }
 
 .swarm-runtime-node__meta {

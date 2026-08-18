@@ -1,10 +1,11 @@
 import { MessagesSquare, Split } from "lucide-react";
-import type { SwarmContextScope } from "./model";
+import { swarmContextScopeAt, type SwarmContextScope } from "./model";
 
 interface SwarmContextScopeBarProps {
   scopes: readonly SwarmContextScope[];
   activeId: string | null;
   activeTokenUsed: number;
+  stepIndex: number;
   onChange: (contextOwnerId: string) => void;
 }
 
@@ -12,6 +13,7 @@ export function SwarmContextScopeBar({
   scopes,
   activeId,
   activeTokenUsed,
+  stepIndex,
   onChange,
 }: SwarmContextScopeBarProps) {
   const active = scopes.find((scope) => scope.id === activeId);
@@ -32,7 +34,7 @@ export function SwarmContextScopeBar({
           {scopes.length === 0 ? <option value="">等待 context.ownerId</option> : null}
           {scopes.map((scope) => (
             <option value={scope.id} key={scope.id}>
-              {scope.label} · {scope.kind} · {scope.messageCount} messages
+              {scope.label} · {scope.kind} · {swarmContextScopeAt(scope, stepIndex).messageCount} messages
             </option>
           ))}
         </select>

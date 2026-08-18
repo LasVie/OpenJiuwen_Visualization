@@ -159,6 +159,43 @@ export interface RuntimeHookObservation {
   examines?: string[];
 }
 
+export type RuntimeSubagentDispatcher =
+  | "task-tool"
+  | "agent-tool"
+  | "session-spawn";
+
+export type RuntimeSubagentRunMode = "foreground" | "background";
+export type RuntimeSubagentSessionPolicy = "ephemeral" | "sticky";
+export type RuntimeSubagentWorkspaceIsolation =
+  | "subdirectory"
+  | "shared"
+  | "unknown";
+export type RuntimeSubagentToolPolicy =
+  | "configured"
+  | "inherited-filtered"
+  | "none"
+  | "unknown";
+
+/**
+ * Exact Subagent dispatch evidence. Prompt and full result text belong in the
+ * Subagent-owned Context so metadata cannot accidentally bypass redaction UI.
+ */
+export interface RuntimeSubagentObservation {
+  invocationId: string;
+  subagentType: string;
+  dispatcher: RuntimeSubagentDispatcher;
+  runMode: RuntimeSubagentRunMode;
+  parentSessionId: string;
+  sessionId: string;
+  contextOwnerId: string;
+  sessionPolicy: RuntimeSubagentSessionPolicy;
+  workspaceIsolation: RuntimeSubagentWorkspaceIsolation;
+  toolPolicy: RuntimeSubagentToolPolicy;
+  toolCallSpanId?: string;
+  resultPreview?: string;
+  error?: string;
+}
+
 export interface RuntimeTraceEventInput<
   Kind extends RuntimeTraceEventKind = RuntimeTraceEventKind,
 > {
@@ -179,6 +216,7 @@ export interface RuntimeTraceEventInput<
   context?: RuntimeContextDelta;
   hook?: RuntimeHookObservation;
   model?: RuntimeModelObservation;
+  subagent?: RuntimeSubagentObservation;
   subject?: RuntimeSubjectReference;
   definition?: GraphSourceReference;
   payload?: Readonly<Record<string, JsonValue>>;
@@ -245,6 +283,19 @@ export interface RuntimeSourceDefinition {
 }
 
 export interface RegisteredRuntimeSource extends RuntimeSourceDefinition {
+  contributedBy: string;
+}
+
+export interface RuntimeTraceRecording {
+  id: string;
+  owner: RuntimeOwner;
+  label: string;
+  description: string;
+  maxTokens: number;
+  events: readonly RuntimeTraceEventInput[];
+}
+
+export interface RegisteredRuntimeTraceRecording extends RuntimeTraceRecording {
   contributedBy: string;
 }
 

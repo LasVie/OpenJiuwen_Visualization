@@ -57,7 +57,9 @@ Swarm 专用事件：
 - `swarm.human`
 - `swarm.subagent`
 
-`jiuwenswarm` Trace 也允许 Core Runtime 事件。生产者可以把成员或 Subagent 内部的 `agent.invoke`、`model.call`、`tool.call`、`rail.*`、`context.*`、`ability.register` 绑定到同一个 subject，从而保留未来“点击成员进入 Core 微观链路”的兼容性。V1 的 Swarm 主画布只激活该主体，不伪造内部节点。
+`jiuwenswarm` Trace 也允许 Core Runtime 事件。生产者可以把成员或 Subagent 内部的 `agent.invoke`、`model.call`、`tool.call`、`rail.*`、`context.*`、`ability.register` 绑定到同一个 subject。Swarm 主画布仍只显示主体层级；点击结构化 Subagent 节点会进入独立执行画布，展示显式上报的内部活动，不伪造未观测节点。
+
+`swarm.subagent` 必须额外携带结构化 `subagent` 证据。完整字段、稳定性约束和独立执行画布见 [`subagent-runtime-v1.md`](subagent-runtime-v1.md)。
 
 事件 phase 为 `start | end | error | instant`。`payload.status` 可保留上游的 `pending`、`in_progress`、`waiting_for_human`、`in_review`、`completed` 等状态；页面只做有限的显示归一化，原始值仍留在 Inspector。
 
@@ -134,6 +136,7 @@ Invoke-RestMethod `
 - 宏观：根节点和直接子节点常显；点击容器逐层展开；当前活跃主体及其祖先路径自动可见。
 - 微观：显示当前步骤之前已出现的所有主体。
 - 点击有 `contextOwnerId` 的节点会选择对应 Context；也可使用独立 owner 下拉框切换。
+- 点击 Subagent 卡片会进入独立执行画布，按当前全局 sequence 展示派发、隔离 session、内部 Core 活动和结果回传；回退时间轴不会泄露未来事件。
 - 主体卡按 Team、Workflow/Phase、Member/Agent、Task、Subagent 采用不同视觉语义，同时都保留 JiuwenSwarm 来源 Badge。
 - 拖拽期间复用共享实时防重叠算法；磁吸可关闭并调整强度；画布支持缩放、平移、fitView 和 MiniMap。
 - Inspector 显示当前事件、主体父子、Context owner、最近活动以及 exact/inferred 源码证据。
@@ -142,6 +145,7 @@ Invoke-RestMethod `
 
 - 服务端拒绝缺少 subject 的非终止 Swarm 事件。
 - 服务端拒绝缺少 `context.ownerId` 的 Swarm Context。
+- 服务端拒绝缺少结构化 `subagent` 证据、subject/context owner 不一致或同一 invocation 改变 session/隔离身份的 `swarm.subagent` 事件。
 - `agent-core` 会话拒绝 `swarm.*` 事件，防止数据源混淆。
 - 静态事件到源码路径的内置映射标记为 `inferred`；只有事件提供 `definition` 才标记 `exact`。
 - Trace 只在服务内存中保存，受请求、事件数、单会话字节数、总字节数和 TTL 限制。

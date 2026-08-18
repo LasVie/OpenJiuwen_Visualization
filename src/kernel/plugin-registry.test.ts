@@ -44,6 +44,13 @@ describe("visualization plugin registry", () => {
         contributedBy: "openjiuwen.jiuwenswarm",
       }),
     ]);
+    expect(defaultWorkbench.runtimeRecordings).toEqual([
+      expect.objectContaining({
+        id: "swarm-subagent-delegation-v1",
+        owner: "jiuwenswarm",
+        contributedBy: "openjiuwen.jiuwenswarm",
+      }),
+    ]);
     expect(defaultWorkbench.modelProviders).toEqual([
       expect.objectContaining({
         id: "openjiuwen.recording-replay",
@@ -89,6 +96,9 @@ describe("visualization plugin registry", () => {
       "openjiuwen.agent-core",
     ]);
     expect(defaultWorkbench.capabilities["trace.context.ownership"]).toEqual([
+      "openjiuwen.jiuwenswarm",
+    ]);
+    expect(defaultWorkbench.capabilities["runtime.subagent.execution.v1"]).toEqual([
       "openjiuwen.jiuwenswarm",
     ]);
     expect(defaultWorkbench.capabilities["runtime.model.recording.v1"]).toEqual([
@@ -138,6 +148,7 @@ describe("visualization plugin registry", () => {
     expect(coreOnly.graph.nodes).toHaveLength(13);
     expect(coreOnly.graph.edges).toHaveLength(11);
     expect(coreOnly.scenarios).toEqual([]);
+    expect(coreOnly.runtimeRecordings).toEqual([]);
     expect(
       coreOnly.plugins.find((item) => item.id === "openjiuwen.integration")
         ?.state,

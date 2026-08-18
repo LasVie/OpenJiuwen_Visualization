@@ -33,6 +33,7 @@ export interface SwarmRuntimeNodeData extends Record<string, unknown> {
   contextActive: boolean;
   childCount: number;
   eventCode?: string;
+  eventCountAtStep: number;
 }
 
 export type SwarmRuntimeFlowNode = Node<
@@ -71,6 +72,7 @@ export function SwarmRuntimeNode({ data }: NodeProps<SwarmRuntimeFlowNode>) {
     contextActive,
     childCount,
     eventCode,
+    eventCountAtStep,
   } = data;
   const Icon = KIND_ICON[subject.kind] ?? Boxes;
 
@@ -105,7 +107,7 @@ export function SwarmRuntimeNode({ data }: NodeProps<SwarmRuntimeFlowNode>) {
       </header>
 
       <div className="swarm-runtime-node__meta">
-        <span><Network size={12} aria-hidden="true" />{subject.eventCount} events</span>
+        <span><Network size={12} aria-hidden="true" />{eventCountAtStep} events</span>
         {subject.contextOwnerId ? <code>CTX</code> : null}
         {contextActive ? <b>正在查看 Context</b> : null}
       </div>
@@ -119,6 +121,9 @@ export function SwarmRuntimeNode({ data }: NodeProps<SwarmRuntimeFlowNode>) {
             {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             {childCount} 子节点
           </span>
+        ) : null}
+        {subject.kind === "subagent" ? (
+          <span className="swarm-runtime-node__drilldown">打开执行画布</span>
         ) : null}
         <RuntimeBadge owner="jiuwenswarm" compact />
       </footer>

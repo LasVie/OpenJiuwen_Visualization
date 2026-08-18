@@ -3,6 +3,7 @@ import {
   CircleDot,
   KeyRound,
   Network,
+  PlayCircle,
   Plus,
   Server,
 } from "lucide-react";
@@ -15,6 +16,10 @@ interface SwarmRuntimeSessionBarProps {
   connection: RuntimeTraceConnectionState;
   error: string | null;
   onCreate: () => void;
+  onLoadRecording: () => void;
+  recordingLabel: string;
+  recordingLoading: boolean;
+  recordingError: string | null;
 }
 
 const connectionLabel: Record<RuntimeTraceConnectionState, string> = {
@@ -32,6 +37,10 @@ export function SwarmRuntimeSessionBar({
   connection,
   error,
   onCreate,
+  onLoadRecording,
+  recordingLabel,
+  recordingLoading,
+  recordingError,
 }: SwarmRuntimeSessionBarProps) {
   return (
     <section className="swarm-runtime-session" aria-label="Swarm Runtime Trace 会话">
@@ -74,6 +83,17 @@ export function SwarmRuntimeSessionBar({
 
       <button
         type="button"
+        className="swarm-runtime-session__recording"
+        onClick={onLoadRecording}
+        disabled={connection === "creating" || recordingLoading}
+        title={recordingLabel}
+      >
+        <PlayCircle size={14} strokeWidth={2} aria-hidden="true" />
+        {recordingLoading ? "载入中" : "Subagent 演示"}
+      </button>
+
+      <button
+        type="button"
         className="swarm-runtime-session__create"
         onClick={onCreate}
         disabled={connection === "creating"}
@@ -81,6 +101,9 @@ export function SwarmRuntimeSessionBar({
         <Plus size={14} strokeWidth={2} aria-hidden="true" />
         新会话
       </button>
+      {recordingError ? (
+        <p className="swarm-runtime-session__error" role="alert">{recordingError}</p>
+      ) : null}
     </section>
   );
 }

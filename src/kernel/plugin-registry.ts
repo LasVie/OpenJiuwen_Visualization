@@ -13,7 +13,10 @@ import {
   type VisualizationPlugin,
   type WorkbenchSnapshot,
 } from "./contracts/plugin";
-import type { RegisteredRuntimeSource } from "./contracts/runtime";
+import type {
+  RegisteredRuntimeSource,
+  RegisteredRuntimeTraceRecording,
+} from "./contracts/runtime";
 import type {
   RegisteredModelProvider,
   RegisteredModelRuntimeRecording,
@@ -35,6 +38,7 @@ export class PluginRegistryError extends Error {
       | "duplicate-edge"
       | "duplicate-scenario"
       | "duplicate-runtime-source"
+      | "duplicate-runtime-recording"
       | "duplicate-model-provider"
       | "duplicate-model-recording"
       | "duplicate-change-source"
@@ -85,6 +89,7 @@ export class VisualizationPluginRegistry {
     const edges: RegisteredGraphEdge[] = [];
     const scenarios: RegisteredTraceScenario[] = [];
     const runtimeSources: RegisteredRuntimeSource[] = [];
+    const runtimeRecordings: RegisteredRuntimeTraceRecording[] = [];
     const modelProviders: RegisteredModelProvider[] = [];
     const modelRecordings: RegisteredModelRuntimeRecording[] = [];
     const changeSources: RegisteredGitChangeSource[] = [];
@@ -93,6 +98,7 @@ export class VisualizationPluginRegistry {
     const edgeIds = new Set<string>();
     const scenarioIds = new Set<string>();
     const runtimeSourceIds = new Set<string>();
+    const runtimeRecordingIds = new Set<string>();
     const modelProviderIds = new Set<string>();
     const modelRecordingIds = new Set<string>();
     const changeSourceIds = new Set<string>();
@@ -125,6 +131,15 @@ export class VisualizationPluginRegistry {
       (contribution.runtimeSources ?? []).forEach((source) => {
         this.assertUnique(runtimeSourceIds, source.id, "runtime-source", pluginId);
         runtimeSources.push({ ...source, contributedBy: pluginId });
+      });
+      (contribution.runtimeRecordings ?? []).forEach((recording) => {
+        this.assertUnique(
+          runtimeRecordingIds,
+          recording.id,
+          "runtime-recording",
+          pluginId,
+        );
+        runtimeRecordings.push({ ...recording, contributedBy: pluginId });
       });
       (contribution.modelProviders ?? []).forEach((provider) => {
         this.assertUnique(modelProviderIds, provider.id, "model-provider", pluginId);
@@ -161,6 +176,7 @@ export class VisualizationPluginRegistry {
       },
       scenarios,
       runtimeSources,
+      runtimeRecordings,
       modelProviders,
       modelRecordings,
       changeSources,
@@ -250,6 +266,7 @@ export class VisualizationPluginRegistry {
       | "edge"
       | "scenario"
       | "runtime-source"
+      | "runtime-recording"
       | "model-provider"
       | "model-recording"
       | "change-source"
@@ -262,6 +279,7 @@ export class VisualizationPluginRegistry {
         | "duplicate-edge"
         | "duplicate-scenario"
         | "duplicate-runtime-source"
+        | "duplicate-runtime-recording"
         | "duplicate-model-provider"
         | "duplicate-model-recording"
         | "duplicate-change-source"

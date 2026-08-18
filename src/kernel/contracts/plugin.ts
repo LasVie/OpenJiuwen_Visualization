@@ -1,5 +1,10 @@
 import type { TraceScenario } from "./trace";
-import type { RegisteredRuntimeSource, RuntimeSourceDefinition } from "./runtime";
+import type {
+  RegisteredRuntimeSource,
+  RegisteredRuntimeTraceRecording,
+  RuntimeSourceDefinition,
+  RuntimeTraceRecording,
+} from "./runtime";
 import type { GraphContribution, GraphSnapshot } from "./graph";
 import type {
   ModelProviderDefinition,
@@ -33,6 +38,7 @@ export interface VisualizationPluginContribution {
   graph?: GraphContribution;
   scenarios?: readonly TraceScenario[];
   runtimeSources?: readonly RuntimeSourceDefinition[];
+  runtimeRecordings?: readonly RuntimeTraceRecording[];
   modelProviders?: readonly ModelProviderDefinition[];
   modelRecordings?: readonly ModelRuntimeRecording[];
   changeSources?: readonly GitChangeSourceDefinition[];
@@ -64,6 +70,7 @@ export interface WorkbenchSnapshot {
   graph: GraphSnapshot;
   scenarios: readonly RegisteredTraceScenario[];
   runtimeSources: readonly RegisteredRuntimeSource[];
+  runtimeRecordings: readonly RegisteredRuntimeTraceRecording[];
   modelProviders: readonly RegisteredModelProvider[];
   modelRecordings: readonly RegisteredModelRuntimeRecording[];
   changeSources: readonly RegisteredGitChangeSource[];

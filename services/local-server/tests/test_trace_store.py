@@ -224,6 +224,79 @@ class RuntimeTraceStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(TraceStoreError, "context.ownerId"):
             swarm_store.append(swarm_trace["id"], swarm_token, [unowned_context])
 
+    def test_validates_subagent_identity_and_isolation_metadata(self) -> None:
+        subagent_store = RuntimeTraceStore(
+            id_factory=lambda: "tr_subagent",
+            token_factory=lambda: "tw_subagent",
+        )
+        trace, token = subagent_store.create(
+            owner="jiuwenswarm",
+            label="Subagent run",
+            max_tokens=8192,
+        )
+        subject = {
+            "id": "subagent:explore",
+            "kind": "subagent",
+            "label": "Explore",
+            "parentId": "member:leader",
+            "contextOwnerId": "ctx:explore",
+        }
+        observation = {
+            "invocationId": "invoke:explore:1",
+            "subagentType": "explore_agent",
+            "dispatcher": "task-tool",
+            "runMode": "foreground",
+            "parentSessionId": "session:parent",
+            "sessionId": "session:child",
+            "contextOwnerId": "ctx:explore",
+            "sessionPolicy": "ephemeral",
+            "workspaceIsolation": "subdirectory",
+            "toolPolicy": "configured",
+            "toolCallSpanId": "span-task-tool",
+        }
+        started = event("subagent-start", kind="swarm.subagent")
+        started["subject"] = subject
+        started["subagent"] = observation
+        completed = event("subagent-end", kind="swarm.subagent", phase="end")
+        completed["subject"] = subject
+        completed["subagent"] = {**observation, "resultPreview": "three files"}
+
+        metadata, accepted = subagent_store.append(
+            trace["id"],
+            token,
+            [started, completed],
+        )
+
+        self.assertEqual(metadata["eventCount"], 2)
+        self.assertEqual(accepted[0]["subagent"]["sessionId"], "session:child")
+        self.assertEqual(accepted[1]["subagent"]["resultPreview"], "three files")
+
+        changed_identity = event("subagent-changed", kind="swarm.subagent")
+        changed_identity["subject"] = subject
+        changed_identity["subagent"] = {**observation, "sessionId": "session:other"}
+        with self.assertRaisesRegex(TraceStoreError, "changed identity"):
+            subagent_store.append(trace["id"], token, [changed_identity])
+
+        invalid_store = RuntimeTraceStore(
+            id_factory=lambda: "tr_subagent_invalid",
+            token_factory=lambda: "tw_subagent_invalid",
+        )
+        invalid_trace, invalid_token = invalid_store.create(
+            owner="jiuwenswarm",
+            label="Invalid Subagent",
+            max_tokens=8192,
+        )
+        missing_evidence = event("missing", kind="swarm.subagent")
+        missing_evidence["subject"] = subject
+        with self.assertRaisesRegex(TraceStoreError, "subagent evidence"):
+            invalid_store.append(invalid_trace["id"], invalid_token, [missing_evidence])
+
+        mismatched_context = event("mismatch", kind="swarm.subagent")
+        mismatched_context["subject"] = subject
+        mismatched_context["subagent"] = {**observation, "contextOwnerId": "ctx:other"}
+        with self.assertRaisesRegex(TraceStoreError, "must match"):
+            invalid_store.append(invalid_trace["id"], invalid_token, [mismatched_context])
+
     def test_keeps_swarm_subject_hierarchy_stable_and_acyclic(self) -> None:
         stable_store = RuntimeTraceStore(
             id_factory=lambda: "tr_swarm_stable",

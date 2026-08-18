@@ -10,6 +10,7 @@ import {
 import { RuntimeBadge } from "../../shared/ui/RuntimeBadge";
 import type { TraceStep } from "../../kernel";
 import {
+  swarmContextScopeAt,
   swarmSubjectStatusAt,
   type SwarmRuntimeProjection,
 } from "./model";
@@ -47,6 +48,9 @@ export function SwarmRuntimeInspector({
   const activity = subject?.revisions.filter((revision) => revision.stepIndex <= stepIndex) ?? [];
   const contextScope = projection.contextScopes.find((scope) =>
     scope.id === subject?.contextOwnerId || scope.id === subject?.id);
+  const contextSnapshot = contextScope
+    ? swarmContextScopeAt(contextScope, stepIndex)
+    : null;
 
   if (!open) {
     return (
@@ -126,7 +130,7 @@ export function SwarmRuntimeInspector({
                 <div><dt>id</dt><dd>{subject.id}</dd></div>
                 <div><dt>status</dt><dd>{swarmSubjectStatusAt(subject, stepIndex)}</dd></div>
                 <div><dt>parent</dt><dd>{parent?.label ?? subject.parentId ?? "root"}</dd></div>
-                <div><dt>events</dt><dd>{subject.eventCount}</dd></div>
+                <div><dt>events</dt><dd>{activity.length}</dd></div>
               </dl>
             </>
           ) : (
@@ -141,8 +145,8 @@ export function SwarmRuntimeInspector({
           {contextScope ? (
             <dl>
               <div><dt>owner</dt><dd>{contextScope.id}</dd></div>
-              <div><dt>messages</dt><dd>{contextScope.messageCount}</dd></div>
-              <div><dt>tokens</dt><dd>{contextScope.tokenUsed}</dd></div>
+              <div><dt>messages</dt><dd>{contextSnapshot?.messageCount ?? 0}</dd></div>
+              <div><dt>tokens</dt><dd>{contextSnapshot?.tokenUsed ?? 0}</dd></div>
               <div><dt>当前面板</dt><dd>{projection.activeContextOwnerId === contextScope.id ? "是" : "否"}</dd></div>
             </dl>
           ) : (

@@ -4,7 +4,11 @@ import type {
   RuntimeTraceEventInput,
   RuntimeTraceSession,
 } from "../../kernel";
-import { projectSwarmRuntimeTrace, swarmSubjectStatusAt } from "./model";
+import {
+  projectSwarmRuntimeTrace,
+  swarmContextScopeAt,
+  swarmSubjectStatusAt,
+} from "./model";
 
 const trace: RuntimeTraceSession = {
   id: "tr_swarm",
@@ -177,6 +181,18 @@ describe("Swarm runtime projection", () => {
           parentId: "member:leader",
           contextOwnerId: "ctx:explore",
         },
+        subagent: {
+          invocationId: "invoke:explore",
+          subagentType: "explore_agent",
+          dispatcher: "task-tool",
+          runMode: "foreground",
+          parentSessionId: "session:leader",
+          sessionId: "session:explore",
+          contextOwnerId: "ctx:explore",
+          sessionPolicy: "ephemeral",
+          workspaceIsolation: "subdirectory",
+          toolPolicy: "configured",
+        },
       }),
       event(4, {
         eventId: "subagent-context",
@@ -223,6 +239,20 @@ describe("Swarm runtime projection", () => {
     ]);
     expect(leader.scenario.steps.at(-1)?.tokenUsed).toBe(12);
     expect(subagent.scenario.steps.at(-1)?.tokenUsed).toBe(21);
+    const leaderScope = leader.contextScopes.find((scope) => scope.id === "ctx:leader")!;
+    const subagentScope = leader.contextScopes.find((scope) => scope.id === "ctx:explore")!;
+    expect(swarmContextScopeAt(leaderScope, 1)).toEqual({
+      messageCount: 1,
+      tokenUsed: 12,
+    });
+    expect(swarmContextScopeAt(subagentScope, 1)).toEqual({
+      messageCount: 0,
+      tokenUsed: 0,
+    });
+    expect(swarmContextScopeAt(subagentScope, 3)).toEqual({
+      messageCount: 1,
+      tokenUsed: 21,
+    });
   });
 
   it("projects message and assignment relations without inventing tool activity", () => {

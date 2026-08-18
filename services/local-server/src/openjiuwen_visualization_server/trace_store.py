@@ -72,11 +72,18 @@ EVENT_FIELDS = frozenset(
         "context",
         "hook",
         "model",
+        "subagent",
         "subject",
         "definition",
         "payload",
     }
 )
+
+SUBAGENT_DISPATCHERS = frozenset({"task-tool", "agent-tool", "session-spawn"})
+SUBAGENT_RUN_MODES = frozenset({"foreground", "background"})
+SUBAGENT_SESSION_POLICIES = frozenset({"ephemeral", "sticky"})
+SUBAGENT_WORKSPACE_ISOLATION = frozenset({"subdirectory", "shared", "unknown"})
+SUBAGENT_TOOL_POLICIES = frozenset({"configured", "inherited-filtered", "none", "unknown"})
 
 
 class TraceStoreError(ValueError):
@@ -234,6 +241,74 @@ def _validate_subject(subject: Any) -> None:
             subject[field_name] = _required_text(subject[field_name], f"subject.{field_name}")
     if subject.get("parentId") == subject["id"]:
         raise TraceStoreError("invalid_event", "subject.parentId must differ from subject.id.")
+
+
+def _validate_subagent(subagent: Any) -> None:
+    if not isinstance(subagent, dict):
+        raise TraceStoreError("invalid_event", "subagent must be an object.")
+    allowed = {
+        "invocationId",
+        "subagentType",
+        "dispatcher",
+        "runMode",
+        "parentSessionId",
+        "sessionId",
+        "contextOwnerId",
+        "sessionPolicy",
+        "workspaceIsolation",
+        "toolPolicy",
+        "toolCallSpanId",
+        "resultPreview",
+        "error",
+    }
+    unknown = set(subagent) - allowed
+    if unknown:
+        raise TraceStoreError(
+            "invalid_event",
+            f"subagent contains unsupported field: {sorted(unknown)[0]}",
+        )
+    for field_name in (
+        "invocationId",
+        "subagentType",
+        "parentSessionId",
+        "sessionId",
+        "contextOwnerId",
+    ):
+        subagent[field_name] = _required_text(
+            subagent.get(field_name),
+            f"subagent.{field_name}",
+        )
+    enum_fields = {
+        "dispatcher": SUBAGENT_DISPATCHERS,
+        "runMode": SUBAGENT_RUN_MODES,
+        "sessionPolicy": SUBAGENT_SESSION_POLICIES,
+        "workspaceIsolation": SUBAGENT_WORKSPACE_ISOLATION,
+        "toolPolicy": SUBAGENT_TOOL_POLICIES,
+    }
+    for field_name, allowed_values in enum_fields.items():
+        value = _required_text(
+            subagent.get(field_name),
+            f"subagent.{field_name}",
+            max_length=40,
+        )
+        if value not in allowed_values:
+            raise TraceStoreError(
+                "invalid_event",
+                f"Unsupported subagent.{field_name}: {value}",
+            )
+        subagent[field_name] = value
+    for field_name in ("toolCallSpanId", "resultPreview", "error"):
+        if field_name not in subagent:
+            continue
+        value = _optional_text(
+            subagent.get(field_name),
+            f"subagent.{field_name}",
+            max_length=4_000 if field_name != "toolCallSpanId" else 240,
+        )
+        if value is None:
+            subagent.pop(field_name, None)
+        else:
+            subagent[field_name] = value
 
 
 def _validate_hook(hook: Any) -> None:
@@ -451,12 +526,35 @@ def _validate_event(raw_event: Any) -> dict[str, Any]:
         _validate_hook(event["hook"])
     if "model" in event:
         _validate_model(event["model"], kind)
+    if "subagent" in event:
+        _validate_subagent(event["subagent"])
     if "subject" in event:
         _validate_subject(event["subject"])
     if kind == "rail.hook" and "hook" not in event:
         raise TraceStoreError("invalid_event", "rail.hook events require hook evidence.")
     if kind in {"model.stream", "model.usage", "model.cancel"} and "model" not in event:
         raise TraceStoreError("invalid_event", f"{kind} events require model evidence.")
+    if kind == "swarm.subagent":
+        if "subagent" not in event:
+            raise TraceStoreError("invalid_event", "swarm.subagent events require subagent evidence.")
+        subject = event.get("subject")
+        if not subject or subject.get("kind") != "subagent":
+            raise TraceStoreError(
+                "invalid_event",
+                "swarm.subagent events require a subject with kind subagent.",
+            )
+        observation = event["subagent"]
+        subject_context_owner = subject.get("contextOwnerId")
+        if subject_context_owner != observation["contextOwnerId"]:
+            raise TraceStoreError(
+                "invalid_event",
+                "subagent.contextOwnerId must match subject.contextOwnerId.",
+            )
+    elif "subagent" in event:
+        raise TraceStoreError(
+            "invalid_event",
+            "subagent evidence is only valid on swarm.subagent events.",
+        )
     if "definition" in event:
         _validate_definition(event["definition"])
     if "payload" in event:
@@ -497,6 +595,9 @@ class _TraceSession:
     subject_shapes: dict[str, tuple[str, str | None, str | None]] = field(default_factory=dict)
     model_shapes: dict[str, tuple[str, str, str, str | None]] = field(default_factory=dict)
     recording_sequences: dict[str, int] = field(default_factory=dict)
+    subagent_shapes: dict[str, tuple[str | None, ...]] = field(
+        default_factory=dict
+    )
 
     def metadata(self) -> dict[str, Any]:
         return {
@@ -648,6 +749,34 @@ class RuntimeTraceStore:
                     existing[2] or incoming[2],
                 )
 
+            next_subagent_shapes = dict(session.subagent_shapes)
+            for event in unique:
+                subagent = event.get("subagent")
+                subject = event.get("subject")
+                if not subagent or not subject:
+                    continue
+                invocation_id = subagent["invocationId"]
+                incoming_shape = (
+                    subject["id"],
+                    subagent["subagentType"],
+                    subagent["dispatcher"],
+                    subagent["runMode"],
+                    subagent["parentSessionId"],
+                    subagent["sessionId"],
+                    subagent["contextOwnerId"],
+                    subagent["sessionPolicy"],
+                    subagent["workspaceIsolation"],
+                    subagent["toolPolicy"],
+                    subagent.get("toolCallSpanId"),
+                )
+                existing_shape = next_subagent_shapes.get(invocation_id)
+                if existing_shape is not None and existing_shape != incoming_shape:
+                    raise TraceStoreError(
+                        "invalid_event",
+                        f"subagent invocation {invocation_id} changed identity or isolation metadata within one trace.",
+                    )
+                next_subagent_shapes[invocation_id] = incoming_shape
+
             next_model_shapes = dict(session.model_shapes)
             next_recording_sequences = dict(session.recording_sequences)
             for event in unique:
@@ -722,6 +851,7 @@ class RuntimeTraceStore:
                 raise TraceStoreError("trace_total_byte_limit", "The global trace byte limit has been reached.", status=413)
 
             session.subject_shapes = next_subject_shapes
+            session.subagent_shapes = next_subagent_shapes
             session.model_shapes = next_model_shapes
             session.recording_sequences = next_recording_sequences
             accepted: list[dict[str, Any]] = []

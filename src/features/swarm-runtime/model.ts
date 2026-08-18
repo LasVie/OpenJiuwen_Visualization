@@ -63,6 +63,8 @@ export interface SwarmContextScope {
   subjectId?: string;
   messageCount: number;
   tokenUsed: number;
+  messages: readonly ContextMessage[];
+  tokenRevisions: readonly { stepIndex: number; used: number }[];
 }
 
 export interface SwarmRuntimeProjection {
@@ -420,6 +422,7 @@ export function projectSwarmRuntimeTrace(
   const messagesByOwner = new Map<string, ContextMessage[]>();
   const contextOwnerIds = new Set<string>();
   const latestTokenByOwner = new Map<string, number>();
+  const tokenRevisionsByOwner = new Map<string, { stepIndex: number; used: number }[]>();
 
   events.forEach((event, stepIndex) => {
     const reference = event.subject;
@@ -508,6 +511,9 @@ export function projectSwarmRuntimeTrace(
     const tokenOwnerId = contextOwnerId ?? reference?.contextOwnerId ?? reference?.id;
     if (event.token && tokenOwnerId) {
       latestTokenByOwner.set(tokenOwnerId, event.token.used);
+      const revisions = tokenRevisionsByOwner.get(tokenOwnerId) ?? [];
+      revisions.push({ stepIndex, used: event.token.used });
+      tokenRevisionsByOwner.set(tokenOwnerId, revisions);
     }
   });
 
@@ -529,6 +535,8 @@ export function projectSwarmRuntimeTrace(
         (message) => message.removedAt === undefined,
       ).length ?? 0,
       tokenUsed: latestTokenByOwner.get(ownerId) ?? 0,
+      messages: messagesByOwner.get(ownerId) ?? [],
+      tokenRevisions: tokenRevisionsByOwner.get(ownerId) ?? [],
     };
   }).sort((left, right) => {
     const leftOrder = left.kind === "unresolved" ? 99 : KIND_ORDER[left.kind];
@@ -640,6 +648,19 @@ export function swarmSubjectStatusAt(
     (candidate) => candidate.stepIndex <= stepIndex,
   );
   return revision?.status ?? "planned";
+}
+
+export function swarmContextScopeAt(
+  scope: SwarmContextScope,
+  stepIndex: number,
+) {
+  const messageCount = scope.messages.filter((message) =>
+    message.addedAt <= stepIndex &&
+    (message.removedAt === undefined || message.removedAt > stepIndex)).length;
+  const tokenUsed = [...scope.tokenRevisions].reverse().find(
+    (revision) => revision.stepIndex <= stepIndex,
+  )?.used ?? 0;
+  return { messageCount, tokenUsed };
 }
 
 export function swarmSubjectIsContainer(kind: RuntimeSubjectKind) {

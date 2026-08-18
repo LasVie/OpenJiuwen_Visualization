@@ -181,6 +181,14 @@ subject.id + subject.kind + subject.parentId
 
 对 `jiuwenswarm` 的只读检视确认了两个真实边界：`TeamMonitorHandler` 输出 member/task/message，`WorkflowMonitorHandler` 聚合 WorkflowProgress 的 workflow/phase/agent/human。上游 `WorkflowAgentActivity` 当前明确保留 tool-call 字段但尚无结构化数据，因此 V1 不从日志、prompt 或 outcome 构造虚假 Tool 节点。完整协议见 [`swarm-runtime-v1.md`](swarm-runtime-v1.md)。
 
+## Subagent Execution Plane V1
+
+Subagent 是 Swarm 主体层级下的独立执行边界，不等同于 Team Member 的 child AgentSession。`swarm.subagent` 必须提供结构化 observation，明确 dispatcher、前后台模式、父/子 session、Context owner、session policy、workspace isolation 与 Tool policy；同一 invocation 的身份字段由服务端保持稳定。
+
+`features/subagent-runtime/` 将父 dispatcher、合成的 session boundary 和绑定同一 subject 的 Core events 投影为独立 ReactFlow。Model frames 按 invocation 聚合，Tool start/end 按 span 聚合，边优先使用 `spanId / parentSpanId`；主时间轴 sequence 是可见性权威，不能展示未来帧。orchestration 节点保持 Swarm 紫色，child Core 活动使用 Core 青色。
+
+确定性录制通过通用 `runtimeRecordings` 插件贡献点进入 workbench，再走真实 loopback Trace API，页面不直接拼装事件。完整协议见 [`subagent-runtime-v1.md`](subagent-runtime-v1.md)。
+
 ## Model Provider V1
 
 Model Provider 作为独立插件注册 adapter 与确定性 recording，不把厂商 SDK 或凭据带入 React。Runtime 协议在 `model.call` 基础上增加 `model.stream`、`model.usage` 和 `model.cancel`，并用稳定 `invocationId` 把输出 delta、Token/费用、预算、结束原因和取消原因归并到同一次调用。

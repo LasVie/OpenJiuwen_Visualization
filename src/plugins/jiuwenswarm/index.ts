@@ -4,6 +4,7 @@ import {
   type VisualizationPlugin,
 } from "../../kernel";
 import { jiuwenSwarmNodes } from "./definition-graph";
+import { subagentDelegationRecording } from "./recordings/subagent-delegation";
 
 export const jiuwenSwarmPlugin: VisualizationPlugin = {
   manifest: {
@@ -17,6 +18,7 @@ export const jiuwenSwarmPlugin: VisualizationPlugin = {
       "graph.definition.jiuwenswarm",
       "trace.runtime.jiuwenswarm",
       "trace.context.ownership",
+      "runtime.subagent.execution.v1",
     ],
   },
   contribute: () => ({
@@ -31,5 +33,6 @@ export const jiuwenSwarmPlugin: VisualizationPlugin = {
         eventKinds: RUNTIME_TRACE_EVENT_KINDS,
       },
     ],
+    runtimeRecordings: [subagentDelegationRecording],
   }),
 };

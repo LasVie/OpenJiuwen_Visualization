@@ -165,6 +165,25 @@ function validModel(value: unknown, kind: unknown) {
   );
 }
 
+function validSubagent(value: unknown) {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.invocationId === "string" &&
+    typeof value.subagentType === "string" &&
+    ["task-tool", "agent-tool", "session-spawn"].includes(String(value.dispatcher)) &&
+    ["foreground", "background"].includes(String(value.runMode)) &&
+    typeof value.parentSessionId === "string" &&
+    typeof value.sessionId === "string" &&
+    typeof value.contextOwnerId === "string" &&
+    ["ephemeral", "sticky"].includes(String(value.sessionPolicy)) &&
+    ["subdirectory", "shared", "unknown"].includes(String(value.workspaceIsolation)) &&
+    ["configured", "inherited-filtered", "none", "unknown"].includes(String(value.toolPolicy)) &&
+    (value.toolCallSpanId === undefined || typeof value.toolCallSpanId === "string") &&
+    (value.resultPreview === undefined || typeof value.resultPreview === "string") &&
+    (value.error === undefined || typeof value.error === "string")
+  );
+}
+
 function validDetails(value: unknown) {
   return (
     Array.isArray(value) &&
@@ -232,10 +251,17 @@ function runtimeEvent(value: unknown): RuntimeTraceEvent {
     (value.context !== undefined && !validContext(value.context)) ||
     (value.hook !== undefined && !validHook(value.hook)) ||
     (value.model !== undefined && !validModel(value.model, value.kind)) ||
+    (value.subagent !== undefined && !validSubagent(value.subagent)) ||
     (value.subject !== undefined && !validSubject(value.subject)) ||
     (value.kind === "rail.hook" && !validHook(value.hook)) ||
     (["model.stream", "model.usage", "model.cancel"].includes(String(value.kind)) &&
       !validModel(value.model, value.kind)) ||
+    (value.kind === "swarm.subagent" &&
+      (!validSubagent(value.subagent) ||
+        !isRecord(value.subject) ||
+        value.subject.kind !== "subagent" ||
+        value.subject.contextOwnerId !== (value.subagent as Record<string, unknown>).contextOwnerId)) ||
+    (value.kind !== "swarm.subagent" && value.subagent !== undefined) ||
     (value.definition !== undefined && !validDefinition(value.definition)) ||
     (value.payload !== undefined && !isRecord(value.payload))
   ) {

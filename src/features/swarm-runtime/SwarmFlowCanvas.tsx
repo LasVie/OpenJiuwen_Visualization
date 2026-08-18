@@ -43,6 +43,7 @@ interface SwarmFlowCanvasProps {
   activeContextOwnerId: string | null;
   onSelectNode: (nodeId: string | null) => void;
   onActivateContext: (contextOwnerId: string) => void;
+  onOpenSubagent: (subjectId: string) => void;
   magnetEnabled: boolean;
   magnetStrength: number;
 }
@@ -196,6 +197,9 @@ function buildNodes(
       eventCode: activeIds.has(subject.id)
         ? projection.scenario.steps[stepIndex]?.eventCode
         : undefined,
+      eventCountAtStep: subject.revisions.filter(
+        (revision) => revision.stepIndex <= stepIndex,
+      ).length,
     },
     style: { width: 252 },
     zIndex: activeIds.has(subject.id) ? 5 : visibleIds.has(subject.id) ? 2 : 1,
@@ -287,6 +291,7 @@ export function SwarmFlowCanvas({
   activeContextOwnerId,
   onSelectNode,
   onActivateContext,
+  onOpenSubagent,
   magnetEnabled,
   magnetStrength,
 }: SwarmFlowCanvasProps) {
@@ -407,6 +412,7 @@ export function SwarmFlowCanvas({
           const subject = projection.subjects.find((candidate) => candidate.id === node.id);
           onSelectNode(node.id);
           if (subject?.contextOwnerId) onActivateContext(subject.contextOwnerId);
+          if (subject?.kind === "subagent") onOpenSubagent(subject.id);
           if (
             viewMode === "macro" &&
             subject &&
