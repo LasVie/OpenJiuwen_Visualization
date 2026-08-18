@@ -35,6 +35,20 @@ const scanPayload = {
     edges: 1,
     durationMs: 4,
     truncated: false,
+    cache: {
+      status: "hit",
+      storage: "memory-only",
+      validationMs: 1,
+      sourceDurationMs: 17,
+      ageMs: 120,
+      pythonFiles: 1,
+      bytesHashed: 2048,
+      ttlSeconds: 300,
+      maxEntries: 8,
+      resultBytes: 4096,
+      maxEntryBytes: 24000000,
+      maxTotalBytes: 96000000,
+    },
   },
   warnings: [],
 };
@@ -76,6 +90,10 @@ describe("local repository client", () => {
 
     expect(result.repository.name).toBe("agent-core");
     expect(result.graph.schemaVersion).toBe("1.0.0");
+    expect(result.statistics.cache).toMatchObject({
+      status: "hit",
+      storage: "memory-only",
+    });
     expect(fetcher).toHaveBeenCalledWith(
       "http://127.0.0.1:8765/api/v1/repositories/scan",
       expect.objectContaining({ method: "POST", cache: "no-store" }),

@@ -39,6 +39,27 @@ export interface RepositoryScanStatistics {
   edges: number;
   durationMs: number;
   truncated: boolean;
+  cache?: RepositoryScanCacheStatistics;
+}
+
+export interface RepositoryScanCacheStatistics {
+  status: "hit" | "miss" | "bypass";
+  storage: "memory-only";
+  validationMs: number;
+  sourceDurationMs: number;
+  ageMs: number;
+  pythonFiles: number;
+  bytesHashed: number;
+  ttlSeconds: number;
+  maxEntries: number;
+  resultBytes?: number;
+  maxEntryBytes: number;
+  maxTotalBytes: number;
+  bypassReason?:
+    | "manifest-byte-limit"
+    | "manifest-read-race"
+    | "manifest-changed-during-scan"
+    | "result-byte-limit";
 }
 
 export interface LocalRepositoryScanResult {
@@ -112,6 +133,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function scanCacheStatistics(value: unknown) {
+  return (
+    isRecord(value) &&
+    ["hit", "miss", "bypass"].includes(String(value.status)) &&
+    value.storage === "memory-only" &&
+    nonNegativeInteger(value.validationMs) &&
+    nonNegativeInteger(value.sourceDurationMs) &&
+    nonNegativeInteger(value.ageMs) &&
+    nonNegativeInteger(value.pythonFiles) &&
+    nonNegativeInteger(value.bytesHashed) &&
+    nonNegativeInteger(value.ttlSeconds) &&
+    nonNegativeInteger(value.maxEntries) &&
+    (value.resultBytes === undefined || nonNegativeInteger(value.resultBytes)) &&
+    nonNegativeInteger(value.maxEntryBytes) &&
+    nonNegativeInteger(value.maxTotalBytes) &&
+    (value.bypassReason === undefined ||
+      value.bypassReason === "manifest-byte-limit" ||
+      value.bypassReason === "manifest-read-race" ||
+      value.bypassReason === "manifest-changed-during-scan" ||
+      value.bypassReason === "result-byte-limit")
+  );
+}
+
 function scanResult(value: unknown): LocalRepositoryScanResult {
   if (!isRecord(value)) throw new TypeError("Local repository response is not an object.");
   const repository = value.repository;
@@ -140,6 +184,7 @@ function scanResult(value: unknown): LocalRepositoryScanResult {
     typeof statistics.edges !== "number" ||
     typeof statistics.durationMs !== "number" ||
     typeof statistics.truncated !== "boolean" ||
+    (statistics.cache !== undefined && !scanCacheStatistics(statistics.cache)) ||
     !Array.isArray(warnings) ||
     !warnings.every((warning) => typeof warning === "string")
   ) {

@@ -326,8 +326,22 @@ export function RepositoryWorkspace({
               </div>
               <p>
                 <LockKeyhole size={13} />
-                AST 静态分析 · {scanResult.statistics.durationMs.toLocaleString()} ms
+                {scanResult.statistics.cache?.status === "hit"
+                  ? "内存缓存命中"
+                  : scanResult.statistics.cache?.status === "bypass"
+                    ? "AST 静态分析 · 缓存绕过"
+                    : "AST 静态分析"}
+                {" · "}{scanResult.statistics.durationMs.toLocaleString()} ms
               </p>
+              {scanResult.statistics.cache ? (
+                <small className={`scan-summary__cache scan-summary__cache--${scanResult.statistics.cache.status}`}>
+                  {scanResult.statistics.cache.status === "hit"
+                    ? `已校验 ${scanResult.statistics.cache.pythonFiles.toLocaleString()} 个 Python 文件 · 缓存年龄 ${scanResult.statistics.cache.ageMs.toLocaleString()} ms`
+                    : scanResult.statistics.cache.status === "miss"
+                      ? `新快照已进入内存 LRU · TTL ${scanResult.statistics.cache.ttlSeconds}s`
+                      : `输入验证未缓存：${scanResult.statistics.cache.bypassReason ?? "bounded validation unavailable"}`}
+                </small>
+              ) : null}
               {scanResult.warnings.slice(0, 3).map((warning) => (
                 <small className="scan-summary__warning" key={warning}>{warning}</small>
               ))}

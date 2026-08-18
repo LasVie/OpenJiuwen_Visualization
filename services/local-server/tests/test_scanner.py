@@ -62,6 +62,21 @@ class PythonRepositoryScannerTests(unittest.TestCase):
         self.assertTrue(result["statistics"]["truncated"])
         self.assertIn("Edge scan stopped at maxEdges=1.", result["warnings"])
 
+    def test_builds_a_stable_bounded_source_manifest(self) -> None:
+        scanner = PythonRepositoryScanner()
+        first = scanner.manifest(self.identity)
+        second = scanner.manifest(self.identity)
+        with_functions = scanner.manifest(
+            self.identity,
+            ScanOptions(include_functions=True),
+        )
+
+        self.assertTrue(first.cacheable)
+        self.assertGreater(first.python_files, 0)
+        self.assertGreater(first.bytes_hashed, 0)
+        self.assertEqual(first.fingerprint, second.fingerprint)
+        self.assertNotEqual(first.fingerprint, with_functions.fingerprint)
+
 
 if __name__ == "__main__":
     unittest.main()

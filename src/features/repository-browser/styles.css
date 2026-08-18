@@ -448,6 +448,17 @@
   font-size: 8px;
 }
 
+.scan-summary__cache {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 7px;
+  line-height: 1.45;
+}
+
+.scan-summary__cache--hit { color: var(--success); }
+.scan-summary__cache--bypass { color: var(--amber); }
+
 .scan-summary__warning {
   display: block;
   margin-top: 6px;

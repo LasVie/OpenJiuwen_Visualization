@@ -18,6 +18,8 @@ from ..repository import RepositoryIdentity
 
 GRAPH_SCHEMA_VERSION = "1.0.0"
 PLUGIN_ID = "openjiuwen.local-repository"
+SCAN_MANIFEST_VERSION = "python-ast-manifest-v1"
+DEFAULT_MAX_MANIFEST_BYTES = 128_000_000
 
 _EXCLUDED_DIRECTORIES = frozenset(
     {
@@ -53,6 +55,16 @@ class ScanOptions:
             raise ValueError("max_file_bytes must be between 1024 and 10000000.")
         if not 1 <= self.max_edges <= 100_000:
             raise ValueError("max_edges must be between 1 and 100000.")
+
+
+@dataclass(frozen=True, slots=True)
+class ScanManifest:
+    fingerprint: str
+    python_files: int
+    bytes_hashed: int
+    truncated: bool
+    cacheable: bool
+    bypass_reason: str | None = None
 
 
 @dataclass(slots=True)
@@ -244,6 +256,73 @@ def _class_definitions(body: list[ast.stmt], prefix: str = "") -> Iterable[tuple
 
 class PythonRepositoryScanner:
     """Build a hierarchy and relationship graph using Python's AST only."""
+
+    def manifest(
+        self,
+        identity: RepositoryIdentity,
+        options: ScanOptions = ScanOptions(),
+        *,
+        max_hashed_bytes: int = DEFAULT_MAX_MANIFEST_BYTES,
+    ) -> ScanManifest:
+        """Fingerprint the exact bounded Python input set without parsing an AST."""
+        if not 1_000_000 <= max_hashed_bytes <= 512_000_000:
+            raise ValueError("max_hashed_bytes must be between 1000000 and 512000000.")
+
+        manifest_warnings: list[str] = []
+        files, truncated = self._python_files(identity.scan_root, options, manifest_warnings)
+        digest = hashlib.sha256()
+        digest.update(SCAN_MANIFEST_VERSION.encode("ascii"))
+        digest.update(str(identity.root).casefold().encode("utf-8"))
+        digest.update(str(identity.scan_root).casefold().encode("utf-8"))
+        digest.update(identity.revision.encode("ascii", errors="replace"))
+        digest.update(identity.branch.encode("utf-8"))
+        digest.update(b"1" if identity.dirty else b"0")
+        digest.update(repr(options).encode("utf-8"))
+        bytes_hashed = 0
+
+        for file_path in files:
+            try:
+                source_path = _source_path(file_path, identity.root)
+                stat = file_path.stat()
+                digest.update(source_path.encode("utf-8"))
+                digest.update(
+                    f"\0{stat.st_size}\0{stat.st_mtime_ns}\0{stat.st_ctime_ns}\0".encode(
+                        "ascii"
+                    )
+                )
+                if bytes_hashed + stat.st_size > max_hashed_bytes:
+                    return ScanManifest(
+                        fingerprint=digest.hexdigest(),
+                        python_files=len(files),
+                        bytes_hashed=bytes_hashed,
+                        truncated=truncated,
+                        cacheable=False,
+                        bypass_reason="manifest-byte-limit",
+                    )
+                with file_path.open("rb") as source_file:
+                    while chunk := source_file.read(64 * 1024):
+                        digest.update(chunk)
+                        bytes_hashed += len(chunk)
+            except OSError:
+                return ScanManifest(
+                    fingerprint=digest.hexdigest(),
+                    python_files=len(files),
+                    bytes_hashed=bytes_hashed,
+                    truncated=truncated,
+                    cacheable=False,
+                    bypass_reason="manifest-read-race",
+                )
+
+        for warning in manifest_warnings:
+            digest.update(b"\0warning\0")
+            digest.update(warning.encode("utf-8"))
+        return ScanManifest(
+            fingerprint=digest.hexdigest(),
+            python_files=len(files),
+            bytes_hashed=bytes_hashed,
+            truncated=truncated,
+            cacheable=True,
+        )
 
     def scan(
         self,

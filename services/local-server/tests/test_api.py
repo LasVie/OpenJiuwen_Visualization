@@ -53,7 +53,35 @@ class LocalRepositoryApiTests(unittest.TestCase):
         self.assertEqual(scan.body["repository"]["scanScope"], str(FIXTURE_ROOT))
         self.assertIn("repository.tools.read", health.body["capabilities"])
         self.assertIn("repository.source.read", health.body["capabilities"])
+        self.assertIn("repository.scan.cache.memory", health.body["capabilities"])
         self.assertIn("github.pull-request.read", health.body["capabilities"])
+
+    def test_reuses_a_validated_memory_only_definition_scan(self) -> None:
+        config = LocalServiceConfig.create(
+            allowed_roots=[REPOSITORY_ROOT],
+            allowed_origins=[ALLOWED_ORIGIN],
+        )
+        api = LocalRepositoryApi(config)
+        first = api.dispatch(
+            "POST",
+            "/api/v1/repositories/scan",
+            body={"path": str(FIXTURE_ROOT)},
+            origin=ALLOWED_ORIGIN,
+        )
+        second = api.dispatch(
+            "POST",
+            "/api/v1/repositories/scan",
+            body={"path": str(FIXTURE_ROOT)},
+            origin=ALLOWED_ORIGIN,
+        )
+
+        self.assertEqual(first.status, 200)
+        self.assertEqual(first.body["statistics"]["cache"]["status"], "miss")
+        self.assertEqual(second.body["statistics"]["cache"]["status"], "hit")
+        self.assertEqual(
+            first.body["graph"]["nodes"],
+            second.body["graph"]["nodes"],
+        )
 
     def test_reports_static_tool_catalog_without_importing_target_code(self) -> None:
         catalog = self.api.dispatch(

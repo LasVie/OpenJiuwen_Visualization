@@ -45,6 +45,8 @@ python -B services/local-server/scripts/scan_repository.py `
 
 页面每次只投影当前焦点和有限数量的子节点，不会把完整仓库的数千节点同时交给 ReactFlow。
 
+重复生成相同 Definition 时，本地服务会先校验有界 Python 输入清单，再复用进程内 LRU 快照。缓存不会落盘，源码/选项/HEAD 或工作树内容变化会导致 miss；超过清单验证上限则明确显示 bypass。完整合同见 [`docs/repository-scan-cache-v1.md`](docs/repository-scan-cache-v1.md)。
+
 ### Registered Tools Catalog
 
 “定义图 → Tool 注册表”会只读识别 `@tool`、Tool 子类、顶层 `ToolCard` 与 Ability/Resource 注册调用，并把信息拆成“声明 → 静态注册路径 → 当前 Trace 运行确认”三层。Core 与 Swarm 使用不同卡片色，同时保留文字来源与状态；点击任一 Tool 或注册点可查看 card metadata、目标表达式、置信度和源码行。静态已关联不等于运行时已注册，只有显式 `ability.register` 事件会显示为本次运行已观察。

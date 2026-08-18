@@ -157,6 +157,12 @@ OpenJiuwen 的 Agent、Rail、Tool、Context、Workflow、Model 与 Team 目前�
 
 这样单仓数千节点仍可渐进浏览，也为未来把 Runtime span、Tool registry 与 Git change 叠加到同一稳定节点保留了空间。
 
+### Definition Scan Cache
+
+`repository.scan.cache.memory` 在服务进程内保存最多 8 个 Definition snapshot，默认 TTL 为 300 秒，并同时执行单条 24 MB、总计 96 MB 的序列化快照预算。缓存键包含规范 repository root、scan scope 与完整 `ScanOptions`；每次命中前都重新构造 Python 输入清单，并把路径、大小、时间戳和文件内容纳入 SHA-256 指纹，因此 HEAD、工作树内容、扫描范围或选项变化都会产生 miss。
+
+指纹最多读取 128 MB；超过上限或读取期间发生文件竞态时返回 `bypass` 并正常执行 AST scan。新 scan 完成后还会复验输入指纹，避免把解析期间发生变化的工作树写入缓存。缓存响应是深拷贝，只存在于内存，不保存 Source Viewer 文本、Trace、凭据或 GitHub 响应。完整合同见 [`repository-scan-cache-v1.md`](repository-scan-cache-v1.md)。
+
 ### Source Evidence Viewer
 
 `repository.source.read` 把 Definition、Change 与 Tool 的源码引用接到同一个按需读取边界。浏览器只能提交已选 repository path、repository-relative source path 和有界行范围；服务再次校验 scan scope、链接/junction、文件类型、大小、编码和行号，再返回当前工作树的行号文本与 SHA-256。

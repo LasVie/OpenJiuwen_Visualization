@@ -6,11 +6,12 @@ export const localRepositoryPlugin: VisualizationPlugin = {
     name: "Local Repository",
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
-    description: "通过只读本地服务把 Python 仓库静态索引为定义图，并提供有界源码证据与节点关系深入。",
+    description: "通过只读本地服务把 Python 仓库静态索引为定义图，并提供内存 revision 缓存、有界源码证据与节点关系深入。",
     group: "workspace",
     defaultEnabled: true,
     capabilities: [
       "repository.local.read",
+      "repository.scan.cache.memory",
       "repository.source.read",
       "graph.definition.static",
       "graph.definition.relation-explorer.v1",

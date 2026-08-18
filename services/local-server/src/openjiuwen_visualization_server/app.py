@@ -21,6 +21,7 @@ from .github_pull_requests import (
     GitHubPullRequestReference,
 )
 from .repository import RepositoryResolutionError, RepositoryResolver
+from .scan_cache import DefinitionScanCache
 from .source_reader import SourceReadError, SourceReadOptions, SourceReader
 from .scanner import (
     PythonRepositoryScanner,
@@ -73,6 +74,7 @@ class LocalRepositoryApi:
         *,
         resolver: RepositoryResolver | None = None,
         scanner: PythonRepositoryScanner | None = None,
+        scan_cache: DefinitionScanCache | None = None,
         tool_catalog_scanner: ToolCatalogScanner | None = None,
         trace_store: RuntimeTraceStore | None = None,
         change_inspector: GitChangeInspector | None = None,
@@ -81,7 +83,9 @@ class LocalRepositoryApi:
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
-        self._scanner = scanner or PythonRepositoryScanner()
+        self._scan_cache = scan_cache or DefinitionScanCache(
+            scanner or PythonRepositoryScanner()
+        )
         self._tool_catalog_scanner = tool_catalog_scanner or ToolCatalogScanner()
         self.trace_store = trace_store or RuntimeTraceStore()
         self._change_inspector = change_inspector or GitChangeInspector()
@@ -113,6 +117,7 @@ class LocalRepositoryApi:
                     "mode": "read-only",
                     "capabilities": [
                         "repository.read",
+                        "repository.scan.cache.memory",
                         "repository.tools.read",
                         "repository.source.read",
                         "git.change.read",
@@ -240,7 +245,7 @@ class LocalRepositoryApi:
                 max_edges=_integer_option(raw_options, "maxEdges", 20_000),
             )
             identity = self._resolver.resolve(repository_path)
-            result = self._scanner.scan(identity, options)
+            result = self._scan_cache.scan(identity, options)
         except PathAccessError as exc:
             return _error(HTTPStatus.FORBIDDEN, "path_not_allowed", str(exc))
         except RepositoryResolutionError as exc:
