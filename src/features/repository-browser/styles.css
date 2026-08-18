@@ -1217,6 +1217,11 @@
   margin-top: 9px;
 }
 
+.definition-inspector__section > .relation-explorer-trigger {
+  width: 100%;
+  margin-top: 9px;
+}
+
 .definition-relation-list button {
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr);

@@ -353,7 +353,15 @@ export function ChangeWorkspace({
       </main>
 
       {projection && activeFile ? (
-        <ChangeInspector projection={projection} activeFileId={activeFile.file.id} selectedNodeId={selectedNodeId} />
+        <ChangeInspector
+          projection={projection}
+          activeFileId={activeFile.file.id}
+          selectedNodeId={selectedNodeId}
+          magnetEnabled={magnetEnabled}
+          magnetStrength={magnetStrength}
+          onToggleMagnet={onToggleMagnet}
+          onMagnetStrengthChange={onMagnetStrengthChange}
+        />
       ) : (
         <aside className="change-inspector change-inspector--empty"><ShieldCheck size={22} /><strong>变更详情</strong><p>生成变更图后，点击文件或节点查看 hunk、源码范围和影响置信度。</p></aside>
       )}

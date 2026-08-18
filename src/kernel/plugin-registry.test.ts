@@ -114,6 +114,8 @@ describe("visualization plugin registry", () => {
     expect(defaultWorkbench.capabilities["repository.source.read"]).toEqual([
       "openjiuwen.local-repository",
     ]);
+    expect(defaultWorkbench.capabilities["graph.definition.relation-explorer.v1"])
+      .toEqual(["openjiuwen.local-repository"]);
     expect(defaultWorkbench.capabilities["trace.context.ownership"]).toEqual([
       "openjiuwen.jiuwenswarm",
     ]);

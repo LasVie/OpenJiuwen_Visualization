@@ -1,5 +1,6 @@
 import { ArrowUp, ChevronRight, Code2, GitFork, Layers3 } from "lucide-react";
 import type { JsonValue, RegisteredGraphNode } from "../../kernel";
+import { RelationExplorer } from "../relation-explorer";
 import { SourceViewer } from "../source-viewer";
 import type { DefinitionGraphIndex } from "./model";
 
@@ -24,6 +25,10 @@ interface DefinitionInspectorProps {
   node: RegisteredGraphNode;
   focusId: string;
   repositoryPath: string;
+  magnetEnabled: boolean;
+  magnetStrength: number;
+  onToggleMagnet: () => void;
+  onMagnetStrengthChange: (strength: number) => void;
   onNavigate: (nodeId: string) => void;
 }
 
@@ -32,6 +37,10 @@ export function DefinitionInspector({
   node,
   focusId,
   repositoryPath,
+  magnetEnabled,
+  magnetStrength,
+  onToggleMagnet,
+  onMagnetStrengthChange,
   onNavigate,
 }: DefinitionInspectorProps) {
   const source = node.evidence.find((evidence) => evidence.source)?.source;
@@ -112,6 +121,16 @@ export function DefinitionInspector({
 
         <section className="definition-inspector__section">
           <h3><GitFork size={14} />关系摘要</h3>
+          <RelationExplorer
+            index={index}
+            node={node}
+            repositoryPath={repositoryPath}
+            magnetEnabled={magnetEnabled}
+            magnetStrength={magnetStrength}
+            onToggleMagnet={onToggleMagnet}
+            onMagnetStrengthChange={onMagnetStrengthChange}
+            buttonLabel="打开关系深入画布"
+          />
           <div className="definition-relation-list">
             {[...incoming, ...outgoing].slice(0, 16).map((edge) => {
               const incomingEdge = edge.target === node.id;

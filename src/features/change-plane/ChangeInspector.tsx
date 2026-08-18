@@ -6,7 +6,10 @@ import {
   GitCommitHorizontal,
   Link2,
 } from "lucide-react";
+import { useMemo } from "react";
 import type { NodeChangeImpact } from "../../kernel";
+import { createDefinitionGraphIndex } from "../repository-browser";
+import { RelationExplorer } from "../relation-explorer";
 import { SourceViewer } from "../source-viewer";
 import type { ChangeImpactProjection } from "./model";
 
@@ -14,6 +17,10 @@ interface ChangeInspectorProps {
   projection: ChangeImpactProjection;
   activeFileId: string;
   selectedNodeId: string | null;
+  magnetEnabled: boolean;
+  magnetStrength: number;
+  onToggleMagnet: () => void;
+  onMagnetStrengthChange: (strength: number) => void;
 }
 
 const impactLabel: Record<NodeChangeImpact["kind"], string> = {
@@ -27,7 +34,15 @@ export function ChangeInspector({
   projection,
   activeFileId,
   selectedNodeId,
+  magnetEnabled,
+  magnetStrength,
+  onToggleMagnet,
+  onMagnetStrengthChange,
 }: ChangeInspectorProps) {
+  const relationIndex = useMemo(
+    () => createDefinitionGraphIndex(projection.graph),
+    [projection.graph],
+  );
   const fileProjection = projection.files.find((item) => item.file.id === activeFileId)
     ?? projection.files[0];
   if (!fileProjection) {
@@ -104,6 +119,16 @@ export function ChangeInspector({
                 />
               </div>
             ) : null}
+            <RelationExplorer
+              index={relationIndex}
+              node={node}
+              repositoryPath={projection.changes.repository.path}
+              magnetEnabled={magnetEnabled}
+              magnetStrength={magnetStrength}
+              onToggleMagnet={onToggleMagnet}
+              onMagnetStrengthChange={onMagnetStrengthChange}
+              buttonLabel="沿影响节点深入关系"
+            />
           </section>
         ) : (
           <section className="change-inspector__impact-summary">

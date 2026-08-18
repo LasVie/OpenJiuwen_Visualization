@@ -41,6 +41,7 @@ python -B services/local-server/scripts/scan_repository.py `
 - `contains`、`imports`、`inherits` 关系与源码行证据；
 - 节点详情、拖拽、实时防重叠、磁性调节、缩放和缩略图。
 - 在 Definition、Change 与 Tool 详情中按需打开统一源码证据窗口，查看聚焦行、当前工作树状态、revision 对齐和内容哈希。
+- 从任意 Definition 或 Change 影响节点进入独立关系画布，按 `contains / imports / inherits`、上下游方向逐节点展开；每次扩展都有明确上限和未显示计数。
 
 页面每次只投影当前焦点和有限数量的子节点，不会把完整仓库的数千节点同时交给 ReactFlow。
 
@@ -51,6 +52,8 @@ python -B services/local-server/scripts/scan_repository.py `
 完整扫描合同、API、证据等级和限制见 [`docs/tool-catalog-v1.md`](docs/tool-catalog-v1.md)。
 
 源码窗口的路径边界、行范围和工作树语义见 [`docs/source-evidence-v1.md`](docs/source-evidence-v1.md)。
+
+关系画布的分层展开、方向语义和容量边界见 [`docs/relation-explorer-v1.md`](docs/relation-explorer-v1.md)。
 
 ## Core Runtime
 
@@ -113,6 +116,7 @@ src/
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
+│  ├─ relation-explorer/       # Definition/Change 共享节点关系深入画布
 │  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期
 │  ├─ source-viewer/           # Definition/Change/Tool 共享只读源码窗口
 │  ├─ swarm-runtime/           # Swarm 层级、主体 Context 与动态画布

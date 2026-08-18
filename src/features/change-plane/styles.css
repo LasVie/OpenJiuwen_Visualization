@@ -482,6 +482,7 @@
 .change-source-evidence code { overflow-wrap: anywhere; color: var(--core-ink); font-size: 7px; }
 .change-source-evidence span { color: var(--muted); font-family: var(--mono); font-size: 7px; }
 .change-source-evidence .source-viewer-trigger { width: fit-content; margin-top: 4px; }
+.change-inspector__impact > .relation-explorer-trigger { width: 100%; margin-top: 9px; }
 
 .change-inspector__impact-summary > div:last-child { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .change-inspector__impact-summary > div:last-child span { display: flex; align-items: baseline; justify-content: space-between; padding: 7px; color: var(--muted); background: var(--surface); border-radius: 7px; font-size: 7px; }

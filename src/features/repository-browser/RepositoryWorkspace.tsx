@@ -439,6 +439,10 @@ export function RepositoryWorkspace({
           node={selectedNode}
           focusId={resolvedFocusId}
           repositoryPath={scanResult!.repository.path}
+          magnetEnabled={magnetEnabled}
+          magnetStrength={magnetStrength}
+          onToggleMagnet={onToggleMagnet}
+          onMagnetStrengthChange={onMagnetStrengthChange}
           onNavigate={navigate}
         />
       ) : (

@@ -163,6 +163,12 @@ OpenJiuwen 的 Agent、Rail、Tool、Context、Workflow、Model 与 Team 目前�
 
 `features/source-viewer/` 拥有请求生命周期、modal、焦点、聚焦行和 revision/dirty warning，各业务 Inspector 只传 repository identity 与已有 source reference，不重复实现文件读取。历史 blob、编辑和 IDE 跳转不是该 capability 的隐式扩展。完整合同见 [`source-evidence-v1.md`](source-evidence-v1.md)。
 
+### Node Relation Explorer
+
+`graph.definition.relation-explorer.v1` 在 Graph Kernel snapshot 之上提供共享的逐层关系投影。Definition Inspector 与 Change 影响节点只传稳定 node id、repository identity 和同一份 Definition index；`features/relation-explorer/` 负责方向/关系筛选、展开集合、有界投影、自动布局、磁吸避碰和节点级源码证据。
+
+关系画布不会复制或改写规范图，也不会在浏览器重新分析源码。起点始终先展示一跳关系，只有显式展开可见节点才读取 snapshot 中的下一层；每节点最多 18 条关系、全图最多 64 个节点，达到边界必须显示未投影计数。完整合同见 [`relation-explorer-v1.md`](relation-explorer-v1.md)。
+
 ## Registered Tools Catalog V1
 
 Tool Catalog 是 Definition 平面的独立插件和子工作台。`services/local-server/` 通过 AST 识别 `@tool`、Tool 子类、顶层 `ToolCard` 以及 Ability/Resource 注册调用；前端 `features/tool-catalog/` 再把结果与当前 Trace 的 `ability.register` 事件投影到同一条证据链。
