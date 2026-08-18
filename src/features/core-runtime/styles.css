@@ -2,7 +2,7 @@
   position: relative;
   z-index: 14;
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto minmax(180px, auto) auto auto;
+  grid-template-columns: minmax(190px, 1fr) auto minmax(150px, auto) auto auto auto;
   align-items: center;
   min-width: 0;
   gap: 12px;
@@ -162,7 +162,8 @@
   user-select: all;
 }
 
-.core-runtime-session__create {
+.core-runtime-session__create,
+.core-runtime-session__replay {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -177,6 +178,17 @@
   font-size: 9px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.core-runtime-session__replay {
+  color: var(--core-ink);
+  background: rgb(255 255 255 / 0.68);
+  box-shadow: inset 0 0 0 1px rgb(22 116 123 / 0.15);
+}
+
+.core-runtime-session__replay:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .core-runtime-session__create:disabled {

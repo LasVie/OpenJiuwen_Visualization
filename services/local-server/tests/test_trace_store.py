@@ -271,6 +271,86 @@ class RuntimeTraceStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(TraceStoreError, "parentId must differ"):
             stable_store.append(trace["id"], token, [self_parent])
 
+    def test_validates_structured_model_stream_usage_and_recording_frames(self) -> None:
+        model_store = RuntimeTraceStore(
+            id_factory=lambda: "tr_model",
+            token_factory=lambda: "tw_model",
+        )
+        trace, token = model_store.create(
+            owner="agent-core",
+            label="Model recording",
+            max_tokens=8192,
+        )
+        base_model = {
+            "invocationId": "invoke-1",
+            "providerId": "provider.demo",
+            "modelId": "model.demo",
+            "source": "recording",
+            "recordingId": "recording-1",
+        }
+
+        missing_frame = event("missing-frame", kind="model.stream", phase="instant")
+        missing_frame["model"] = {**base_model, "delta": "hello"}
+        with self.assertRaisesRegex(TraceStoreError, "recordingSequence"):
+            model_store.append(trace["id"], token, [missing_frame])
+
+        missing_delta = event("missing-delta", kind="model.stream", phase="instant")
+        missing_delta["model"] = {**base_model, "recordingSequence": 0}
+        with self.assertRaisesRegex(TraceStoreError, "model.delta"):
+            model_store.append(trace["id"], token, [missing_delta])
+
+        fractional_usage = event("fractional-usage", kind="model.usage", phase="instant")
+        fractional_usage["model"] = {
+            **base_model,
+            "recordingSequence": 0,
+            "usage": {"inputTokens": 1, "outputTokens": 1.5, "totalTokens": 2.5},
+        }
+        with self.assertRaisesRegex(TraceStoreError, "non-negative integer"):
+            model_store.append(trace["id"], token, [fractional_usage])
+
+        stream = event("stream", kind="model.stream", phase="instant")
+        stream["model"] = {
+            **base_model,
+            "recordingSequence": 0,
+            "delta": "full recorded output",
+            "budget": {"maxTotalTokens": 128, "maxCostMicros": 5000, "currency": "USD"},
+        }
+        usage = event("usage", kind="model.usage", phase="instant")
+        usage["model"] = {
+            **base_model,
+            "recordingSequence": 1,
+            "usage": {
+                "inputTokens": 12,
+                "outputTokens": 3,
+                "totalTokens": 15,
+                "costMicros": 420,
+                "currency": "USD",
+            },
+        }
+        _, accepted = model_store.append(trace["id"], token, [stream, usage])
+
+        self.assertEqual(accepted[0]["model"]["delta"], "full recorded output")
+        self.assertEqual(accepted[1]["model"]["usage"]["totalTokens"], 15)
+
+        repeated_frame = event("repeated-frame", kind="model.stream", phase="instant")
+        repeated_frame["model"] = {
+            **base_model,
+            "recordingSequence": 1,
+            "delta": "out of order",
+        }
+        with self.assertRaisesRegex(TraceStoreError, "increase monotonically"):
+            model_store.append(trace["id"], token, [repeated_frame])
+
+        changed_provider = event("changed-provider", kind="model.stream", phase="instant")
+        changed_provider["model"] = {
+            **base_model,
+            "providerId": "provider.other",
+            "recordingSequence": 2,
+            "delta": "wrong provider",
+        }
+        with self.assertRaisesRegex(TraceStoreError, "changed provider"):
+            model_store.append(trace["id"], token, [changed_provider])
+
 
 if __name__ == "__main__":
     unittest.main()

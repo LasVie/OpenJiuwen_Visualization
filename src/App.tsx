@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Activity,
   Braces,
@@ -24,6 +24,7 @@ import {
   type RuntimeSourceMode,
 } from "./features/core-runtime";
 import { MagnetControls } from "./features/trace-graph";
+import { ModelRuntimePanel, projectModelRuntime } from "./features/model-runtime";
 import {
   SwarmContextScopeBar,
   SwarmRuntimeSessionBar,
@@ -31,6 +32,7 @@ import {
 } from "./features/swarm-runtime";
 import { RuntimeBadge } from "./shared/ui/RuntimeBadge";
 import { useReplayStore } from "./state/replay-store";
+import { defaultWorkbench } from "./workbench/default-workbench";
 
 const SwarmFlowCanvas = lazy(() =>
   import("./features/swarm-runtime/SwarmFlowCanvas").then((module) => ({
@@ -43,6 +45,8 @@ const SwarmRuntimeInspector = lazy(() =>
   })),
 );
 
+const defaultModelRecording = defaultWorkbench.modelRecordings[0];
+
 export default function App() {
   const [workbenchMode, setWorkbenchMode] = useState<"runtime" | "definition">(
     "runtime",
@@ -53,6 +57,8 @@ export default function App() {
   const [swarmTraceLabel, setSwarmTraceLabel] = useState("JiuwenSwarm local run");
   const [liveStepIndex, setLiveStepIndex] = useState(0);
   const [followLive, setFollowLive] = useState(true);
+  const [recordingLoading, setRecordingLoading] = useState(false);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
   const coreRuntime = useCoreRuntimeSession();
   const swarmRuntime = useSwarmRuntimeSession();
   const {
@@ -102,6 +108,18 @@ export default function App() {
     : runtimeSource === "swarm-runtime"
       ? swarmRuntime.events.length
       : 0;
+  const activeRuntimeEvents = runtimeSource === "core-runtime"
+    ? coreRuntime.events
+    : runtimeSource === "swarm-runtime"
+      ? swarmRuntime.events
+      : [];
+  const modelProjection = useMemo(
+    () => projectModelRuntime(
+      activeRuntimeEvents,
+      activeRuntimeEvents[stepIndex]?.sequence ?? 0,
+    ),
+    [activeRuntimeEvents, stepIndex],
+  );
   const railCanvasDefinition = graphNodes.find(
     (node) => node.id === railCanvasRailId && node.type === "rail",
   );
@@ -174,6 +192,33 @@ export default function App() {
     if (inspectorOpen) toggleInspector();
     closeRailCanvas();
     await coreRuntime.startSession(coreTraceLabel.trim() || "Agent Core local run");
+  }
+
+  async function loadModelRecording() {
+    if (!defaultModelRecording) return;
+    setLiveStepIndex(0);
+    setFollowLive(true);
+    selectNode(null);
+    if (inspectorOpen) toggleInspector();
+    closeRailCanvas();
+    setRecordingLoading(true);
+    setRecordingError(null);
+    setCoreTraceLabel(defaultModelRecording.label);
+    try {
+      const created = await coreRuntime.startSession(defaultModelRecording.label);
+      if (!created) return;
+      await coreRuntime.client.appendEvents(
+        created.trace.id,
+        created.writeToken,
+        defaultModelRecording.events,
+      );
+    } catch (caught) {
+      setRecordingError(
+        caught instanceof Error ? caught.message : "无法载入模型录制。",
+      );
+    } finally {
+      setRecordingLoading(false);
+    }
   }
 
   async function createSwarmTrace() {
@@ -301,11 +346,11 @@ export default function App() {
       </header>
 
       {workbenchMode === "runtime" ? <div className="content-shell">
-        <section className={
-          runtimeSource === "swarm-runtime"
-            ? "stage-column stage-column--swarm"
-            : "stage-column"
-        }>
+        <section className={[
+          "stage-column",
+          runtimeSource === "swarm-runtime" ? "stage-column--swarm" : "",
+          modelProjection.invocations.length ? "stage-column--model" : "",
+        ].filter(Boolean).join(" ")}>
           {runtimeSource === "fixture" ? (
             <ScenarioTabs
               scenarios={scenarios}
@@ -319,6 +364,10 @@ export default function App() {
               connection={coreRuntime.connection}
               error={coreRuntime.error}
               onCreate={() => void createCoreTrace()}
+              onLoadRecording={() => void loadModelRecording()}
+              recordingLabel={defaultModelRecording?.label ?? "无可用模型录制"}
+              recordingLoading={recordingLoading}
+              recordingError={recordingError}
             />
           ) : (
             <SwarmRuntimeSessionBar
@@ -384,6 +433,9 @@ export default function App() {
               activeTokenUsed={step.tokenUsed}
               onChange={swarmRuntime.setContextOwnerId}
             />
+          ) : null}
+          {modelProjection.invocations.length ? (
+            <ModelRuntimePanel projection={modelProjection} />
           ) : null}
           {runtimeSource === "swarm-runtime" ? (
             <Suspense fallback={<div className="swarm-runtime-loading">加载 Swarm 层级画布…</div>}>

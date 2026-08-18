@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义和运行链路工作台。当前版本支持确定性演示、Agent Core 实时 Trace 与 Swarm 实时 Trace：既能查看 DeepAgent/ReAct、Context、Rail/Hook，也能按 Team → Workflow/Member → Phase/Task → Agent/Subagent 层级逐步回放，并把不同执行主体的 Context Window 完全分开。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义和运行链路工作台。当前版本支持确定性演示、Agent Core 实时 Trace、Swarm 实时 Trace 与 Model Provider 录制回放：既能查看 DeepAgent/ReAct、Context、Rail/Hook，也能按 Team → Workflow/Member → Phase/Task → Agent/Subagent 层级逐步回放，并把不同执行主体的 Context Window 完全分开。
 
 ## 本地运行
 
@@ -56,6 +56,10 @@ python -B services/local-server/scripts/scan_repository.py `
 Swarm Trace 复用同一个内存采集服务，但要求每个非终止事件声明稳定 `subject`。画布按真实层级区分 Team、Workflow、Phase、Member、Agent、Human、Task 与 Subagent；成员消息和任务分配显示为不同关系边。宏观模式保留团队骨架并允许逐层点开，运行到深层主体时自动显露当前路径；微观模式一次展开所有已出现主体。
 
 Context 事件必须携带 `context.ownerId`。Team/Member/Agent/Subagent 可以拥有彼此独立的窗口，点击有 Context 的节点或使用 owner 选择器即可切换，消息和 Token 不会跨主体混合。`jiuwenswarm` 现有 WorkflowProgress 尚未提供结构化 tool-call activity，页面不会把日志或 outcome 猜成工具调用。
+
+### Model Provider 录制
+
+Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，不访问任何模型 API。`model.stream`、`model.usage` 与 `model.cancel` 会被投影成流式输出、Token/费用预算、完成或取消状态，并与主时间轴同步回放。输出默认脱敏，显式点击后才展示完整原文；录制帧、Provider、模型和 invocation 身份都由服务端校验。完整合同见 [`docs/model-provider-v1.md`](docs/model-provider-v1.md)。
 
 完整事件矩阵、层级规则和可直接投递的示例见 [`docs/swarm-runtime-v1.md`](docs/swarm-runtime-v1.md) 与 [`examples/swarm-runtime-v1.events.json`](examples/swarm-runtime-v1.events.json)。
 

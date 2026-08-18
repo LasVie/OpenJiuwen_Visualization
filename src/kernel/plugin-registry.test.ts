@@ -44,9 +44,24 @@ describe("visualization plugin registry", () => {
         contributedBy: "openjiuwen.jiuwenswarm",
       }),
     ]);
+    expect(defaultWorkbench.modelProviders).toEqual([
+      expect.objectContaining({
+        id: "openjiuwen.recording-replay",
+        mode: "recording-replay",
+        credentialPolicy: "none",
+        contributedBy: "openjiuwen.model-provider",
+      }),
+    ]);
+    expect(defaultWorkbench.modelRecordings).toEqual([
+      expect.objectContaining({
+        id: "model-provider-v1-stream-and-cancel",
+        contributedBy: "openjiuwen.model-provider",
+      }),
+    ]);
     expect(defaultWorkbench.plugins.map((item) => [item.id, item.state]))
       .toEqual([
         ["openjiuwen.agent-core", "enabled"],
+        ["openjiuwen.model-provider", "enabled"],
         ["openjiuwen.jiuwenswarm", "enabled"],
         ["openjiuwen.integration", "enabled"],
         ["openjiuwen.deterministic-replay", "enabled"],
@@ -57,6 +72,9 @@ describe("visualization plugin registry", () => {
     ]);
     expect(defaultWorkbench.capabilities["trace.context.ownership"]).toEqual([
       "openjiuwen.jiuwenswarm",
+    ]);
+    expect(defaultWorkbench.capabilities["runtime.model.recording.v1"]).toEqual([
+      "openjiuwen.model-provider",
     ]);
     expect(defaultWorkbench.graph.nodes.find((node) => node.id === "model"))
       .toMatchObject({
@@ -76,6 +94,7 @@ describe("visualization plugin registry", () => {
 
     expect(status).toEqual({
       "openjiuwen.agent-core": "disabled",
+      "openjiuwen.model-provider": "blocked",
       "openjiuwen.jiuwenswarm": "enabled",
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",

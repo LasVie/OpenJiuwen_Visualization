@@ -19,6 +19,9 @@ export const CORE_RUNTIME_EVENT_KINDS = [
   "agent.task_iteration",
   "agent.react_iteration",
   "model.call",
+  "model.stream",
+  "model.usage",
+  "model.cancel",
   "tool.call",
   "rail.chain",
   "rail.hook",
@@ -89,6 +92,40 @@ export interface RuntimeTokenState {
   budget?: number;
 }
 
+export interface RuntimeModelUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedInputTokens?: number;
+  reasoningTokens?: number;
+  costMicros?: number;
+  currency?: string;
+}
+
+export interface RuntimeModelBudget {
+  maxInputTokens?: number;
+  maxOutputTokens?: number;
+  maxTotalTokens?: number;
+  maxCostMicros?: number;
+  currency?: string;
+}
+
+/** Provider-neutral evidence attached to model.* events. Prompt text stays in Context. */
+export interface RuntimeModelObservation {
+  invocationId: string;
+  providerId: string;
+  modelId: string;
+  source: "live" | "recording";
+  recordingId?: string;
+  recordingSequence?: number;
+  delta?: string;
+  responseText?: string;
+  finishReason?: string;
+  cancelReason?: string;
+  usage?: RuntimeModelUsage;
+  budget?: RuntimeModelBudget;
+}
+
 export interface RuntimeContextMessage {
   id: string;
   role: ContextRole;
@@ -141,6 +178,7 @@ export interface RuntimeTraceEventInput<
   token?: RuntimeTokenState;
   context?: RuntimeContextDelta;
   hook?: RuntimeHookObservation;
+  model?: RuntimeModelObservation;
   subject?: RuntimeSubjectReference;
   definition?: GraphSourceReference;
   payload?: Readonly<Record<string, JsonValue>>;

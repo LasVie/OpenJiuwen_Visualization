@@ -161,6 +161,21 @@ const EVENT_PRESENTATION: Record<
     title: "成员模型调用",
     summary: "指定执行主体调用模型。",
   },
+  "model.stream": {
+    phase: "Model stream",
+    title: "成员模型输出增量",
+    summary: "指定执行主体接收一个结构化模型流增量。",
+  },
+  "model.usage": {
+    phase: "Model usage",
+    title: "成员模型用量",
+    summary: "指定执行主体收到 Provider 用量或费用更新。",
+  },
+  "model.cancel": {
+    phase: "Model cancel",
+    title: "成员模型调用取消",
+    summary: "指定执行主体的模型调用被显式取消。",
+  },
   "tool.call": {
     phase: "Tool",
     title: "成员工具调用",
@@ -323,6 +338,14 @@ function runtimeDetails(event: RuntimeTraceEvent): TraceDetail[] {
       : []),
     ...(event.definition
       ? [{ label: "source evidence", value: "instrumented exact" }]
+      : []),
+    ...(event.model
+      ? [
+          { label: "provider", value: event.model.providerId },
+          { label: "model", value: event.model.modelId },
+          { label: "invocation", value: event.model.invocationId },
+          { label: "model source", value: event.model.source },
+        ]
       : []),
     ...payloadDetails,
     ...(event.details ?? []),

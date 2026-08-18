@@ -73,6 +73,7 @@ repository@revision:path:symbol
 |---|---|
 | `openjiuwen.agent-core` | DeepAgent、ReAct、Context、Model、Tool、Rail |
 | `openjiuwen.jiuwenswarm` | Swarm 请求/响应定义与 Team/Workflow/Subagent Runtime |
+| `openjiuwen.model-provider` | Provider 流、用量、取消与确定性录制回放 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务与静态定义图客户端，默认关闭 |
@@ -169,3 +170,9 @@ subject.id + subject.kind + subject.parentId
 `features/swarm-runtime/model.ts` 只从显式 subject、payload relation 和 Context owner 投影，不从标签猜层级。静态源码路径仅标记为 `inferred`；生产者提供 `definition` 时才标记 `exact`。宏观视图只展示骨架、用户展开分支与当前活跃祖先链，微观视图展示当前步骤前已出现的全部主体。
 
 对 `jiuwenswarm` 的只读检视确认了两个真实边界：`TeamMonitorHandler` 输出 member/task/message，`WorkflowMonitorHandler` 聚合 WorkflowProgress 的 workflow/phase/agent/human。上游 `WorkflowAgentActivity` 当前明确保留 tool-call 字段但尚无结构化数据，因此 V1 不从日志、prompt 或 outcome 构造虚假 Tool 节点。完整协议见 [`swarm-runtime-v1.md`](swarm-runtime-v1.md)。
+
+## Model Provider V1
+
+Model Provider 作为独立插件注册 adapter 与确定性 recording，不把厂商 SDK 或凭据带入 React。Runtime 协议在 `model.call` 基础上增加 `model.stream`、`model.usage` 和 `model.cancel`，并用稳定 `invocationId` 把输出 delta、Token/费用、预算、结束原因和取消原因归并到同一次调用。
+
+`features/model-runtime/` 按当前 Trace sequence 重建调用，因此上一步不会看到未来 delta。输出默认脱敏，完整输出需要显式展开；费用以整数微单位保存，页面不推断价格。默认 recording 通过同一个 loopback 内存 Trace endpoint 加载，验证整条 Provider 观测链但不执行真实模型请求。实时 Provider、密钥来源与取消实现必须留在本地服务 adapter，完整合同见 [`model-provider-v1.md`](model-provider-v1.md)。

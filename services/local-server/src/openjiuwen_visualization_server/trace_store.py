@@ -21,6 +21,9 @@ CORE_EVENT_KINDS = frozenset(
         "agent.task_iteration",
         "agent.react_iteration",
         "model.call",
+        "model.stream",
+        "model.usage",
+        "model.cancel",
         "tool.call",
         "rail.chain",
         "rail.hook",
@@ -68,6 +71,7 @@ EVENT_FIELDS = frozenset(
         "token",
         "context",
         "hook",
+        "model",
         "subject",
         "definition",
         "payload",
@@ -113,6 +117,12 @@ def _finite_number(value: Any, field_name: str, *, minimum: float | None = 0) ->
     if not math.isfinite(value) or (minimum is not None and value < minimum):
         constraint = "finite" if minimum is None else f"finite and >= {minimum}"
         raise TraceStoreError("invalid_event", f"{field_name} must be {constraint}.")
+    return value
+
+
+def _non_negative_integer(value: Any, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise TraceStoreError("invalid_event", f"{field_name} must be a non-negative integer.")
     return value
 
 
@@ -266,6 +276,109 @@ def _validate_hook(hook: Any) -> None:
         _validate_string_list(hook["examines"], "hook.examines", maximum=100)
 
 
+def _validate_model_usage(usage: Any) -> None:
+    if not isinstance(usage, dict):
+        raise TraceStoreError("invalid_event", "model.usage must be an object.")
+    allowed = {
+        "inputTokens",
+        "outputTokens",
+        "totalTokens",
+        "cachedInputTokens",
+        "reasoningTokens",
+        "costMicros",
+        "currency",
+    }
+    unknown = set(usage) - allowed
+    if unknown:
+        raise TraceStoreError("invalid_event", f"model.usage contains unsupported field: {sorted(unknown)[0]}")
+    for field_name in ("inputTokens", "outputTokens", "totalTokens"):
+        usage[field_name] = _non_negative_integer(usage.get(field_name), f"model.usage.{field_name}")
+    for field_name in ("cachedInputTokens", "reasoningTokens", "costMicros"):
+        if field_name in usage:
+            usage[field_name] = _non_negative_integer(usage[field_name], f"model.usage.{field_name}")
+    if "currency" in usage:
+        usage["currency"] = _required_text(usage["currency"], "model.usage.currency", max_length=12)
+
+
+def _validate_model_budget(budget: Any) -> None:
+    if not isinstance(budget, dict):
+        raise TraceStoreError("invalid_event", "model.budget must be an object.")
+    allowed = {
+        "maxInputTokens",
+        "maxOutputTokens",
+        "maxTotalTokens",
+        "maxCostMicros",
+        "currency",
+    }
+    unknown = set(budget) - allowed
+    if unknown:
+        raise TraceStoreError("invalid_event", f"model.budget contains unsupported field: {sorted(unknown)[0]}")
+    for field_name in ("maxInputTokens", "maxOutputTokens", "maxTotalTokens", "maxCostMicros"):
+        if field_name in budget:
+            budget[field_name] = _non_negative_integer(budget[field_name], f"model.budget.{field_name}")
+    if "currency" in budget:
+        budget["currency"] = _required_text(budget["currency"], "model.budget.currency", max_length=12)
+
+
+def _validate_model(model: Any, kind: str) -> None:
+    if not isinstance(model, dict):
+        raise TraceStoreError("invalid_event", "model must be an object.")
+    allowed = {
+        "invocationId",
+        "providerId",
+        "modelId",
+        "source",
+        "recordingId",
+        "recordingSequence",
+        "delta",
+        "responseText",
+        "finishReason",
+        "cancelReason",
+        "usage",
+        "budget",
+    }
+    unknown = set(model) - allowed
+    if unknown:
+        raise TraceStoreError("invalid_event", f"model contains unsupported field: {sorted(unknown)[0]}")
+    for field_name in ("invocationId", "providerId", "modelId"):
+        model[field_name] = _required_text(model.get(field_name), f"model.{field_name}")
+    source = _required_text(model.get("source"), "model.source", max_length=20)
+    if source not in {"live", "recording"}:
+        raise TraceStoreError("invalid_event", "model.source must be live or recording.")
+    model["source"] = source
+    for field_name, max_length in {
+        "recordingId": 240,
+        "finishReason": 240,
+        "cancelReason": 4_000,
+    }.items():
+        if field_name in model:
+            model[field_name] = _required_text(model[field_name], f"model.{field_name}", max_length=max_length)
+    for field_name in ("delta", "responseText"):
+        if field_name in model:
+            value = model[field_name]
+            if not isinstance(value, str) or len(value) > 1_000_000:
+                raise TraceStoreError("invalid_event", f"model.{field_name} must be a string of at most 1000000 characters.")
+    if "recordingSequence" in model:
+        value = model["recordingSequence"]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise TraceStoreError("invalid_event", "model.recordingSequence must be a non-negative integer.")
+    if "usage" in model:
+        _validate_model_usage(model["usage"])
+    if "budget" in model:
+        _validate_model_budget(model["budget"])
+    if source == "recording" and ("recordingId" not in model or "recordingSequence" not in model):
+        raise TraceStoreError(
+            "invalid_event",
+            "Recorded model events require model.recordingId and model.recordingSequence.",
+        )
+    if kind == "model.stream" and "delta" not in model:
+        raise TraceStoreError("invalid_event", "model.stream events require model.delta.")
+    if kind == "model.usage" and "usage" not in model:
+        raise TraceStoreError("invalid_event", "model.usage events require model.usage.")
+    if kind == "model.cancel" and "cancelReason" not in model:
+        raise TraceStoreError("invalid_event", "model.cancel events require model.cancelReason.")
+
+
 def _validate_definition(definition: Any) -> None:
     if not isinstance(definition, dict):
         raise TraceStoreError("invalid_event", "definition must be an object.")
@@ -336,10 +449,14 @@ def _validate_event(raw_event: Any) -> dict[str, Any]:
         _validate_context(event["context"])
     if "hook" in event:
         _validate_hook(event["hook"])
+    if "model" in event:
+        _validate_model(event["model"], kind)
     if "subject" in event:
         _validate_subject(event["subject"])
     if kind == "rail.hook" and "hook" not in event:
         raise TraceStoreError("invalid_event", "rail.hook events require hook evidence.")
+    if kind in {"model.stream", "model.usage", "model.cancel"} and "model" not in event:
+        raise TraceStoreError("invalid_event", f"{kind} events require model evidence.")
     if "definition" in event:
         _validate_definition(event["definition"])
     if "payload" in event:
@@ -378,6 +495,8 @@ class _TraceSession:
     event_ids: set[str] = field(default_factory=set)
     event_bytes: int = 0
     subject_shapes: dict[str, tuple[str, str | None, str | None]] = field(default_factory=dict)
+    model_shapes: dict[str, tuple[str, str, str, str | None]] = field(default_factory=dict)
+    recording_sequences: dict[str, int] = field(default_factory=dict)
 
     def metadata(self) -> dict[str, Any]:
         return {
@@ -529,6 +648,37 @@ class RuntimeTraceStore:
                     existing[2] or incoming[2],
                 )
 
+            next_model_shapes = dict(session.model_shapes)
+            next_recording_sequences = dict(session.recording_sequences)
+            for event in unique:
+                model = event.get("model")
+                if not model:
+                    continue
+                invocation_id = model["invocationId"]
+                incoming_shape = (
+                    model["providerId"],
+                    model["modelId"],
+                    model["source"],
+                    model.get("recordingId"),
+                )
+                existing_shape = next_model_shapes.get(invocation_id)
+                if existing_shape is not None and existing_shape != incoming_shape:
+                    raise TraceStoreError(
+                        "invalid_event",
+                        f"model invocation {invocation_id} changed provider, model, source, or recording within one trace.",
+                    )
+                next_model_shapes[invocation_id] = incoming_shape
+                if model["source"] == "recording":
+                    recording_id = model["recordingId"]
+                    recording_sequence = model["recordingSequence"]
+                    previous_sequence = next_recording_sequences.get(recording_id, -1)
+                    if recording_sequence <= previous_sequence:
+                        raise TraceStoreError(
+                            "invalid_event",
+                            f"model recording {recording_id} frame sequence must increase monotonically.",
+                        )
+                    next_recording_sequences[recording_id] = recording_sequence
+
             for subject_id in next_subject_shapes:
                 cursor: str | None = subject_id
                 seen_subjects: set[str] = set()
@@ -572,6 +722,8 @@ class RuntimeTraceStore:
                 raise TraceStoreError("trace_total_byte_limit", "The global trace byte limit has been reached.", status=413)
 
             session.subject_shapes = next_subject_shapes
+            session.model_shapes = next_model_shapes
+            session.recording_sequences = next_recording_sequences
             accepted: list[dict[str, Any]] = []
             for event, encoded_size in zip(unique, encoded_sizes):
                 now = self._clock()

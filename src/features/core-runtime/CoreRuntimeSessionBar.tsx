@@ -4,6 +4,7 @@ import {
   KeyRound,
   Plus,
   Radio,
+  RotateCcw,
   Server,
 } from "lucide-react";
 import type { CreatedRuntimeTrace, RuntimeTraceSession } from "../../kernel";
@@ -15,6 +16,10 @@ interface CoreRuntimeSessionBarProps {
   connection: CoreRuntimeConnectionState;
   error: string | null;
   onCreate: () => void;
+  onLoadRecording: () => void;
+  recordingLabel: string;
+  recordingLoading: boolean;
+  recordingError: string | null;
 }
 
 const connectionLabel: Record<CoreRuntimeConnectionState, string> = {
@@ -32,6 +37,10 @@ export function CoreRuntimeSessionBar({
   connection,
   error,
   onCreate,
+  onLoadRecording,
+  recordingLabel,
+  recordingLoading,
+  recordingError,
 }: CoreRuntimeSessionBarProps) {
   return (
     <section className="core-runtime-session" aria-label="Core Runtime Trace 会话">
@@ -71,6 +80,17 @@ export function CoreRuntimeSessionBar({
           </div>
         </details>
       ) : null}
+
+      <button
+        type="button"
+        className="core-runtime-session__replay"
+        onClick={onLoadRecording}
+        disabled={connection === "creating" || recordingLoading}
+        title={recordingError ?? `载入：${recordingLabel}`}
+      >
+        <RotateCcw size={14} strokeWidth={2} aria-hidden="true" />
+        {recordingLoading ? "载入中" : "模型录制"}
+      </button>
 
       <button
         type="button"

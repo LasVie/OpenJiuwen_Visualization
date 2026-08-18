@@ -98,6 +98,21 @@ const EVENT_PRESENTATION: Record<
     title: "模型调用",
     summary: "最终 ContextWindow 被发送给模型并接收响应。",
   },
+  "model.stream": {
+    phase: "Model stream",
+    title: "模型输出增量",
+    summary: "Provider 返回一个结构化流式文本增量。",
+  },
+  "model.usage": {
+    phase: "Model usage",
+    title: "模型用量更新",
+    summary: "Provider 报告输入、输出、缓存、推理 Token 或费用。",
+  },
+  "model.cancel": {
+    phase: "Model cancel",
+    title: "模型调用取消",
+    summary: "模型调用收到显式取消信号并记录原因。",
+  },
   "tool.call": {
     phase: "Tool",
     title: "工具调用",
@@ -175,6 +190,10 @@ function inferredNodeIds(event: CoreRuntimeEvent) {
       return ["react-loop", "decision"];
     case "model.call":
       return event.phase === "start" ? ["context", "model"] : ["model", "decision"];
+    case "model.stream":
+    case "model.usage":
+    case "model.cancel":
+      return ["model"];
     case "tool.call":
       return event.phase === "end" ? ["tool", "context"] : ["decision", "tool"];
     case "context.snapshot":
@@ -276,6 +295,14 @@ function runtimeDetails(event: CoreRuntimeEvent): TraceDetail[] {
       : []),
     ...(event.hook
       ? [{ label: "rail evidence", value: event.hook.exact ? "instrumented exact" : "callback boundary" }]
+      : []),
+    ...(event.model
+      ? [
+          { label: "provider", value: event.model.providerId },
+          { label: "model", value: event.model.modelId },
+          { label: "invocation", value: event.model.invocationId },
+          { label: "source", value: event.model.source },
+        ]
       : []),
     ...(event.details ?? []),
   ];

@@ -91,7 +91,7 @@ export function useRuntimeTraceSession({
           { owner, label, maxTokens },
           abort.signal,
         );
-        if (abort.signal.aborted) return;
+        if (abort.signal.aborted) return null;
         if (nextCreated.trace.owner !== owner) {
           throw new TypeError(
             `Runtime trace owner mismatch: expected ${owner}, received ${nextCreated.trace.owner}.`,
@@ -141,11 +141,13 @@ export function useRuntimeTraceSession({
           setTrace((current) => mergeTraceSession(current, initial.trace));
           setEvents((current) => mergeEvents(current, initial.events));
         }
+        return abort.signal.aborted ? null : nextCreated;
       } catch (caught) {
-        if (abort.signal.aborted) return;
+        if (abort.signal.aborted) return null;
         closeStream();
         setConnection("failed");
         setError(caught instanceof Error ? caught.message : "无法创建本地 Trace 会话。");
+        return null;
       }
     },
     [client, closeStream, maxTokens, owner],

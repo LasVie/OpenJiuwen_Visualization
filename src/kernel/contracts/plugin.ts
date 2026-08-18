@@ -1,6 +1,12 @@
 import type { TraceScenario } from "./trace";
 import type { RegisteredRuntimeSource, RuntimeSourceDefinition } from "./runtime";
 import type { GraphContribution, GraphSnapshot } from "./graph";
+import type {
+  ModelProviderDefinition,
+  ModelRuntimeRecording,
+  RegisteredModelProvider,
+  RegisteredModelRuntimeRecording,
+} from "./model-provider";
 
 export const PLUGIN_API_VERSION = "1.0.0" as const;
 
@@ -19,6 +25,8 @@ export interface VisualizationPluginContribution {
   graph?: GraphContribution;
   scenarios?: readonly TraceScenario[];
   runtimeSources?: readonly RuntimeSourceDefinition[];
+  modelProviders?: readonly ModelProviderDefinition[];
+  modelRecordings?: readonly ModelRuntimeRecording[];
 }
 
 export interface VisualizationPlugin {
@@ -46,6 +54,8 @@ export interface WorkbenchSnapshot {
   graph: GraphSnapshot;
   scenarios: readonly RegisteredTraceScenario[];
   runtimeSources: readonly RegisteredRuntimeSource[];
+  modelProviders: readonly RegisteredModelProvider[];
+  modelRecordings: readonly RegisteredModelRuntimeRecording[];
   plugins: readonly ResolvedPluginStatus[];
   capabilities: Readonly<Record<string, readonly string[]>>;
 }

@@ -164,4 +164,60 @@ describe("CoreRuntimeClient", () => {
 
     await expect(client.getSnapshot(trace.id)).rejects.toThrow(/Runtime Trace V1/);
   });
+
+  it("validates structured recorded model frames before projection", async () => {
+    const modelFrame = {
+      invocationId: "invoke-1",
+      providerId: "provider.demo",
+      modelId: "model.demo",
+      source: "recording",
+      recordingId: "recording-1",
+      recordingSequence: 0,
+      delta: "recorded output",
+    };
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      jsonResponse({
+        apiVersion: "1.0.0",
+        trace: { ...trace, eventCount: 1, lastSequence: 1 },
+        events: [
+          {
+            eventId: "model-stream-1",
+            traceId: trace.id,
+            sequence: 1,
+            receivedAt: "2026-08-18T00:00:01Z",
+            kind: "model.stream",
+            phase: "instant",
+            timestampMs: 10,
+            spanId: "model-1",
+            model: modelFrame,
+          },
+        ],
+        storage: "memory-only",
+      }));
+    const client = new CoreRuntimeClient({ fetcher: fetcher as typeof fetch });
+
+    await expect(client.getSnapshot(trace.id)).resolves.toMatchObject({
+      events: [{ kind: "model.stream", model: { delta: "recorded output" } }],
+    });
+
+    fetcher.mockImplementationOnce(async () => jsonResponse({
+      apiVersion: "1.0.0",
+      trace: { ...trace, eventCount: 1, lastSequence: 1 },
+      events: [
+        {
+          eventId: "model-stream-bad",
+          traceId: trace.id,
+          sequence: 1,
+          receivedAt: "2026-08-18T00:00:01Z",
+          kind: "model.stream",
+          phase: "instant",
+          timestampMs: 10,
+          spanId: "model-1",
+          model: { ...modelFrame, delta: undefined },
+        },
+      ],
+      storage: "memory-only",
+    }));
+    await expect(client.getSnapshot(trace.id)).rejects.toThrow(/Runtime Trace V1/);
+  });
 });

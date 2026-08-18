@@ -45,6 +45,10 @@ function finiteNumber(value: unknown, minimum?: number) {
   );
 }
 
+function nonNegativeInteger(value: unknown) {
+  return Number.isInteger(value) && Number(value) >= 0;
+}
+
 function stringArray(value: unknown) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
@@ -109,6 +113,55 @@ function validHook(value: unknown) {
     (value.noop === undefined || typeof value.noop === "boolean") &&
     typeof value.exact === "boolean" &&
     (value.examines === undefined || stringArray(value.examines))
+  );
+}
+
+function validModelUsage(value: unknown) {
+  return (
+    isRecord(value) &&
+    nonNegativeInteger(value.inputTokens) &&
+    nonNegativeInteger(value.outputTokens) &&
+    nonNegativeInteger(value.totalTokens) &&
+    (value.cachedInputTokens === undefined || nonNegativeInteger(value.cachedInputTokens)) &&
+    (value.reasoningTokens === undefined || nonNegativeInteger(value.reasoningTokens)) &&
+    (value.costMicros === undefined || nonNegativeInteger(value.costMicros)) &&
+    (value.currency === undefined || typeof value.currency === "string")
+  );
+}
+
+function validModelBudget(value: unknown) {
+  return (
+    isRecord(value) &&
+    (value.maxInputTokens === undefined || nonNegativeInteger(value.maxInputTokens)) &&
+    (value.maxOutputTokens === undefined || nonNegativeInteger(value.maxOutputTokens)) &&
+    (value.maxTotalTokens === undefined || nonNegativeInteger(value.maxTotalTokens)) &&
+    (value.maxCostMicros === undefined || nonNegativeInteger(value.maxCostMicros)) &&
+    (value.currency === undefined || typeof value.currency === "string")
+  );
+}
+
+function validModel(value: unknown, kind: unknown) {
+  if (!isRecord(value)) return false;
+  const recorded = value.source === "recording";
+  return (
+    typeof value.invocationId === "string" &&
+    typeof value.providerId === "string" &&
+    typeof value.modelId === "string" &&
+    (value.source === "live" || recorded) &&
+    (value.recordingId === undefined || typeof value.recordingId === "string") &&
+    (value.recordingSequence === undefined ||
+      (Number.isInteger(value.recordingSequence) && Number(value.recordingSequence) >= 0)) &&
+    (!recorded ||
+      (typeof value.recordingId === "string" && Number.isInteger(value.recordingSequence))) &&
+    (value.delta === undefined || typeof value.delta === "string") &&
+    (value.responseText === undefined || typeof value.responseText === "string") &&
+    (value.finishReason === undefined || typeof value.finishReason === "string") &&
+    (value.cancelReason === undefined || typeof value.cancelReason === "string") &&
+    (value.usage === undefined || validModelUsage(value.usage)) &&
+    (value.budget === undefined || validModelBudget(value.budget)) &&
+    (kind !== "model.stream" || typeof value.delta === "string") &&
+    (kind !== "model.usage" || validModelUsage(value.usage)) &&
+    (kind !== "model.cancel" || typeof value.cancelReason === "string")
   );
 }
 
@@ -178,8 +231,11 @@ function runtimeEvent(value: unknown): RuntimeTraceEvent {
     (value.token !== undefined && !validToken(value.token)) ||
     (value.context !== undefined && !validContext(value.context)) ||
     (value.hook !== undefined && !validHook(value.hook)) ||
+    (value.model !== undefined && !validModel(value.model, value.kind)) ||
     (value.subject !== undefined && !validSubject(value.subject)) ||
     (value.kind === "rail.hook" && !validHook(value.hook)) ||
+    (["model.stream", "model.usage", "model.cancel"].includes(String(value.kind)) &&
+      !validModel(value.model, value.kind)) ||
     (value.definition !== undefined && !validDefinition(value.definition)) ||
     (value.payload !== undefined && !isRecord(value.payload))
   ) {

@@ -14,6 +14,10 @@ import {
   type WorkbenchSnapshot,
 } from "./contracts/plugin";
 import type { RegisteredRuntimeSource } from "./contracts/runtime";
+import type {
+  RegisteredModelProvider,
+  RegisteredModelRuntimeRecording,
+} from "./contracts/model-provider";
 
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 
@@ -29,6 +33,8 @@ export class PluginRegistryError extends Error {
       | "duplicate-edge"
       | "duplicate-scenario"
       | "duplicate-runtime-source"
+      | "duplicate-model-provider"
+      | "duplicate-model-recording"
       | "dangling-edge"
       | "invalid-scenario-reference",
   ) {
@@ -75,10 +81,14 @@ export class VisualizationPluginRegistry {
     const edges: RegisteredGraphEdge[] = [];
     const scenarios: RegisteredTraceScenario[] = [];
     const runtimeSources: RegisteredRuntimeSource[] = [];
+    const modelProviders: RegisteredModelProvider[] = [];
+    const modelRecordings: RegisteredModelRuntimeRecording[] = [];
     const nodeIds = new Set<string>();
     const edgeIds = new Set<string>();
     const scenarioIds = new Set<string>();
     const runtimeSourceIds = new Set<string>();
+    const modelProviderIds = new Set<string>();
+    const modelRecordingIds = new Set<string>();
     const capabilities = new Map<string, string[]>();
 
     orderedPlugins.forEach((plugin) => {
@@ -108,6 +118,14 @@ export class VisualizationPluginRegistry {
         this.assertUnique(runtimeSourceIds, source.id, "runtime-source", pluginId);
         runtimeSources.push({ ...source, contributedBy: pluginId });
       });
+      (contribution.modelProviders ?? []).forEach((provider) => {
+        this.assertUnique(modelProviderIds, provider.id, "model-provider", pluginId);
+        modelProviders.push({ ...provider, contributedBy: pluginId });
+      });
+      (contribution.modelRecordings ?? []).forEach((recording) => {
+        this.assertUnique(modelRecordingIds, recording.id, "model-recording", pluginId);
+        modelRecordings.push({ ...recording, contributedBy: pluginId });
+      });
     });
 
     this.validateEdges(edges, nodeIds);
@@ -122,6 +140,8 @@ export class VisualizationPluginRegistry {
       },
       scenarios,
       runtimeSources,
+      modelProviders,
+      modelRecordings,
       plugins: statuses,
       capabilities: Object.fromEntries(capabilities),
     };
@@ -202,7 +222,13 @@ export class VisualizationPluginRegistry {
   private assertUnique(
     ids: Set<string>,
     id: string,
-    entity: "node" | "edge" | "scenario" | "runtime-source",
+    entity:
+      | "node"
+      | "edge"
+      | "scenario"
+      | "runtime-source"
+      | "model-provider"
+      | "model-recording",
     pluginId: string,
   ) {
     if (ids.has(id)) {
@@ -210,7 +236,9 @@ export class VisualizationPluginRegistry {
         | "duplicate-node"
         | "duplicate-edge"
         | "duplicate-scenario"
-        | "duplicate-runtime-source";
+        | "duplicate-runtime-source"
+        | "duplicate-model-provider"
+        | "duplicate-model-recording";
       throw new PluginRegistryError(
         `${entity} "${id}" contributed by "${pluginId}" is duplicated.`,
         code,
