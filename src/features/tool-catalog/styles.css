@@ -503,6 +503,7 @@
 .tool-inspector__source > span { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-soft); font-size: 8px; font-weight: 700; }
 .tool-inspector__source code { margin-top: 7px; overflow-wrap: anywhere; color: var(--muted); font-size: 7px; line-height: 1.45; }
 .tool-inspector__source small { margin-top: 5px; color: var(--core); font-family: var(--mono); font-size: 7px; }
+.tool-inspector__source .source-viewer-trigger { width: fit-content; margin-top: 8px; }
 
 .tool-inspector--empty {
   display: grid;

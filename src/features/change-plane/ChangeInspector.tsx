@@ -7,6 +7,7 @@ import {
   Link2,
 } from "lucide-react";
 import type { NodeChangeImpact } from "../../kernel";
+import { SourceViewer } from "../source-viewer";
 import type { ChangeImpactProjection } from "./model";
 
 interface ChangeInspectorProps {
@@ -97,6 +98,10 @@ export function ChangeInspector({
               <div className="change-source-evidence">
                 <code>{source.path}{source.symbol ? `:${source.symbol}` : ""}</code>
                 <span>{source.startLine ? `L${source.startLine}${source.endLine ? `–${source.endLine}` : ""}` : "file"}</span>
+                <SourceViewer
+                  repositoryPath={projection.changes.repository.path}
+                  source={source}
+                />
               </div>
             ) : null}
           </section>

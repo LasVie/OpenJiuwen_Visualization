@@ -40,6 +40,7 @@ python -B services/local-server/scripts/scan_repository.py `
 - 全局符号/源码路径搜索、类型过滤和大层级分页；
 - `contains`、`imports`、`inherits` 关系与源码行证据；
 - 节点详情、拖拽、实时防重叠、磁性调节、缩放和缩略图。
+- 在 Definition、Change 与 Tool 详情中按需打开统一源码证据窗口，查看聚焦行、当前工作树状态、revision 对齐和内容哈希。
 
 页面每次只投影当前焦点和有限数量的子节点，不会把完整仓库的数千节点同时交给 ReactFlow。
 
@@ -48,6 +49,8 @@ python -B services/local-server/scripts/scan_repository.py `
 “定义图 → Tool 注册表”会只读识别 `@tool`、Tool 子类、顶层 `ToolCard` 与 Ability/Resource 注册调用，并把信息拆成“声明 → 静态注册路径 → 当前 Trace 运行确认”三层。Core 与 Swarm 使用不同卡片色，同时保留文字来源与状态；点击任一 Tool 或注册点可查看 card metadata、目标表达式、置信度和源码行。静态已关联不等于运行时已注册，只有显式 `ability.register` 事件会显示为本次运行已观察。
 
 完整扫描合同、API、证据等级和限制见 [`docs/tool-catalog-v1.md`](docs/tool-catalog-v1.md)。
+
+源码窗口的路径边界、行范围和工作树语义见 [`docs/source-evidence-v1.md`](docs/source-evidence-v1.md)。
 
 ## Core Runtime
 
@@ -111,6 +114,7 @@ src/
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
 │  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期
+│  ├─ source-viewer/           # Definition/Change/Tool 共享只读源码窗口
 │  ├─ swarm-runtime/           # Swarm 层级、主体 Context 与动态画布
 │  ├─ subagent-runtime/        # Subagent 派发、隔离 session 与内部执行画布
 │  ├─ tool-catalog/            # Tool 声明、注册路径与 Runtime 观察画布

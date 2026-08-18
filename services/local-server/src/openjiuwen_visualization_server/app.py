@@ -21,6 +21,7 @@ from .github_pull_requests import (
     GitHubPullRequestReference,
 )
 from .repository import RepositoryResolutionError, RepositoryResolver
+from .source_reader import SourceReadError, SourceReadOptions, SourceReader
 from .scanner import (
     PythonRepositoryScanner,
     ScanOptions,
@@ -76,6 +77,7 @@ class LocalRepositoryApi:
         trace_store: RuntimeTraceStore | None = None,
         change_inspector: GitChangeInspector | None = None,
         github_pull_request_inspector: GitHubPullRequestInspector | None = None,
+        source_reader: SourceReader | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -86,6 +88,7 @@ class LocalRepositoryApi:
         self._github_pull_request_inspector = (
             github_pull_request_inspector or GitHubPullRequestInspector()
         )
+        self._source_reader = source_reader or SourceReader()
 
     def dispatch(
         self,
@@ -111,6 +114,7 @@ class LocalRepositoryApi:
                     "capabilities": [
                         "repository.read",
                         "repository.tools.read",
+                        "repository.source.read",
                         "git.change.read",
                         "github.pull-request.read",
                         "trace.ephemeral",
@@ -132,6 +136,8 @@ class LocalRepositoryApi:
             )
         if method == "POST" and route == "/api/v1/repositories/scan":
             return self._scan(body or {})
+        if method == "POST" and route == "/api/v1/repositories/source":
+            return self._source(body or {})
         if method == "POST" and route == "/api/v1/repositories/tools":
             return self._tool_catalog(body or {})
         if method == "POST" and route == "/api/v1/repositories/changes":
@@ -247,6 +253,77 @@ class LocalRepositoryApi:
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 "scan_failed",
                 "Repository scan failed without modifying the target repository.",
+            )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _source(self, body: dict[str, Any]) -> ApiResponse:
+        repository_path = body.get("path")
+        relative_path = body.get("relativePath")
+        if not isinstance(repository_path, str) or not repository_path.strip():
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_path", "path must be a non-empty string.")
+        if not isinstance(relative_path, str) or not relative_path.strip():
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_source_path",
+                "relativePath must be a non-empty string.",
+            )
+        start_line = body.get("startLine")
+        end_line = body.get("endLine")
+        revision = body.get("revision")
+        if start_line is not None and (isinstance(start_line, bool) or not isinstance(start_line, int)):
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_source_range",
+                "startLine must be an integer.",
+            )
+        if end_line is not None and (isinstance(end_line, bool) or not isinstance(end_line, int)):
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_source_range",
+                "endLine must be an integer.",
+            )
+        if revision is not None and not isinstance(revision, str):
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_source_revision",
+                "revision must be a string.",
+            )
+        raw_options = body.get("options", {})
+        if not isinstance(raw_options, dict):
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_options", "options must be an object.")
+
+        try:
+            identity = self._resolver.resolve(repository_path)
+            result = self._source_reader.read(
+                identity,
+                relative_path,
+                start_line=start_line,
+                end_line=end_line,
+                requested_revision=revision,
+                options=SourceReadOptions(
+                    context_lines=_integer_option(raw_options, "contextLines", 6),
+                    max_lines=_integer_option(raw_options, "maxLines", 240),
+                    max_file_bytes=_integer_option(
+                        raw_options,
+                        "maxFileBytes",
+                        2_000_000,
+                    ),
+                ),
+            )
+        except PathAccessError as exc:
+            return _error(HTTPStatus.FORBIDDEN, "path_not_allowed", str(exc))
+        except RepositoryResolutionError as exc:
+            return _error(HTTPStatus.UNPROCESSABLE_ENTITY, "repository_unavailable", str(exc))
+        except SourceReadError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        except ValueError as exc:
+            return _error(HTTPStatus.BAD_REQUEST, "invalid_options", str(exc))
+        except Exception:
+            LOGGER.exception("Source excerpt read failed")
+            return _error(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "source_read_failed",
+                "Source excerpt read failed without modifying the target repository.",
             )
         return ApiResponse(HTTPStatus.OK, result)
 

@@ -52,6 +52,7 @@ class LocalRepositoryApiTests(unittest.TestCase):
         self.assertGreater(scan.body["statistics"]["nodes"], 5)
         self.assertEqual(scan.body["repository"]["scanScope"], str(FIXTURE_ROOT))
         self.assertIn("repository.tools.read", health.body["capabilities"])
+        self.assertIn("repository.source.read", health.body["capabilities"])
         self.assertIn("github.pull-request.read", health.body["capabilities"])
 
     def test_reports_static_tool_catalog_without_importing_target_code(self) -> None:
@@ -69,6 +70,28 @@ class LocalRepositoryApiTests(unittest.TestCase):
         self.assertTrue(
             any(tool["name"] == "weather_lookup" for tool in catalog.body["tools"])
         )
+
+    def test_reads_a_bounded_source_excerpt_inside_the_selected_repository(self) -> None:
+        source = self.api.dispatch(
+            "POST",
+            "/api/v1/repositories/source",
+            body={
+                "path": str(REPOSITORY_ROOT),
+                "relativePath": "services/local-server/tests/fixtures/sample_project/openjiuwen/deep_agent.py",
+                "startLine": 10,
+                "endLine": 13,
+                "revision": "not-the-current-revision",
+                "options": {"contextLines": 2, "maxLines": 30},
+            },
+            origin=ALLOWED_ORIGIN,
+        )
+
+        self.assertEqual(source.status, 200)
+        self.assertEqual(source.body["source"]["language"], "python")
+        self.assertFalse(source.body["source"]["revisionMatches"])
+        self.assertEqual(source.body["range"]["focusStartLine"], 10)
+        self.assertTrue(source.body["readOnly"])
+        self.assertFalse(source.body["writeOperations"])
 
     def test_rejects_untrusted_origins_and_paths(self) -> None:
         origin_response = self.api.dispatch(

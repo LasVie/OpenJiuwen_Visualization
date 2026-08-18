@@ -7,7 +7,11 @@ import {
   Route,
   ShieldCheck,
 } from "lucide-react";
-import type { ToolRegistrationSiteRecord } from "../../kernel";
+import type {
+  ToolCatalogSourceReference,
+  ToolRegistrationSiteRecord,
+} from "../../kernel";
+import { SourceViewer } from "../source-viewer";
 import type {
   ProjectedToolDefinition,
   ToolCatalogProjection,
@@ -39,22 +43,24 @@ const mechanismLabel: Record<ToolRegistrationSiteRecord["mechanism"], string> = 
   "ownership-helper": "register_tool(tool, owner)",
 };
 
-function SourceLocation({ path, symbol, startLine, endLine }: {
-  path: string;
-  symbol: string;
-  startLine: number;
-  endLine: number;
+function SourceLocation({ repositoryPath, source }: {
+  repositoryPath: string;
+  source: ToolCatalogSourceReference;
 }) {
   return (
     <section className="tool-inspector__source">
       <span><FileCode2 size={13} />源码证据</span>
-      <code>{path}:{symbol}</code>
-      <small>L{startLine}{endLine !== startLine ? `–${endLine}` : ""}</small>
+      <code>{source.path}:{source.symbol}</code>
+      <small>L{source.startLine}{source.endLine !== source.startLine ? `–${source.endLine}` : ""}</small>
+      <SourceViewer repositoryPath={repositoryPath} source={source} />
     </section>
   );
 }
 
-function ToolDetail({ item }: { item: ProjectedToolDefinition }) {
+function ToolDetail({ item, repositoryPath }: {
+  item: ProjectedToolDefinition;
+  repositoryPath: string;
+}) {
   const copy = stateCopy[item.state];
   const StateIcon = copy.icon;
   const card = item.tool.card;
@@ -118,7 +124,7 @@ function ToolDetail({ item }: { item: ProjectedToolDefinition }) {
           ))}
           {!item.observations.length ? <p className="tool-inspector__empty">当前 Trace 未观察到同名 ability.register。</p> : null}
         </section>
-        <SourceLocation {...item.tool.source} />
+        <SourceLocation repositoryPath={repositoryPath} source={item.tool.source} />
       </div>
     </>
   );
@@ -161,7 +167,10 @@ export function ToolCatalogInspector({
             <div><dt>candidates</dt><dd>{site.candidateNames.join(", ") || "none"}</dd></div>
             <div><dt>resolved</dt><dd>{site.resolvedToolIds.length}</dd></div>
           </dl>
-          <SourceLocation {...site.source} />
+          <SourceLocation
+            repositoryPath={projection.catalog.repository.path}
+            source={site.source}
+          />
         </div>
       </aside>
     );
@@ -188,5 +197,12 @@ export function ToolCatalogInspector({
       </aside>
     );
   }
-  return <aside className="tool-inspector"><ToolDetail item={selectedTool} /></aside>;
+  return (
+    <aside className="tool-inspector">
+      <ToolDetail
+        item={selectedTool}
+        repositoryPath={projection.catalog.repository.path}
+      />
+    </aside>
+  );
 }

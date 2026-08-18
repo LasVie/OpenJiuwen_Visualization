@@ -1,5 +1,6 @@
 import { ArrowUp, ChevronRight, Code2, GitFork, Layers3 } from "lucide-react";
 import type { JsonValue, RegisteredGraphNode } from "../../kernel";
+import { SourceViewer } from "../source-viewer";
 import type { DefinitionGraphIndex } from "./model";
 
 function renderAttribute(value: JsonValue) {
@@ -22,6 +23,7 @@ interface DefinitionInspectorProps {
   index: DefinitionGraphIndex;
   node: RegisteredGraphNode;
   focusId: string;
+  repositoryPath: string;
   onNavigate: (nodeId: string) => void;
 }
 
@@ -29,6 +31,7 @@ export function DefinitionInspector({
   index,
   node,
   focusId,
+  repositoryPath,
   onNavigate,
 }: DefinitionInspectorProps) {
   const source = node.evidence.find((evidence) => evidence.source)?.source;
@@ -67,6 +70,9 @@ export function DefinitionInspector({
             </div>
             <div><dt>revision</dt><dd><code>{source?.revision?.slice(0, 12) ?? "—"}</code></dd></div>
           </dl>
+          {source ? (
+            <SourceViewer repositoryPath={repositoryPath} source={source} />
+          ) : null}
         </section>
 
         <section className="definition-inspector__section">

@@ -111,6 +111,9 @@ describe("visualization plugin registry", () => {
     expect(defaultWorkbench.capabilities["graph.rail"]).toEqual([
       "openjiuwen.agent-core",
     ]);
+    expect(defaultWorkbench.capabilities["repository.source.read"]).toEqual([
+      "openjiuwen.local-repository",
+    ]);
     expect(defaultWorkbench.capabilities["trace.context.ownership"]).toEqual([
       "openjiuwen.jiuwenswarm",
     ]);

@@ -82,7 +82,7 @@ repository@revision:path:symbol
 | `openjiuwen.tool-catalog` | Tool 声明、静态注册路径与 `ability.register` 运行确认 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
-| `openjiuwen.local-repository` | 只读本地仓服务、静态定义图与 Git Change 客户端，默认开启 |
+| `openjiuwen.local-repository` | 只读本地仓服务、静态定义图、有界源码证据与 Git Change 客户端，默认开启 |
 
 `openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。组件不会读取 Python 对象或原始日志格式。
 
@@ -156,6 +156,12 @@ OpenJiuwen 的 Agent、Rail、Tool、Context、Workflow、Model 与 Team 目前�
 - Definition 画布复用 Trace 画布的磁吸与实时避碰算法，但位置仍是临时 View State，不写回语义图。
 
 这样单仓数千节点仍可渐进浏览，也为未来把 Runtime span、Tool registry 与 Git change 叠加到同一稳定节点保留了空间。
+
+### Source Evidence Viewer
+
+`repository.source.read` 把 Definition、Change 与 Tool 的源码引用接到同一个按需读取边界。浏览器只能提交已选 repository path、repository-relative source path 和有界行范围；服务再次校验 scan scope、链接/junction、文件类型、大小、编码和行号，再返回当前工作树的行号文本与 SHA-256。
+
+`features/source-viewer/` 拥有请求生命周期、modal、焦点、聚焦行和 revision/dirty warning，各业务 Inspector 只传 repository identity 与已有 source reference，不重复实现文件读取。历史 blob、编辑和 IDE 跳转不是该 capability 的隐式扩展。完整合同见 [`source-evidence-v1.md`](source-evidence-v1.md)。
 
 ## Registered Tools Catalog V1
 

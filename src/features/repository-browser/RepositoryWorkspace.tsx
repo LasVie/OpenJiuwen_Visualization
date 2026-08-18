@@ -438,6 +438,7 @@ export function RepositoryWorkspace({
           index={index}
           node={selectedNode}
           focusId={resolvedFocusId}
+          repositoryPath={scanResult!.repository.path}
           onNavigate={navigate}
         />
       ) : (

@@ -1144,6 +1144,8 @@
   line-height: 1.5;
 }
 
+.definition-inspector__section > .source-viewer-trigger { margin-top: 10px; }
+
 .definition-inspector__metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
