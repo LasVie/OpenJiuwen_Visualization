@@ -56,9 +56,9 @@ export function shouldExpandDeepAgent(
 }
 
 export function validateScenarios(
-  scenarios: TraceScenario[],
-  nodes: TraceNodeDefinition[],
-  edges: TraceEdgeDefinition[],
+  scenarios: readonly TraceScenario[],
+  nodes: readonly TraceNodeDefinition[],
+  edges: readonly TraceEdgeDefinition[],
 ): string[] {
   const issues: string[] = [];
   const nodeIds = new Set(nodes.map((node) => node.id));

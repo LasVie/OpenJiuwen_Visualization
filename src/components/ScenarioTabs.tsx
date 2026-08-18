@@ -2,7 +2,7 @@ import { Check, FlaskConical } from "lucide-react";
 import type { TraceScenario } from "../types/trace";
 
 interface ScenarioTabsProps {
-  scenarios: TraceScenario[];
+  scenarios: readonly TraceScenario[];
   activeId: string;
   onChange: (id: string) => void;
 }

@@ -1,8 +1,14 @@
 # Visualization Web Architecture
 
-## 目标
+## 产品边界
 
-项目会同时承载 Core 链路、Swarm 链路、真实 Trace 适配、更多 Context 视图和大量 Rail。代码按“稳定领域合同 + 独立功能 + 可替换数据源”组织，避免把业务数据、ReactFlow 布局和面板 UI 继续堆入单一文件。
+项目面向 OpenJiuwen 的代码理解、运行调试与变更影响分析。一个工作台最终组合三种相互关联的数据平面：
+
+- Definition：从仓库、配置和注册表得到的定义图。
+- Runtime：确定性回放或真实 Agent/Workflow 运行事件。
+- Change：本地 Git、commit 和 GitHub PR 的变更与影响关系。
+
+浏览器只负责交互与渲染。未来读取本地仓库、运行 Python、执行 Git 或调用模型的能力必须进入独立本地服务，不允许 React 组件直接访问凭据或执行目标仓代码。
 
 ## 依赖方向
 
@@ -10,29 +16,76 @@
 App / components
       ↓
 features ─────→ shared
-      ↓            ↓
-domain ───────→ types
+      ↓
+workbench → domain projection
+      ↓             ↓
+plugins ────────→ kernel contracts
       ↑
-data fixtures / future trace adapters
+fixtures / future adapters
 ```
 
 规则：
 
-1. `types/` 只保存跨模块稳定合同，不依赖 React。
-2. `domain/` 保存运行时来源、图定义等稳定知识，不依赖页面组件。
-3. `features/<name>/` 同时拥有该能力的模型、组件、测试和公开 `index.ts`；跨功能只从公开入口导入。
-4. `data/scenarios/` 一个轨迹一个文件；禁止重新创建巨型场景总文件。
-5. `components/` 负责页面编排和第三方库适配，不保存新的领域规则。
-6. `shared/` 只放无业务状态的复用组件；带 Rail、Context、Swarm 语义的内容必须留在对应 feature/domain。
+1. `kernel/contracts/` 保存可序列化、无 React 依赖的稳定协议。
+2. `kernel/plugin-registry.ts` 只负责插件解析、依赖、归属和跨贡献校验。
+3. `plugins/<id>/` 拥有自己的定义图、适配器或轨迹贡献，不导入其他插件内部文件。
+4. `workbench/` 选择插件集合；页面不得自行拼接插件数据。
+5. `domain/trace/projection.ts` 将通用图投影成现有 ReactFlow View Model，ReactFlow 坐标不进入通用节点顶层。
+6. `features/<name>/` 拥有该能力的模型、组件、测试和公开入口；跨功能只从公开入口导入。
+7. `data/scenarios/` 一个轨迹一个文件；禁止重新创建巨型场景总文件。
+8. `components/` 负责页面编排和第三方库适配，不保存新的领域规则。
+
+## Graph Kernel V1
+
+`GraphNodeRecord` 与 `GraphEdgeRecord` 是所有数据源的共同协议。节点至少声明：
+
+- 全局稳定 `id`、`kind`、`owner`。
+- `plane` 与 `level`，用于宏观/微观渐进展开。
+- 用户可读的 `label` 与 `summary`。
+- 可审计 `evidence`，包含来源、置信度和可选源码引用。
+- 可选 `attributes`，只保存 JSON 可序列化的领域数据。
+- 可选命名 `views`，保存某一投影视图的 renderer 与首选布局。
+
+通用图是语义权威，ReactFlow 节点只是当前 UI 的投影结果。未来同一节点可以同时投影到主链路、调用树、Context 时间轴和 PR 影响图。
+
+当前 fixture 使用短 ID 以兼容既有回放。仓库扫描器接入后，定义节点采用以下稳定来源键：
+
+```text
+repository@revision:path:symbol
+```
+
+运行节点使用 `trace_id + span_id`，并通过 SourceReference 指向定义节点；PR 节点使用 base/head revision 与 diff hunk 证据。
+
+## 插件合同
+
+每个插件提供 manifest 和纯 `contribute()`：
+
+- `id`、版本、Plugin API 版本。
+- 默认启用状态与依赖插件。
+- 能力列表，例如 `graph.definition.agent-core`、`trace.replay`。
+- 可选图节点、边和轨迹场景。
+
+注册器按依赖拓扑顺序解析插件。关闭一个插件时，依赖它的插件进入 `blocked`，不会留下悬空边或半可用场景。注册器拒绝重复 ID、缺失依赖、依赖环、悬空边和无效轨迹引用。
+
+当前默认模块：
+
+| Plugin | Responsibility |
+|---|---|
+| `openjiuwen.agent-core` | DeepAgent、ReAct、Context、Model、Tool、Rail |
+| `openjiuwen.jiuwenswarm` | Swarm 请求与响应边界 |
+| `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
+| `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
+
+后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
 
 ## Trace 来源语义
 
-每个 Stage/Rail 必须声明 `owner`：
+当前 Trace 投影只支持两个运行时 owner：
 
 - `agent-core`：Agent、ReAct、Context、Model、Tool、Rail 和 Hook 执行。
 - `jiuwenswarm`：Channel/Server 请求边界、会话宿主、Swarm 装配、调度和响应出口。
 
-颜色只是辅助线索；所有节点还必须显示文字 Badge，避免仅靠颜色表达来源。
+颜色只是辅助线索；所有节点还必须显示文字 Badge，避免仅靠颜色表达来源。Git、模型 Provider 和其他 owner 可以先存在于通用图中，只有相应 View 支持后才投影到主链路。
 
 ## Rail 审查合同
 
@@ -53,11 +106,17 @@ data fixtures / future trace adapters
 ## 新增确定性场景
 
 1. 在 `data/scenarios/` 创建独立文件，并使用 `data/fixtures/builders.ts`。
-2. 在 `data/scenarios.ts` 注册场景，不在索引文件放大段 fixture。
-3. 所有 `activeNodeIds`、`activeEdgeIds` 必须存在于 `domain/trace/graph.ts`。
+2. 从 `openjiuwen.deterministic-replay` 插件贡献场景，不在索引文件放大段 fixture。
+3. 所有 `activeNodeIds`、`activeEdgeIds` 必须存在于默认插件解析后的图中。
 4. 每条 Context 消息必须同时保留完整 `raw`；需要人工摘要时提供 `preview`。
 5. 运行 `npm run check`，确保引用、Token 预算和 ID 唯一性通过。
 
-## 未来真实 Trace 接入
+## 后续适配顺序
 
-推荐新增 `adapters/core-trace/` 与 `adapters/swarm-trace/`，分别把上游事件映射到当前 `TraceScenario`/`TraceStep` 合同。不要让 Web 组件直接读取 Python 日志结构。真实 tokenizer 的 token ID/offset 也应在 adapter 层归一化，再交给 Context feature 展示。
+1. Local Repository 插件：静态 AST 索引、源码证据、增量 revision 缓存。
+2. Core Runtime 插件：Span、Rail Hook、ContextDelta、Ability 注册事件。
+3. Swarm Runtime 插件：WorkflowProgressEvent、并行 Agent、Subagent 调用树。
+4. Model Provider 插件：流式模型调用、预算、取消和确定性录制回放。
+5. Git/GitHub 插件：工作树、commit、PR base/head 与节点级影响映射。
+
+所有上游格式必须在 adapter 层归一化；Web 组件不得直接读取 Python 日志、Git 输出或 Provider 响应结构。
