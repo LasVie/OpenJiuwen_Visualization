@@ -1,6 +1,6 @@
 # Core Runtime V1
 
-Core Runtime V1 是 `agent-core` 与 Visualization Web 之间的归一化事件边界。外部生产者可以主动写入；可选的 Agent Core Executor 也能在固定隔离进程中执行真实 DeepAgent 并写入同一协议。浏览器始终只读取内存 Trace，不 import Python 或接触凭据。
+Core Runtime V1 是 `agent-core` 与 Visualization Web 之间的归一化事件边界。外部生产者可以主动写入；可选的 Agent Core Executor 也能在固定隔离进程中执行真实 DeepAgent 并写入同一协议。Runtime 页面只读取实时 Trace，不 import Python 或接触凭据；历史读取由独立 Archive capability 负责。
 
 ## 真实观测边界
 
@@ -23,7 +23,7 @@ Core Runtime V1 是 `agent-core` 与 Visualization Web 之间的归一化事件�
 4. 页面通过 SSE 获取增量事件，并按 `sequence` 幂等合并。
 5. 生产者发送 `trace.status/end` 或 `trace.status/error` 后，会话关闭并拒绝继续写入。
 
-所有 Trace 只存在于服务进程内存，默认两小时无活动后过期；服务重启后不会恢复。
+所有 Trace 的实时 authority、SSE 状态与可继续写入能力只存在于服务进程内存，默认两小时无活动后过期；服务重启后不会恢复为 live Trace。已校验事件会同步写入本机 SQLite 历史归档，见 [`runtime-archive-and-compare-v1.md`](runtime-archive-and-compare-v1.md)。
 
 ### 创建 Trace
 
@@ -123,9 +123,9 @@ X-Trace-Token: {writeToken}
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/v1/traces` | 创建内存 Trace 并返回写入令牌 |
+| `POST` | `/api/v1/traces` | 创建实时 Trace、归档 Session 并返回写入令牌 |
 | `POST` | `/api/v1/traces/{id}/events` | 批量追加事件，需要 `X-Trace-Token` |
 | `GET` | `/api/v1/traces/{id}?after=N` | 获取 N 之后的快照 |
 | `GET` | `/api/v1/traces/{id}/stream?after=N` | SSE 增量流；支持 `Last-Event-ID` 重连 |
 
-服务仍只允许 loopback host。Repository API 保持严格只读；Trace endpoint 本身只修改进程内存，不提供文件、Git、命令执行或凭据持久化能力。Provider-only 调用见 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)；真实 DeepAgent/ReAct 执行使用另一个固定 bridge 路由，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)。
+服务仍只允许 loopback host。Repository API 保持严格只读；Trace endpoint 不提供目标文件、Git、命令执行或凭据持久化能力，只更新实时内存并写入服务拥有的 SQLite 归档。Provider-only 调用见 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)；真实 DeepAgent/ReAct 执行使用另一个固定 bridge 路由，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)。

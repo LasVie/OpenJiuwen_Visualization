@@ -55,6 +55,7 @@ localStorage["openjiuwen.visualization.plugin-states.v1"]
 - Runtime：至少存在一个 fixture、Core Runtime source 或 Swarm Runtime source；
 - Definition：存在 `repository.local.read` capability；
 - Change：至少存在一个 `changeSource`；
+- Archive：存在 `trace.archive.local.v1` capability；
 - Tool 注册表：至少存在一个 `toolCatalogSource`；
 - Model 录制与面板：存在 Model Provider contribution；
 - OpenRouter 调用入口：存在 `runtime.model.openrouter.v1` capability；
@@ -89,6 +90,8 @@ openjiuwen.local-repository ──→ openjiuwen.tool-catalog
                  ├────────────→ openjiuwen.git-change
                  │
                  └────────────→ openjiuwen.github-pull-request
+
+openjiuwen.trace-archive       （独立 workspace 根插件，无 Core/Swarm/Provider 依赖）
 ```
 
 控制中心只展示直接依赖和直接下游；传递阻塞由注册器按拓扑顺序计算。
@@ -97,5 +100,6 @@ openjiuwen.local-repository ──→ openjiuwen.tool-catalog
 
 - 新插件必须通过 manifest 暴露依赖、group 和 capabilities，不能在 `App.tsx` 内硬编码数据贡献。
 - 新顶层平面应从 Workbench contribution 或 capability 推导可用性。
+- Archive 平面只依赖 `trace.archive.local.v1`；关闭插件后隐藏入口，但不会删除本机 Session。删除仍必须由 Session 管理显式执行。
 - 真实插件安装、签名、权限审批和服务生命周期不属于 V1；后续应由独立 adapter/host 管理。
 - 涉及模型密钥、GitHub token 或文件写入的插件必须在本地服务或受控 host 中实现，不能把凭据写入插件偏好。

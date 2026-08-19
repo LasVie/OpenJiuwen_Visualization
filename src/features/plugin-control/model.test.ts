@@ -55,6 +55,7 @@ describe("plugin control model", () => {
     const registry = createDefaultPluginRegistry();
     expect(workbenchAvailability(registry.resolve())).toEqual({
       runtime: true,
+      archive: true,
       definition: true,
       change: true,
       tools: true,
@@ -78,6 +79,7 @@ describe("plugin control model", () => {
     });
     expect(workbenchAvailability(reduced)).toEqual({
       runtime: true,
+      archive: true,
       definition: false,
       change: false,
       tools: false,
@@ -115,5 +117,10 @@ describe("plugin control model", () => {
       change: true,
       sourceConvergence: false,
     });
+
+    const withoutArchive = registry.resolve({
+      pluginStates: { "openjiuwen.trace-archive": false },
+    });
+    expect(workbenchAvailability(withoutArchive).archive).toBe(false);
   });
 });

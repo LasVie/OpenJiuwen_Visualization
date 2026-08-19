@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Activity,
+  Archive,
   Box,
   Braces,
   Database,
@@ -24,6 +25,7 @@ import {
 } from "./features/subagent-runtime";
 import { DefinitionWorkspace } from "./features/definition-plane";
 import { ChangeWorkspace } from "./features/change-plane";
+import { TraceArchiveWorkspace } from "./features/trace-archive";
 import {
   CoreRuntimeSessionBar,
   RuntimeSourceToggle,
@@ -75,7 +77,7 @@ const SwarmRuntimeInspector = lazy(() =>
   })),
 );
 
-type WorkbenchMode = "runtime" | "definition" | "change" | "modules";
+type WorkbenchMode = "runtime" | "archive" | "definition" | "change" | "modules";
 
 export default function App() {
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>("runtime");
@@ -328,10 +330,11 @@ export default function App() {
     const currentModeAvailable =
       workbenchMode === "modules" ||
       (workbenchMode === "runtime" && availability.runtime) ||
+      (workbenchMode === "archive" && availability.archive) ||
       (workbenchMode === "definition" && availability.definition) ||
       (workbenchMode === "change" && availability.change);
     if (!currentModeAvailable) setWorkbenchMode("modules");
-  }, [availability.change, availability.definition, availability.runtime, workbenchMode]);
+  }, [availability.archive, availability.change, availability.definition, availability.runtime, workbenchMode]);
 
   useEffect(() => {
     if (runtimeSource === "fixture") return;
@@ -530,6 +533,16 @@ export default function App() {
           </button>
           <button
             type="button"
+            className={workbenchMode === "archive" ? "workbench-mode--active" : ""}
+            onClick={() => setWorkbenchMode("archive")}
+            aria-pressed={workbenchMode === "archive"}
+            disabled={!availability.archive}
+          >
+            <Archive size={15} />
+            <span><strong>档案</strong><small>ARCHIVE</small></span>
+          </button>
+          <button
+            type="button"
             className={workbenchMode === "definition" ? "workbench-mode--active" : ""}
             onClick={() => setWorkbenchMode("definition")}
             aria-pressed={workbenchMode === "definition"}
@@ -605,6 +618,14 @@ export default function App() {
               {runtimeSource === "fixture" ? "开始模拟" : "开始监听"}
             </button>
           </form>
+        ) : workbenchMode === "archive" ? (
+          <div className="definition-header-summary archive-header-summary">
+            <Archive size={17} />
+            <span>
+              <strong>Local Trace Archive</strong>
+              <small>SQLite / WAL · Session 管理 · 按需原文 · 运行对比</small>
+            </span>
+          </div>
         ) : workbenchMode === "definition" ? (
           <div className="definition-header-summary">
             <Database size={17} />
@@ -631,11 +652,18 @@ export default function App() {
           </div>
         )}
 
-        <div className="runtime-key" aria-label="节点来源颜色图例">
-          <span className="runtime-key__label">NODE SOURCE</span>
-          <RuntimeBadge owner="agent-core" />
-          <RuntimeBadge owner="jiuwenswarm" />
-        </div>
+        {workbenchMode === "archive" ? (
+          <div className="runtime-key archive-header-assurance" aria-label="档案原文边界">
+            <ShieldCheck size={15} aria-hidden="true" />
+            <span><strong>RAW LOCAL ONLY</strong><small>默认仅展示脱敏摘要</small></span>
+          </div>
+        ) : (
+          <div className="runtime-key" aria-label="节点来源颜色图例">
+            <span className="runtime-key__label">NODE SOURCE</span>
+            <RuntimeBadge owner="agent-core" />
+            <RuntimeBadge owner="jiuwenswarm" />
+          </div>
+        )}
       </header>
 
       {workbenchMode === "runtime" ? <div className="content-shell">
@@ -854,7 +882,9 @@ export default function App() {
               )?.label
             : undefined}
         />
-      </div> : workbenchMode === "definition" ? (
+      </div> : workbenchMode === "archive" ? (
+        <TraceArchiveWorkspace />
+      ) : workbenchMode === "definition" ? (
         <DefinitionWorkspace
           runtimeEvents={availability.sourceConvergence ? activeRuntimeEvents : []}
           sourceNavigation={availability.sourceConvergence ? definitionNavigation : null}

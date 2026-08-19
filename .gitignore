@@ -20,4 +20,5 @@ __pycache__/
 .uv-cache-agent-core/
 .pip-cache-agent-core/
 .runtime-temp/
+.openjiuwen-visualization/
 logs/

@@ -106,6 +106,7 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.swarmflow-executor", "enabled"],
         ["openjiuwen.integration", "enabled"],
         ["openjiuwen.deterministic-replay", "enabled"],
+        ["openjiuwen.trace-archive", "enabled"],
         ["openjiuwen.local-repository", "enabled"],
         ["openjiuwen.source-convergence", "enabled"],
         ["openjiuwen.tool-catalog", "enabled"],
@@ -166,6 +167,8 @@ describe("visualization plugin registry", () => {
     ]);
     expect(defaultWorkbench.capabilities["graph.definition.tool-registry.v1"])
       .toEqual(["openjiuwen.tool-catalog"]);
+    expect(defaultWorkbench.capabilities["trace.archive.local.v1"])
+      .toEqual(["openjiuwen.trace-archive"]);
     expect(defaultWorkbench.graph.nodes.find((node) => node.id === "model"))
       .toMatchObject({
         contributedBy: "openjiuwen.agent-core",
@@ -193,6 +196,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.swarmflow-executor": "blocked",
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",
+      "openjiuwen.trace-archive": "enabled",
       "openjiuwen.local-repository": "enabled",
       "openjiuwen.source-convergence": "enabled",
       "openjiuwen.tool-catalog": "enabled",

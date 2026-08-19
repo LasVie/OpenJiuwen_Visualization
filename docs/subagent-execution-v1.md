@@ -106,7 +106,7 @@ Trace 必须属于 `jiuwenswarm`，因为 `swarm.subagent`、父子 subject 层�
 - 连续原文模式继续按既有合同展示完整 owner Context；
 - Tool/Rail 的紧凑详情使用有界摘要或字符统计，错误元数据不复制输入、provider body 或日志；
 - bridge stdout 只有固定前缀、大小受限的 JSON 记录会被 adapter 接收，其余框架日志忽略；
-- Runtime Trace 与 Context 仍只在 local service 内存保存。
+- Runtime Trace authority 与实时状态只在 local service 内存保存；完整 Context 和归一化事件同步写入本机归档。
 
 ## 环境配置
 

@@ -63,7 +63,7 @@ Prompt 或消息正文不放入 `model`，仍由 Context 事件保存。这样 P
 
 运行页在第一次出现结构化模型事件后显示 Model Provider 区域。默认输出经过脱敏和长度压缩，只有点击“完整输出”才显示原始文本；流式内容追加时输出区域自动跟随到底部。展开详情可以查看 invocation、span、subject、结束原因与每个模型事件帧。
 
-“Core Trace → 模型录制”会创建一个新的内存 Trace，并载入 `plugins/model-provider/recordings/stream-and-cancel.ts`。示例包含一段完成调用和一段取消调用，用于验证流、预算、费用、隐私与时间旅行；它不访问外部网络，也不执行 Agent、Tool 或模型。
+“Core Trace → 模型录制”会创建一个新的实时 Trace 与归档 Session，并载入 `plugins/model-provider/recordings/stream-and-cancel.ts`。示例包含一段完成调用和一段取消调用，用于验证流、预算、费用、隐私与时间旅行；它不访问外部网络，也不执行 Agent、Tool 或模型。
 
 ## 实时 OpenRouter 接入
 

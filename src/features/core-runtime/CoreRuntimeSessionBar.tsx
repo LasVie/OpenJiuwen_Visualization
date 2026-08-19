@@ -54,7 +54,7 @@ export function CoreRuntimeSessionBar({
       <div className="core-runtime-session__identity">
         <Radio size={17} strokeWidth={1.8} aria-hidden="true" />
         <span>
-          <small>CORE RUNTIME · MEMORY ONLY</small>
+          <small>CORE RUNTIME · LIVE MEMORY + LOCAL ARCHIVE</small>
           <strong>{trace?.label ?? "等待创建监听会话"}</strong>
         </span>
       </div>

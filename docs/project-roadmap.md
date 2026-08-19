@@ -6,10 +6,11 @@
 
 OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，而是把代码定义、真实运行证据和 Git 变更放进同一套可展开语义图，逐步形成面向理解、调试和开发的工作台。
 
-长期能力按四个平面组织：
+长期能力按五个平面组织：
 
 - Definition：仓库、符号、Tool、Rail、Hook、Agent、Workflow 与配置定义；
 - Runtime：Agent、Agent Team、SwarmFlow、Subagent、Model、Tool、Context 和决策过程；
+- Archive：本机历史 Session、原文受控查看、导出、删除和跨运行对比；
 - Change：工作树、commit range、GitHub PR 与受影响节点；
 - Modules：Provider、执行器、数据源和深入画布的可开关插件。
 
@@ -31,6 +32,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | Agent Core Subagent 真实执行 | 已完成 | 父 DeepAgent → TaskTool → child DeepAgent、父子 session/Context、双重 Tool 边界、取消与自检 |
 | Agent Core SwarmFlow 真实执行 | 已完成 | 固定两阶段 Workflow、真实 TeamWorkerBackend、结构化 WorkflowMonitor、Worker Rail/ReAct 与独立 Context |
 | Runtime ↔ Definition ↔ Change 收敛 | 已完成 | 稳定 source identity、方法级定位、revision 降级、Runtime 聚合、Change 运行证据叠加与精确往返 |
+| 运行归档与对比 V1 | 已完成 | SQLite/WAL 增量归档、默认完整本机原文、脱敏读取、Session 管理、保留策略与双运行结构化 diff |
 
 ## 当前已支持功能
 
@@ -71,6 +73,17 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - Rail 卡片进入独立画布，逐帧查看读取、检查、变更、控制信号与输出证据；
 - Provider 录制回放和 OpenRouter 实时流式调用。
 
+### 运行档案与对比
+
+- 每个已校验 Runtime 事件先增量写入本机 SQLite/WAL，再提交实时内存会话；
+- 默认保存用户输入、系统提示、Context 增量、Tool 参数/结果、Rail 输入/输出和 Model 流式输出的完整原文；
+- Session 列表与事件详情默认只返回脱敏摘要，逐条展开或切换连续原文后才读取完整内容；
+- 连续原文按 Context owner 和 sequence 展示，并自动跟随新增内容；
+- Session 管理支持搜索、Core/Swarm 筛选、分页、完整 JSON 导出和带确认的级联删除；
+- 默认保留 30 天、完整事件逻辑上限 2 GiB，自动清理最旧已关闭 Session，运行中 Session 受保护；
+- 可选择两次运行，比较事件、Token、费用、Context 消息数及 source/runtime identity 对齐后的节点增删改；
+- `openjiuwen.trace-archive` 是独立、默认启用且可关闭的 workspace 插件。
+
 ### Git 与模块化
 
 - 工作树和本地 commit range 的节点级影响图；
@@ -81,29 +94,30 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 
 ## 当前明确限制
 
-- Runtime Trace 与 Context 默认只在 local service 内存中保存；
+- 实时 Trace/SSE 仍是有界内存态，服务重启后不会恢复为可继续执行的 live session；历史证据由本机归档读取；
 - JiuwenSwarm V1 是固定双成员 Agent Team，不是 SwarmFlow，一次最多一个执行；
 - Subagent V1 固定为单层、单 child、前台执行，不支持并行、后台 spawn、sticky resume 或嵌套 child；
 - SwarmFlow V1 固定为两个串行 Phase、每阶段一个临时 Worker，无并行、HITL、任意脚本/配置上传或工具执行；
 - WorkflowProgress 尚无可靠的结构化 tool activity，页面不会从文本猜 Tool 调用；
 - 执行器不开放任意 Shell、Git 写入、文件写入、MCP、Skill 或浏览器自定义工具；
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
-- 还没有持久化运行归档、跨运行比较、协作权限或远端部署控制面。
+- 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
+- 还没有插件签名/安装 Host、协作权限或远端部署控制面。
 
-## 下一阶段：运行归档与对比 V1（待产品决策）
+## 下一阶段：Provider 与插件 Host V1（待产品决策）
 
-当前 Trace 仍是本地服务内存态。下一阶段计划在不改变实时采集协议的前提下增加可选本地归档，让用户选择两次运行，对比实际链路、节点状态、Context 增长、Token、费用与 Rail 决策；Definition/Change 的 source identity 继续作为跨运行对齐键。
+当前浏览器插件是随前端打包的静态模块，本地服务也在启动时固定装配 Provider 与执行器。下一阶段计划引入受控 Plugin Host，让更多 Model Provider、已注册 Tool 和后续数据源可以独立发现、启停与声明权限，同时保持现有 Graph Kernel capability 和页面模块开关语义。
 
 候选交付：
 
-1. 独立 `trace-archive` adapter 与 capability，默认关闭，实时 Trace 不依赖持久化；
-2. 保存经过版本迁移的 Trace 元数据、事件、Context 与 Provider usage，并保持 owner 隔离；
-3. 运行列表、筛选、标签、删除与单次导出，所有生命周期操作显式可见；
-4. 两次运行的节点增删、步骤状态、Token/费用、Context delta 与 Rail 决策对比；
-5. 用 source identity 对齐 Definition/Change，revision 不同或缺失时继续显式降级；
-6. 存储上限、过期清理、脱敏策略、故障恢复和迁移测试。
+1. 版本化插件 manifest、来源 identity、安装状态与 capability/permission 声明；
+2. 本机 Host 负责发现、校验、启动、停止和故障隔离，浏览器仍不执行第三方代码；
+3. Provider adapter 统一模型列表、请求、流、usage、取消和错误合同，OpenRouter 迁入首个 Host profile；
+4. Tool registry 统一“已安装 / 已授权 / 当前运行已注册 / 已调用”证据，并与 Definition/Runtime 节点往返；
+5. 模块开关从浏览器 contribution 收敛扩展到服务生命周期，同时保留依赖阻塞与恢复语义；
+6. 权限变更、密钥引用、Host 崩溃和插件升级均进入本机可审计事件，不记录 secret 或业务原文。
 
-进入实现前需要确定：本地数据库类型、是否允许保存完整 Context/模型原文、默认保留周期与空间上限。未决之前不创建隐式磁盘存储，也不把当前内存 Trace 宣称为可恢复归档。
+进入实现前需要确定三项安全语义：未签名本地插件是否允许以开发模式加载；密钥由环境变量、系统凭据库还是独立本机 vault 托管；capability 是安装时一次授权、每次运行确认，还是按风险分级组合。Host 隔离和授权模型一旦形成将影响后续所有 Provider/Tool 插件，因此本阶段暂停在设计决策点，不先固化实现。
 
 ## 后续路线
 
@@ -112,8 +126,8 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | 已完成 | 真实 Subagent Executor | 父子 session/Context/Tool/结果的真实链路 | 固定单 child profile 已落地 |
 | 已完成 | SwarmFlow Executor | Workflow/Phase/Agent 的真实流程运行和控制 | 固定两阶段 profile 已落地，身份独立于 Agent Team/Subagent |
 | 已完成 | Runtime ↔ Definition ↔ Change 收敛 | 运行节点跳转源码，Change 标出受影响且实际运行的链路 | 结构化 identity 与显式 revision 降级已落地 |
-| P2 | 运行归档与对比 | 可选持久化、跨运行 diff、Token/费用/决策比较 | 本地数据库、脱敏和保留周期 |
-| P4 | Provider 与插件 Host | 更多模型 Provider、注册工具插件、权限声明 | 插件签名、密钥隔离和 capability 审批 |
+| 已完成 | 运行归档与对比 | SQLite/WAL 持久化、Session 管理、原文受控读取、跨运行结构化 diff | SQLite、默认完整本机原文、30 天 / 2 GiB 已落地 |
+| P4 | Provider 与插件 Host | 更多模型 Provider、注册工具插件、权限声明与服务生命周期 | 插件信任、密钥隔离和 capability 审批 |
 | P5 | 辅助开发闭环 | 从受影响节点生成测试/修改建议并回写受控分支 | 任何写操作都需要独立权限和可审计审批 |
 
 ## 阶段管理规则

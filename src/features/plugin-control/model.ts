@@ -15,6 +15,7 @@ export interface PluginModuleModel extends ResolvedPluginStatus {
 
 export interface WorkbenchAvailability {
   runtime: boolean;
+  archive: boolean;
   definition: boolean;
   change: boolean;
   tools: boolean;
@@ -88,6 +89,7 @@ export function workbenchAvailability(
   );
   return {
     runtime: fixture || core || swarm,
+    archive: Boolean(workbench.capabilities["trace.archive.local.v1"]),
     definition: Boolean(workbench.capabilities["repository.local.read"]),
     change: workbench.changeSources.length > 0,
     tools: workbench.toolCatalogSources.length > 0,

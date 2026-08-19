@@ -151,7 +151,7 @@ X-Trace-Token: <write token>
 | `OPENJIUWEN_OPENROUTER_API_KEY` | 无 | 服务端 OpenRouter key |
 | `OPENJIUWEN_OPENROUTER_MODELS` | `openrouter/free` | 模型 allowlist |
 
-bridge 把 Agent Core 本地状态、journal、Worker workspace 与临时目录都放在本次 invocation workspace 下。源码仓保持只读，浏览器不能覆盖路径。Trace 与 Context 仍只在 local service 内存中。
+bridge 把 Agent Core 本地状态、journal、Worker workspace 与临时目录都放在本次 invocation workspace 下。源码仓保持只读，浏览器不能覆盖路径。Trace authority 与实时播放状态只在 local service 内存中，完整归一化事件与 Context 同步进入本机运行归档。
 
 ## 无网络真实框架自检
 

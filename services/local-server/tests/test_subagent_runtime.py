@@ -327,6 +327,7 @@ class SubagentRuntimeTests(unittest.TestCase):
             ),
             trace_store=self.store,
             subagent_adapter=adapter,
+            archive_enabled=False,
         )
 
         status = api.dispatch("GET", "/api/v1/subagents", origin=ALLOWED_ORIGIN)

@@ -10,7 +10,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 
 API_VERSION = "1.0.0"
@@ -93,6 +93,16 @@ class TraceStoreError(ValueError):
         super().__init__(message)
         self.code = code
         self.status = status
+
+
+class TraceArchiveSink(Protocol):
+    """Persistence boundary implemented by the optional local archive."""
+
+    def store(
+        self,
+        metadata: dict[str, Any],
+        events: list[dict[str, Any]],
+    ) -> None: ...
 
 
 def _utc_timestamp(epoch_seconds: float) -> str:
@@ -615,7 +625,7 @@ class _TraceSession:
 
 
 class RuntimeTraceStore:
-    """Bounded runtime event collector that never writes trace data to disk."""
+    """Bounded runtime collector with an optional explicit archive sink."""
 
     def __init__(
         self,
@@ -628,6 +638,7 @@ class RuntimeTraceStore:
         clock: Callable[[], float] = time.time,
         id_factory: Callable[[], str] | None = None,
         token_factory: Callable[[], str] | None = None,
+        archive_sink: TraceArchiveSink | None = None,
     ) -> None:
         self._max_sessions = max_sessions
         self._max_events_per_session = max_events_per_session
@@ -637,8 +648,13 @@ class RuntimeTraceStore:
         self._clock = clock
         self._id_factory = id_factory or (lambda: "tr_" + secrets.token_urlsafe(16))
         self._token_factory = token_factory or (lambda: "tw_" + secrets.token_urlsafe(24))
+        self._archive_sink = archive_sink
         self._sessions: dict[str, _TraceSession] = {}
         self._condition = threading.Condition(threading.RLock())
+
+    def set_archive_sink(self, archive_sink: TraceArchiveSink | None) -> None:
+        with self._condition:
+            self._archive_sink = archive_sink
 
     def create(self, *, owner: str, label: str, max_tokens: int) -> tuple[dict[str, Any], str]:
         if owner not in TRACE_OWNERS:
@@ -669,8 +685,10 @@ class RuntimeTraceStore:
                 created_epoch=now,
                 updated_epoch=now,
             )
+            metadata = session.metadata()
+            self._store_archive(metadata, [])
             self._sessions[trace_id] = session
-            return session.metadata(), session.write_token
+            return metadata, session.write_token
 
     def append(
         self,
@@ -850,29 +868,50 @@ class RuntimeTraceStore:
             if self._total_event_bytes_locked() + incoming_bytes > self._max_total_bytes:
                 raise TraceStoreError("trace_total_byte_limit", "The global trace byte limit has been reached.", status=413)
 
-            session.subject_shapes = next_subject_shapes
-            session.subagent_shapes = next_subagent_shapes
-            session.model_shapes = next_model_shapes
-            session.recording_sequences = next_recording_sequences
-            accepted: list[dict[str, Any]] = []
-            for event, encoded_size in zip(unique, encoded_sizes):
+            stored_events: list[dict[str, Any]] = []
+            next_status = session.status
+            next_updated_epoch = session.updated_epoch
+            for event in unique:
                 now = self._clock()
                 stored = {
                     **event,
                     "traceId": session.id,
-                    "sequence": len(session.events) + 1,
+                    "sequence": len(session.events) + len(stored_events) + 1,
                     "receivedAt": _utc_timestamp(now),
                 }
-                session.events.append(stored)
-                session.event_ids.add(event["eventId"])
-                session.event_bytes += encoded_size
-                session.updated_epoch = now
                 if event["kind"] == "trace.status":
                     if event["phase"] == "end":
-                        session.status = "completed"
+                        next_status = "completed"
                     elif event["phase"] == "error":
-                        session.status = "failed"
-                accepted.append(copy.deepcopy(stored))
+                        next_status = "failed"
+                next_updated_epoch = now
+                stored_events.append(stored)
+
+            prospective_metadata = {
+                "id": session.id,
+                "owner": session.owner,
+                "label": session.label,
+                "status": next_status,
+                "createdAt": _utc_timestamp(session.created_epoch),
+                "updatedAt": _utc_timestamp(next_updated_epoch),
+                "eventCount": len(session.events) + len(stored_events),
+                "lastSequence": len(session.events) + len(stored_events),
+                "maxTokens": session.max_tokens,
+                "byteCount": session.event_bytes + incoming_bytes,
+            }
+            self._store_archive(prospective_metadata, stored_events)
+
+            session.subject_shapes = next_subject_shapes
+            session.subagent_shapes = next_subagent_shapes
+            session.model_shapes = next_model_shapes
+            session.recording_sequences = next_recording_sequences
+            for stored, encoded_size in zip(stored_events, encoded_sizes):
+                session.events.append(stored)
+                session.event_ids.add(stored["eventId"])
+                session.event_bytes += encoded_size
+            session.updated_epoch = next_updated_epoch
+            session.status = next_status
+            accepted = copy.deepcopy(stored_events)
             if accepted:
                 self._condition.notify_all()
             return session.metadata(), accepted
@@ -981,3 +1020,19 @@ class RuntimeTraceStore:
 
     def _total_event_bytes_locked(self) -> int:
         return sum(session.event_bytes for session in self._sessions.values())
+
+    def _store_archive(
+        self,
+        metadata: dict[str, Any],
+        events: list[dict[str, Any]],
+    ) -> None:
+        if self._archive_sink is None:
+            return
+        try:
+            self._archive_sink.store(copy.deepcopy(metadata), copy.deepcopy(events))
+        except Exception as exc:
+            raise TraceStoreError(
+                "trace_archive_failed",
+                "The local SQLite trace archive could not persist this trace batch.",
+                status=500,
+            ) from exc

@@ -6,7 +6,7 @@ OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的 `openjiu
 
 ```mermaid
 flowchart LR
-  UI["OpenRouter 启动面板"] -->|"创建内存 Trace"| Trace["Runtime Trace V1"]
+  UI["OpenRouter 启动面板"] -->|"创建实时 Trace + 归档 Session"| Trace["Runtime Trace V1"]
   UI -->|"traceId + X-Trace-Token + 输入"| Adapter["本地 OpenRouter adapter"]
   Env["服务进程环境变量"] -->|"API key / 模型白名单"| Adapter
   Adapter -->|"HTTPS / Bearer"| OR["openrouter.ai\nchat/completions"]
@@ -15,7 +15,7 @@ flowchart LR
   Trace -->|"SSE"| UI
 ```
 
-- API key 只从本地服务进程环境读取，不进入 React state、请求正文、API 响应、Trace、日志、插件偏好或磁盘。
+- API key 只从本地服务进程环境读取，不进入 React state、请求正文、API 响应、Trace、日志、插件偏好或磁盘。模型输入与输出作为 Runtime 事件进入本机归档，但 key 永不进入事件。
 - 浏览器仍持有当前 Trace 的高熵写入令牌；Provider endpoint 必须用它证明本次调用属于一个开放的 `agent-core` Trace。
 - Provider URL 固定为 `https://openrouter.ai/api/v1/chat/completions`，拒绝重定向，不接受浏览器提供 base URL。
 - 插件关闭后，Provider contribution 消失，依赖它的 Agent Core、JiuwenSwarm、SwarmFlow 与 Subagent Executor 都进入 blocked；本地服务不会因此卸载，也不会自动发起请求。
@@ -91,7 +91,7 @@ Context 卡片的逐消息 Token 在请求发出前只能是字符级估算，`s
 - SSE 最多 4,096 个数据帧、8 MiB、单行 1 MiB、累计文本 1,000,000 字符。
 - 手写 SSE parser 支持注释 keepalive、多行 `data:`、`[DONE]` 和最终 usage；无效 UTF-8/JSON、异常 content type 或超限都会安全终止 Trace。
 - 服务拒绝目标重定向，使用系统 TLS 校验；不记录 prompt、模型输出或 API key。
-- Trace 与 Context 仍只在服务内存中，进程退出或 TTL/容量回收后消失；发送到 OpenRouter 后的数据处理同时受 OpenRouter 与实际上游模型的策略约束。
+- Trace authority 与实时 Context 状态仍只在服务内存中，进程退出或 TTL/容量回收后不能继续；完整归一化事件同步保存在本机归档。发送到 OpenRouter 后的数据处理同时受 OpenRouter 与实际上游模型的策略约束。
 
 协议依据 OpenRouter 官方当前文档：[`POST /api/v1/chat/completions`](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion)、[Streaming](https://openrouter.ai/docs/api_reference/streaming)、[Usage Accounting](https://openrouter.ai/docs/cookbook/administration/usage-accounting) 与 [Errors](https://openrouter.ai/docs/api_reference/errors-and-debugging)。
 

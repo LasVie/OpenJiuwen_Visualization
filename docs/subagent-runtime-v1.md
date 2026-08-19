@@ -102,7 +102,7 @@ Subagent Context 事件必须使用 observation 声明的 child `contextOwnerId`
 
 ## 确定性录制
 
-`openjiuwen.jiuwenswarm` 插件贡献 `swarm-subagent-delegation-v1` runtime recording。页面“Swarm Trace → Subagent 演示”会创建普通的 loopback 内存 Trace，再把录制事件通过同一写入 API 投递；它不执行 Agent、Tool 或模型，也不读取凭据。
+`openjiuwen.jiuwenswarm` 插件贡献 `swarm-subagent-delegation-v1` runtime recording。页面“Swarm Trace → Subagent 演示”会创建普通的 loopback 实时 Trace 与归档 Session，再把录制事件通过同一写入 API 投递；它不执行 Agent、Tool 或模型，也不读取凭据。
 
 录制用于验证：
 
@@ -121,7 +121,7 @@ Subagent Context 事件必须使用 observation 声明的 child `contextOwnerId`
 ## 安全与限制
 
 - 通用 Trace API 只校验和存储归一化 JSON；只有用户显式启用并启动的 Subagent Executor 才会在独立固定 bridge 中创建 child、执行 dispatcher。
-- Trace 仍是有界、带 TTL 的 memory-only 数据；write token 只授权当前 Trace。
+- Trace authority 仍是有界、带 TTL 的内存数据，write token 只授权当前 Trace；已校验事件同步写入本机归档。
 - V1 展示生产者明确提供的 workspace/tool policy 枚举，不接收 workspace 绝对路径或工具凭据。
 - 外部 producer 可用 lifecycle 事件表达后台 Subagent；真实 Executor V1 只支持前台 child，并提供整个父子进程的取消按钮。
 - 通用协议允许生产者表达嵌套 Subagent（child `parentId` 指向父 Subagent）；真实 Executor V1 明确关闭嵌套派发。

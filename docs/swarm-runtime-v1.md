@@ -1,6 +1,6 @@
 # Swarm Runtime V1
 
-Swarm Runtime V1 是 `jiuwenswarm` 与 Visualization Web 之间的归一化事件边界。协议与通用 ingestion 层本身不 import 或执行 `jiuwenswarm`，也不主动调用 Agent、工具或模型；任何生产者都可以把已观测事件写入 loopback 内存服务，浏览器再按严格顺序投影层级、关系、状态和独立 Context。
+Swarm Runtime V1 是 `jiuwenswarm` 与 Visualization Web 之间的归一化事件边界。协议与通用 ingestion 层本身不 import 或执行 `jiuwenswarm`，也不主动调用 Agent、工具或模型；任何生产者都可以把已观测事件写入 loopback 实时服务，浏览器再按严格顺序投影层级、关系、状态和独立 Context，服务同时将完整事件写入本机归档。
 
 可选执行器位于协议层之外，并把真实框架证据归一化回同一协议：`openjiuwen.jiuwenswarm-executor` 运行固定双成员 Agent Team，它明确不是 SwarmFlow；`openjiuwen.swarmflow-executor` 则通过 Agent Core `run_swarmflow` 运行固定两阶段 Workflow。两者身份、入口和运行限制彼此独立，完整边界见 [`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md) 与 [`swarmflow-execution-v1.md`](swarmflow-execution-v1.md)。
 
@@ -150,5 +150,5 @@ Invoke-RestMethod `
 - 服务端拒绝缺少结构化 `subagent` 证据、subject/context owner 不一致或同一 invocation 改变 session/隔离身份的 `swarm.subagent` 事件。
 - `agent-core` 会话拒绝 `swarm.*` 事件，防止数据源混淆。
 - 静态事件到源码路径的内置映射标记为 `inferred`；只有事件提供 `definition` 才标记 `exact`。
-- Trace 只在服务内存中保存，受请求、事件数、单会话字节数、总字节数和 TTL 限制。
+- Trace 的实时 authority 与 SSE 状态只在服务内存中保存，受请求、事件数、单会话字节数、总字节数和 TTL 限制；历史事件另由本机 SQLite 归档按保留策略保存。
 - `raw` 可能含敏感信息；不要复制到 title、summary、日志或 payload。写入令牌默认只在折叠的“接入信息”中展示。

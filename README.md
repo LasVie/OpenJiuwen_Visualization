@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、工作树/commit range/GitHub PR 的节点影响图、Runtime ↔ Definition ↔ Change 证据往返，以及带依赖解析的模块开关。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、本机 SQLite 运行归档与跨运行对比、工作树/commit range/GitHub PR 的节点影响图、Runtime ↔ Definition ↔ Change 证据往返，以及带依赖解析的模块开关。
 
 已交付能力、阶段记录和后续路线见 [`docs/project-roadmap.md`](docs/project-roadmap.md)。
 
@@ -25,6 +25,8 @@ npm run check
 python -B services/local-server/scripts/run_server.py `
   --allow-root "C:\Users\soong\Documents\OpenJiuwen_Visualization"
 ```
+
+服务默认在首个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 中增量保存完整 Runtime 原文，并使用 WAL、30 天保留期和 2 GiB 逻辑上限。可用 `--archive-path`、`--archive-retention-days` 与 `--archive-max-bytes` 覆盖；数据库路径必须仍在允许根目录内。
 
 四个真实执行器（独立 DeepAgent、Agent Team、SwarmFlow、Subagent）都使用独立固定 bridge；浏览器不能提交 Python 入口、工作流源码或工具配置。只读扫描烟测：
 
@@ -62,7 +64,7 @@ python -B services/local-server/scripts/scan_repository.py `
 
 ## Core Runtime
 
-运行链路的数据源可以在“演示 / Core Trace / Swarm Trace”之间切换。Core Trace 创建一个本机内存会话，通过 SSE 接收归一化的 Agent、ReAct、Rail、Context、Model、Tool 和 Ability 事件；既可由外部 producer 写入，也可从“Agent Core”面板显式启动真实独立 DeepAgent。
+运行链路的数据源可以在“演示 / Core Trace / Swarm Trace”之间切换。Core Trace 创建一个本机实时会话，通过 SSE 接收归一化的 Agent、ReAct、Rail、Context、Model、Tool 和 Ability 事件，并同步增量归档；既可由外部 producer 写入，也可从“Agent Core”面板显式启动真实独立 DeepAgent。
 
 页面把事件顺序直接映射到已有的上一步/下一步、节点高亮、Rail 决策画布和 ContextWindow。停留在最新步骤时自动跟随新事件；回退查看历史后保持当前位置。Context 的分段模式默认脱敏，展开显示原文，连续原文始终保留完整消息。
 
@@ -74,7 +76,7 @@ Core Trace 的“Agent Core”入口会先探测独立 Python 环境，然后在
 
 ## Swarm Runtime
 
-Swarm Trace 复用同一个内存采集服务，但要求每个非终止事件声明稳定 `subject`。画布按真实层级区分 Team、Workflow、Phase、Member、Agent、Human、Task 与 Subagent；成员消息和任务分配显示为不同关系边。宏观模式保留团队骨架并允许逐层点开，运行到深层主体时自动显露当前路径；微观模式一次展开所有已出现主体。
+Swarm Trace 复用同一个实时采集与本机归档服务，但要求每个非终止事件声明稳定 `subject`。画布按真实层级区分 Team、Workflow、Phase、Member、Agent、Human、Task 与 Subagent；成员消息和任务分配显示为不同关系边。宏观模式保留团队骨架并允许逐层点开，运行到深层主体时自动显露当前路径；微观模式一次展开所有已出现主体。
 
 Context 事件必须携带 `context.ownerId`。Team/Member/Agent/Subagent 可以拥有彼此独立的窗口，点击有 Context 的节点或使用 owner 选择器即可切换，消息和 Token 不会跨主体混合。`jiuwenswarm` 现有 WorkflowProgress 尚未提供结构化 tool-call activity，页面不会把日志或 outcome 猜成工具调用。
 
@@ -95,6 +97,12 @@ Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，
 ### OpenRouter 实时调用
 
 OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback adapter。真实 DeepAgent、JiuwenSwarm Agent Team、SwarmFlow Worker 与 TaskTool Subagent 分别通过自己的 Executor 使用框架 OpenRouter client，避免把普通模型调用误画成 Agent、Team、Workflow 或 child。API key 仅在本地服务环境变量中，默认模型白名单只有 `openrouter/free`。Provider 配置与底层安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
+
+### 运行档案与跨运行对比
+
+顶部“运行档案”管理本机 SQLite/WAL 中保存的 Core 与 Swarm Session。列表支持搜索、owner 筛选和分页；详情默认只读取脱敏摘要，只有逐事件点击“展开原文”或切换到“连续原文”时才读取完整内容。连续原文保持消息间隔并自动跟随最新内容。
+
+用户可以删除已结束 Session，原文、摘要、Token、费用与事件会一起级联删除；也可以显式导出包含完整原文的 JSON。对比模式只读取脱敏数据，按源码 identity（缺失时按 runtime kind + subject）对齐两次运行，并展示事件、Token、费用、Context 与节点结构差异。完整存储、隐私、保留和 API 合同见 [`docs/runtime-archive-and-compare-v1.md`](docs/runtime-archive-and-compare-v1.md)。
 
 ### Git Change Plane
 
@@ -148,18 +156,19 @@ src/
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
 │  ├─ relation-explorer/       # Definition/Change 共享节点关系深入画布
 │  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期
+│  ├─ trace-archive/           # 本机 Session 管理、按需原文与跨运行对比
 │  ├─ source-viewer/           # Definition/Change/Tool 共享只读源码窗口
 │  ├─ swarm-runtime/           # Swarm 层级、主体 Context 与动态画布
 │  ├─ subagent-runtime/        # Subagent 派发、隔离 session 与内部执行画布
 │  ├─ tool-catalog/            # Tool 声明、注册路径与 Runtime 观察画布
 │  └─ trace-graph/             # 可调磁吸、实时节点避碰与共享画布控件
-├─ plugins/                    # Core、Swarm、集成边与轨迹数据贡献者
+├─ plugins/                    # Core、Swarm、归档、集成边与轨迹数据贡献者
 ├─ shared/ui/                  # 无业务状态的通用 UI
 ├─ state/                      # 回放状态与纯工具函数
 ├─ types/                      # 兼容导出；稳定合同由 kernel 管理
 └─ workbench/                  # 组合默认插件并生成当前工作台快照
 services/
-└─ local-server/               # 只读索引、内存 Trace、Provider 与两个固定执行 bridge
+└─ local-server/               # 只读索引、实时 Trace、SQLite 归档、Provider 与固定执行 bridge
 examples/                       # 可直接投递的归一化事件示例
 ```
 

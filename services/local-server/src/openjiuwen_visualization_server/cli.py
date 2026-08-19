@@ -38,6 +38,12 @@ def _build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--allow-origin", action="append", default=[])
+    serve.add_argument(
+        "--archive-path",
+        help="SQLite archive path inside an allowed root.",
+    )
+    serve.add_argument("--archive-retention-days", type=int, default=30)
+    serve.add_argument("--archive-max-bytes", type=int, default=2 * 1024 * 1024 * 1024)
 
     scan = subparsers.add_parser("scan", help="Scan one repository and print JSON.")
     _add_common_arguments(scan)
@@ -64,6 +70,13 @@ def _config(arguments: argparse.Namespace) -> LocalServiceConfig:
     return LocalServiceConfig.create(
         allowed_roots=arguments.allow_root,
         allowed_origins=origins or DEFAULT_ORIGINS,
+        archive_path=getattr(arguments, "archive_path", None),
+        archive_retention_days=getattr(arguments, "archive_retention_days", 30),
+        archive_max_bytes=getattr(
+            arguments,
+            "archive_max_bytes",
+            2 * 1024 * 1024 * 1024,
+        ),
     )
 
 
@@ -89,7 +102,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             server.server_close()
         return 0
 
-    api = LocalRepositoryApi(config)
+    api = LocalRepositoryApi(config, archive_enabled=False)
     response = api.dispatch(
         "POST",
         "/api/v1/repositories/scan",

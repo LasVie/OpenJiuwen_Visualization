@@ -64,7 +64,7 @@ git -C <validated repository> rev-parse --verify HEAD
 - 最近运行事件，以及返回该精确步骤的入口；
 - 进入 Change 平面的结构化 source 导航。
 
-聚合只读取当前内存 Trace，不落盘，也不把一次历史运行混入另一条 Trace。
+实时聚合只读取当前内存 Trace，不把一次历史运行混入另一条 Trace；底层事件独立写入本机归档，历史比较使用自己的脱敏读取模型。
 
 ## Definition → Change
 
@@ -97,7 +97,7 @@ git -C <validated repository> rev-parse --verify HEAD
 
 ## 明确限制
 
-- Runtime 与聚合证据仍是内存态，刷新或服务过期后不可恢复；
+- 当前 Runtime authority 与实时聚合状态仍是内存态，刷新或服务过期后不可继续执行；历史事件可从本机 Archive 平面重新查看和比较；
 - 尚无跨运行比较、运行标签检索、持久化保留或协作权限；
 - Python AST 方法索引不解析运行期 monkey patch、动态 import、反射或生成代码；
 - 当前 revision 只表示执行器启动前观测到的 repository HEAD，不证明 dirty 工作树内容与该 commit 相同；

@@ -55,6 +55,38 @@ class RuntimeTraceStoreTests(unittest.TestCase):
         self.assertEqual([item["sequence"] for item in events], [2])
         self.assertEqual(events[0]["traceId"], trace["id"])
 
+    def test_archive_failure_does_not_commit_a_partial_memory_batch(self) -> None:
+        class FailingSecondWrite:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def store(self, metadata, events):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                if self.calls == 2:
+                    raise RuntimeError("disk unavailable")
+
+        sink = FailingSecondWrite()
+        transactional = RuntimeTraceStore(
+            id_factory=lambda: "tr_transactional",
+            token_factory=lambda: "tw_transactional",
+            archive_sink=sink,
+        )
+        trace, token = transactional.create(
+            owner="agent-core",
+            label="Transactional archive",
+            max_tokens=4096,
+        )
+
+        with self.assertRaises(TraceStoreError) as caught:
+            transactional.append(trace["id"], token, [event("not-committed")])
+        metadata, events = transactional.snapshot(trace["id"])
+
+        self.assertEqual(caught.exception.code, "trace_archive_failed")
+        self.assertEqual(caught.exception.status, 500)
+        self.assertEqual(metadata["eventCount"], 0)
+        self.assertEqual(metadata["status"], "open")
+        self.assertEqual(events, [])
+
     def test_requires_write_token_and_closes_on_terminal_status(self) -> None:
         trace, token = self.store.create(
             owner="agent-core",

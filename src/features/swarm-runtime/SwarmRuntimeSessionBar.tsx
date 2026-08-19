@@ -54,7 +54,7 @@ export function SwarmRuntimeSessionBar({
       <div className="swarm-runtime-session__identity">
         <Network size={17} strokeWidth={1.8} aria-hidden="true" />
         <span>
-          <small>SWARM RUNTIME · MEMORY ONLY</small>
+          <small>SWARM RUNTIME · LIVE MEMORY + LOCAL ARCHIVE</small>
           <strong>{trace?.label ?? "等待创建 Swarm 监听会话"}</strong>
         </span>
       </div>

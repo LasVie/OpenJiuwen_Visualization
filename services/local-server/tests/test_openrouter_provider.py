@@ -436,6 +436,7 @@ class OpenRouterProviderTests(unittest.TestCase):
             ),
             trace_store=self.store,
             openrouter_adapter=adapter,
+            archive_enabled=False,
         )
 
         registry = api.dispatch(

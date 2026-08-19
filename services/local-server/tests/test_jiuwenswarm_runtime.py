@@ -350,6 +350,7 @@ class JiuwenSwarmRuntimeTests(unittest.TestCase):
             ),
             trace_store=self.store,
             jiuwenswarm_adapter=adapter,
+            archive_enabled=False,
         )
 
         status = api.dispatch("GET", "/api/v1/jiuwenswarm", origin=ALLOWED_ORIGIN)

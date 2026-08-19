@@ -1,6 +1,6 @@
 # Agent Core Execution V1
 
-Agent Core Execution V1 把“接收外部 Trace”扩展为可选的真实独立 Agent 执行。网页创建内存 Trace 后，本地服务只启动仓库自带的固定桥接脚本；桥接脚本从指定的 `agent-core` checkout 导入 `openjiuwen.harness.create_deep_agent`，内部使用真实 `ReActAgent`、Rail callback、AbilityManager 和 Agent Core 自带的 OpenRouter Model Client。
+Agent Core Execution V1 把“接收外部 Trace”扩展为可选的真实独立 Agent 执行。网页创建实时 Trace 与归档 Session 后，本地服务只启动仓库自带的固定桥接脚本；桥接脚本从指定的 `agent-core` checkout 导入 `openjiuwen.harness.create_deep_agent`，内部使用真实 `ReActAgent`、Rail callback、AbilityManager 和 Agent Core 自带的 OpenRouter Model Client。
 
 它不是模拟器，也不会把一次普通 Chat Completions 请求标成 Agent。确定性 fixture、原始 OpenRouter Provider adapter 和真实 Agent Core executor 是三个独立模块。
 
@@ -13,7 +13,7 @@ flowchart LR
   Source["agent-core source checkout"] -->|"import create_deep_agent"| Bridge
   Env["Server environment"] -->|"OpenRouter key / model allowlist"| Bridge
   Bridge -->|"Agent Core OpenRouter Model Client"| OR["openrouter.ai"]
-  Bridge -->|"normalized events"| Trace["Memory-only Runtime Trace"]
+  Bridge -->|"normalized events"| Trace["Live Runtime Trace + local archive"]
   Trace -->|"SSE + sequence"| UI
 ```
 
@@ -135,7 +135,7 @@ Rail 深入画布优先显示 `hook.examines`，因此输入 Rail、Context Rail
 - `PYTHONPATH` 只由服务端配置的 Agent Core root 构造；浏览器无权覆盖。
 - Bridge stdin 承载一次有界 JSON 请求；stdout 只接受带固定前缀的有界 JSON record，其他 Agent Core 日志全部丢弃。
 - 同时最多两个 Agent Core invocation，同一 Trace 同时最多一个。
-- Trace 仍只写进程内存；DeepAgent 自身需要的工作区和日志被限制到 `.agent-core-runtime/`。
+- Trace 的实时 authority 仍只在进程内存；完整归一化事件同步写入本机归档。DeepAgent 自身需要的工作区和日志被限制到 `.agent-core-runtime/`。
 - OpenRouter key 只继承自本地服务环境，不进入命令行、stdin、Trace 或前端。
 - V1 不注册文件、shell、Git、MCP、Subagent 或写入工具。
 

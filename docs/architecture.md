@@ -2,10 +2,11 @@
 
 ## 产品边界
 
-项目面向 OpenJiuwen 的代码理解、运行调试与变更影响分析。一个工作台组合三种相互关联的数据平面，并由一个控制平面决定当前装配：
+项目面向 OpenJiuwen 的代码理解、运行调试与变更影响分析。一个工作台组合四种相互关联的数据平面，并由一个控制平面决定当前装配：
 
 - Definition：从仓库、配置和注册表得到的定义图。
 - Runtime：确定性回放或真实 Agent/Workflow 运行事件。
+- Archive：本机历史 Session、受控原文读取和跨运行对比。
 - Change：本地 Git、commit 和 GitHub PR 的变更与影响关系。
 - Modules：插件启停、依赖状态与 capability 可见性。
 
@@ -17,6 +18,8 @@
 App / components
       ↓
 features ─────→ shared
+      ↓              ↑
+   adapters ─────────┘
       ↓
 workbench → domain projection
       ↓             ↓
@@ -35,6 +38,7 @@ fixtures / future adapters
 6. `features/<name>/` 拥有该能力的模型、组件、测试和公开入口；跨功能只从公开入口导入。
 7. `data/scenarios/` 一个轨迹一个文件；禁止重新创建巨型场景总文件。
 8. `components/` 负责页面编排和第三方库适配，不保存新的领域规则。
+9. `adapters/` 负责 loopback/remote 协议校验；原文读取必须由显式 feature action 触发，组件不能绕过 adapter 拼接 URL。
 
 ## Graph Kernel V1
 
@@ -87,12 +91,15 @@ repository@revision:path:symbol
 | `openjiuwen.tool-catalog` | Tool 声明、静态注册路径与 `ability.register` 运行确认 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.source-convergence` | Runtime、Definition 与 Change 的稳定源码身份、运行聚合和往返导航 |
+| `openjiuwen.trace-archive` | 本机 SQLite/WAL Session 管理、按需原文、完整导出、删除和跨运行对比 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务、静态定义图、有界源码证据与 Git Change 客户端，默认开启 |
 
 `openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。四个 Executor 只增加各自显式执行入口：独立 DeepAgent、Agent Team、固定 SwarmFlow 和 TaskTool Subagent 拥有不同 capability 与 bridge；它们依赖对应 Runtime source 与 OpenRouter 模块，组件不会读取 Python 对象或原始日志格式。
 
 `openjiuwen.source-convergence` 依赖 Local Repository，并用 `graph.cross-plane.source.v1` capability 控制 Runtime、Definition 与 Change 的源码证据往返；它不要求 Core 与 Swarm 同时启用。`features/source-convergence/` 只拥有 identity、匹配与聚合模型；各平面仍由自己的 feature 管理扫描、Trace 播放和 Git 投影，不能互相导入内部组件。
+
+`openjiuwen.trace-archive` 是独立 workspace 根插件，不依赖 Core、Swarm 或 Provider contribution。`features/trace-archive/` 只通过 `adapters/trace-archive/` 读取本地归档 API；Session 详情和对比默认使用脱敏预览，完整事件与 Context 必须走单独的显式 raw 请求。
 
 后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
 
@@ -137,7 +144,8 @@ repository@revision:path:symbol
 2. Core Runtime 插件：Span、Rail Hook、ContextDelta、Ability 注册事件。
 3. Swarm Runtime 插件：Team/WorkflowProgress、并行 Agent、Subagent 调用树与 Context owner 隔离。
 4. Model Provider 插件：流式模型调用、预算、取消和确定性录制回放。
-5. Git/GitHub 插件：工作树、commit、PR base/head 与节点级影响映射。
+5. Runtime Archive 插件：本机 Session 生命周期、受控原文与跨运行结构化对比。
+6. Git/GitHub 插件：工作树、commit、PR base/head 与节点级影响映射。
 
 所有上游格式必须在 adapter 层归一化；Web 组件不得直接读取 Python 日志、Git 输出或 Provider 响应结构。
 
@@ -195,9 +203,17 @@ Tool Catalog 是 Definition 平面的独立插件和子工作台。`services/loc
 
 Core Runtime 使用 `traceId + sequence` 作为运行时顺序权威，并用 `spanId / parentSpanId` 保留后续调用树扩展能力。事件种类覆盖 Agent invoke、用户消息、task/ReAct iteration、model/tool call、Rail callback、Context snapshot/delta、Ability 注册和 Trace 状态。
 
-本地服务为每次运行创建有界、自动过期的内存会话：写入需要独立 token，读取依赖高熵 Trace ID，SSE 使用 `Last-Event-ID` 恢复。浏览器先按 sequence 幂等合并，再由 `features/core-runtime/model.ts` 投影为现有 `TraceScenario`；因此确定性 fixture 与真实 Runtime 共用画布、时间轴、Context 和 Rail 详情组件。
+本地服务为每次运行创建有界、自动过期的内存会话：写入需要独立 token，读取依赖高熵 Trace ID，SSE 使用 `Last-Event-ID` 恢复。每批已校验事件先增量写入本机 SQLite/WAL 归档，再提交内存实时状态；归档失败不会形成只存在于内存的半提交。浏览器先按 sequence 幂等合并，再由 `features/core-runtime/model.ts` 投影为现有 `TraceScenario`；因此确定性 fixture 与真实 Runtime 共用画布、时间轴、Context 和 Rail 详情组件。
 
 框架 callback 只能生成 `rail.chain` 证据。`rail.hook` 的 mutation、control signal 和 examines 只有显式探针提供且标记 `exact=true` 时才作为单 Rail 决策展示，防止把链级耗时误标成某个 Rail 的内部过程。完整协议见 [`core-runtime-v1.md`](core-runtime-v1.md)。
+
+## Runtime Archive and Compare V1
+
+`TraceArchiveStore` 与 live `TraceStore` 位于同一本机服务进程但职责分离：live store 管理 token authority、TTL、SSE 与当前运行；archive store 管理 schema migration、WAL、Session/事件持久化、保留策略和级联删除。数据库默认位于首个允许根目录的忽略目录内，自定义路径也必须通过允许根校验。
+
+归档事件同时保存完整 `raw_json` 和服务端生成的 `preview_json`。列表、详情与跨运行比较只返回 preview；逐事件“展开原文”、连续 Context 和完整导出使用独立 endpoint。收起原文时前端清除对应 React state，避免仅用 CSS 隐藏敏感内容。删除已关闭 Session 会一起删除原文、摘要、Token、费用与事件；open Session 不参与手动或自动清理。
+
+跨运行对比优先用 source location identity 对齐，缺失时退回 runtime kind + subject；revision 作为变化证据而非 identity 的一部分。归档不会自动恢复成 live Trace，也不会把原文传给 Definition/Change 或比较模型。完整合同见 [`runtime-archive-and-compare-v1.md`](runtime-archive-and-compare-v1.md)。
 
 ## Swarm Runtime V1
 

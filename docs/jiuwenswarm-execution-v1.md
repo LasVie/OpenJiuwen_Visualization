@@ -1,6 +1,6 @@
 # JiuwenSwarm Agent Team Execution V1
 
-JiuwenSwarm Agent Team Execution V1 在既有 Swarm Runtime Trace 之上增加一个可开关的真实执行模块。网页先创建 `owner=jiuwenswarm` 的内存 Trace，本地服务再启动仓库自带的固定子进程 bridge。Bridge 从指定的两个 source checkout 导入：
+JiuwenSwarm Agent Team Execution V1 在既有 Swarm Runtime Trace 之上增加一个可开关的真实执行模块。网页先创建 `owner=jiuwenswarm` 的实时 Trace 与归档 Session，本地服务再启动仓库自带的固定子进程 bridge。Bridge 从指定的两个 source checkout 导入：
 
 - `jiuwenswarm.agents.swarm.enrich_team_spec_for_swarm`，负责应用 JiuwenSwarm provider assembly；
 - Agent Core `TeamAgentSpec`、`Runner.run_agent_team_streaming` 与 `TeamMonitor`，负责真实团队生命周期、成员运行和团队事件。
@@ -156,5 +156,5 @@ $env:PYTHONPATH = "C:\path\to\jiuwenswarm;C:\path\to\agent-core"
 - 确定性自检验证真实团队基础设施和 roster；它不伪造一次模型驱动的任务委派。实时 OpenRouter 运行才由 Leader 选择允许的团队工具。
 - 只支持 in-process scheduled Agent Team；process/remote transport 是未来独立 profile。
 - 不启用 SwarmFlow、HITT、外部 CLI Agent、MCP、Skill、Subagent 或任意仓库工具。
-- Trace 与完整 Context 只保存在 local service 内存中；团队的临时数据库和 workspace 位于忽略的运行目录。
+- Trace 的实时 authority 只保存在 local service 内存中；完整 Context 和归一化事件同步进入本机运行归档。团队自身的临时数据库和 workspace 位于忽略的运行目录。
 - 输入发送到 OpenRouter 后的数据处理同时受 OpenRouter 与实际上游模型的策略约束。

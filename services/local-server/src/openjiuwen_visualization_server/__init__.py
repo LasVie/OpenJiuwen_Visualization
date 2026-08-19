@@ -7,6 +7,7 @@ from .scan_cache import DefinitionScanCache
 from .openrouter_provider import OpenRouterProviderConfig, OpenRouterRuntimeAdapter
 from .scanner import PythonRepositoryScanner, ScanOptions
 from .trace_store import RuntimeTraceStore, TraceStoreError
+from .trace_archive import TraceArchiveError, TraceArchiveStore
 from .subagent_runtime import SubagentRuntimeAdapter, SubagentRuntimeConfig
 from .swarmflow_runtime import SwarmFlowRuntimeAdapter, SwarmFlowRuntimeConfig
 
@@ -23,6 +24,8 @@ __all__ = [
     "ScanOptions",
     "RuntimeTraceStore",
     "TraceStoreError",
+    "TraceArchiveError",
+    "TraceArchiveStore",
     "SubagentRuntimeAdapter",
     "SubagentRuntimeConfig",
     "SwarmFlowRuntimeAdapter",

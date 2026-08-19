@@ -56,12 +56,20 @@ from .scanner import (
 )
 from .trace_store import API_VERSION as TRACE_API_VERSION
 from .trace_store import RuntimeTraceStore, TraceStoreError
+from .trace_archive import (
+    ARCHIVE_API_VERSION,
+    TraceArchiveError,
+    TraceArchiveStore,
+)
 
 
 LOGGER = logging.getLogger(__name__)
 TRACE_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)$")
 TRACE_EVENTS_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)/events$")
 TRACE_STREAM_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)/stream$")
+ARCHIVE_SESSION_ROUTE = re.compile(r"^/api/v1/archive/sessions/([^/]+)$")
+ARCHIVE_RAW_ROUTE = re.compile(r"^/api/v1/archive/sessions/([^/]+)/raw$")
+ARCHIVE_EXPORT_ROUTE = re.compile(r"^/api/v1/archive/sessions/([^/]+)/export$")
 OPENROUTER_CANCEL_ROUTE = re.compile(
     r"^/api/v1/model-providers/openrouter/invocations/([^/]+)/cancel$"
 )
@@ -125,6 +133,8 @@ class LocalRepositoryApi:
         jiuwenswarm_adapter: JiuwenSwarmRuntimeAdapter | None = None,
         subagent_adapter: SubagentRuntimeAdapter | None = None,
         swarmflow_adapter: SwarmFlowRuntimeAdapter | None = None,
+        archive_store: TraceArchiveStore | None = None,
+        archive_enabled: bool = True,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -132,7 +142,24 @@ class LocalRepositoryApi:
             scanner or PythonRepositoryScanner()
         )
         self._tool_catalog_scanner = tool_catalog_scanner or ToolCatalogScanner()
+        archive_path = config.archive_path or (
+            config.allowed_roots[0]
+            / ".openjiuwen-visualization"
+            / "runtime-archive.sqlite3"
+        )
+        self.archive_store = (
+            archive_store
+            if archive_store is not None
+            else TraceArchiveStore(
+                archive_path,
+                retention_days=config.archive_retention_days,
+                max_bytes=config.archive_max_bytes,
+            )
+            if archive_enabled
+            else None
+        )
         self.trace_store = trace_store or RuntimeTraceStore()
+        self.trace_store.set_archive_sink(self.archive_store)
         self._change_inspector = change_inspector or GitChangeInspector()
         self._github_pull_request_inspector = (
             github_pull_request_inspector or GitHubPullRequestInspector()
@@ -194,6 +221,7 @@ class LocalRepositoryApi:
                         "git.change.read",
                         "github.pull-request.read",
                         "trace.ephemeral",
+                        *(["trace.archive.sqlite"] if self.archive_store else []),
                         "model.provider.openrouter.registry",
                         *(["model.provider.openrouter.invoke"] if openrouter_ready else []),
                         "runtime.agent-core.registry",
@@ -201,7 +229,12 @@ class LocalRepositoryApi:
                         "runtime.subagent.registry",
                         "runtime.swarmflow.registry",
                     ],
-                    "traceStorage": "memory-only",
+                    "traceStorage": "memory-live+sqlite-archive"
+                    if self.archive_store
+                    else "memory-only",
+                    "archiveStorage": self.archive_store.descriptor()
+                    if self.archive_store
+                    else None,
                 },
             )
         if method == "GET" and route == "/api/v1/model-providers/openrouter":
@@ -242,6 +275,22 @@ class LocalRepositoryApi:
                     "writeOperations": False,
                 },
             )
+        if method == "GET" and route == "/api/v1/archive":
+            if self.archive_store is None:
+                return _error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "archive_disabled",
+                    "Trace archive is disabled.",
+                )
+            return ApiResponse(
+                HTTPStatus.OK,
+                {
+                    "apiVersion": ARCHIVE_API_VERSION,
+                    "storage": self.archive_store.descriptor(),
+                },
+            )
+        if method == "GET" and route == "/api/v1/archive/sessions":
+            return self._archive_list(split_path.query)
         if method == "POST" and route == "/api/v1/repositories/scan":
             return self._scan(body or {})
         if method == "POST" and route == "/api/v1/repositories/source":
@@ -279,6 +328,17 @@ class LocalRepositoryApi:
         swarmflow_cancel_match = SWARMFLOW_CANCEL_ROUTE.fullmatch(route)
         if method == "POST" and swarmflow_cancel_match:
             return self._cancel_swarmflow(swarmflow_cancel_match.group(1), trace_token)
+        archive_raw_match = ARCHIVE_RAW_ROUTE.fullmatch(route)
+        if method == "POST" and archive_raw_match:
+            return self._archive_raw(archive_raw_match.group(1), body or {})
+        archive_export_match = ARCHIVE_EXPORT_ROUTE.fullmatch(route)
+        if method == "GET" and archive_export_match:
+            return self._archive_export(archive_export_match.group(1))
+        archive_session_match = ARCHIVE_SESSION_ROUTE.fullmatch(route)
+        if method == "GET" and archive_session_match:
+            return self._archive_session(archive_session_match.group(1), split_path.query)
+        if method == "DELETE" and archive_session_match:
+            return self._archive_delete(archive_session_match.group(1))
         trace_match = TRACE_ROUTE.fullmatch(route)
         if method == "GET" and trace_match:
             return self._trace_snapshot(trace_match.group(1), split_path.query)
@@ -419,6 +479,10 @@ class LocalRepositoryApi:
                     "stream": f"/api/v1/traces/{trace_id}/stream",
                 },
                 "storage": "memory-only",
+                "archive": {
+                    "enabled": self.archive_store is not None,
+                    "engine": "sqlite" if self.archive_store is not None else None,
+                },
             },
         )
 
@@ -444,6 +508,7 @@ class LocalRepositoryApi:
                 "accepted": len(accepted),
                 "lastSequence": metadata["lastSequence"],
                 "storage": "memory-only",
+                "archived": self.archive_store is not None,
             },
         )
 
@@ -465,6 +530,107 @@ class LocalRepositoryApi:
                 "storage": "memory-only",
             },
         )
+
+    def _archive_list(self, query: str) -> ApiResponse:
+        if self.archive_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "archive_disabled",
+                "Trace archive is disabled.",
+            )
+        values = parse_qs(query)
+        try:
+            result = self.archive_store.list_sessions(
+                limit=int(values.get("limit", ["50"])[0]),
+                offset=int(values.get("offset", ["0"])[0]),
+            )
+        except TraceArchiveError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        except ValueError:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_pagination",
+                "Archive pagination is invalid.",
+            )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _archive_session(self, trace_id: str, query: str) -> ApiResponse:
+        if self.archive_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "archive_disabled",
+                "Trace archive is disabled.",
+            )
+        values = parse_qs(query)
+        try:
+            result = self.archive_store.get_session(
+                trace_id,
+                after=int(values.get("after", ["0"])[0]),
+                limit=int(values.get("limit", ["500"])[0]),
+            )
+        except TraceArchiveError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        except ValueError:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_pagination",
+                "Archive event pagination is invalid.",
+            )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _archive_raw(self, trace_id: str, body: dict[str, Any]) -> ApiResponse:
+        if self.archive_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "archive_disabled",
+                "Trace archive is disabled.",
+            )
+        mode = body.get("mode")
+        try:
+            if mode == "events":
+                sequences = body.get("sequences")
+                if not isinstance(sequences, list):
+                    raise TraceArchiveError(
+                        "invalid_raw_request",
+                        "sequences must be an array.",
+                    )
+                result = self.archive_store.reveal_events(trace_id, sequences)
+            elif mode == "context":
+                result = self.archive_store.reveal_context(trace_id)
+            else:
+                raise TraceArchiveError(
+                    "invalid_raw_request",
+                    "mode must be events or context.",
+                )
+        except TraceArchiveError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _archive_export(self, trace_id: str) -> ApiResponse:
+        if self.archive_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "archive_disabled",
+                "Trace archive is disabled.",
+            )
+        try:
+            result = self.archive_store.export_session(trace_id)
+        except TraceArchiveError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _archive_delete(self, trace_id: str) -> ApiResponse:
+        if self.archive_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "archive_disabled",
+                "Trace archive is disabled.",
+            )
+        try:
+            result = self.archive_store.delete_session(trace_id)
+        except TraceArchiveError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
 
     def _scan(self, body: dict[str, Any]) -> ApiResponse:
         repository_path = body.get("path")
@@ -731,7 +897,7 @@ class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
             return
         self.send_response(HTTPStatus.NO_CONTENT)
         self._write_common_headers(origin)
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Trace-Token")
         self.send_header("Access-Control-Max-Age", "600")
         self.end_headers()
@@ -769,6 +935,13 @@ class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
                 origin=origin,
                 trace_token=self.headers.get("X-Trace-Token"),
             ),
+            origin,
+        )
+
+    def do_DELETE(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        origin = self.headers.get("Origin")
+        self._write_response(
+            self._api.dispatch("DELETE", self.path, origin=origin),
             origin,
         )
 

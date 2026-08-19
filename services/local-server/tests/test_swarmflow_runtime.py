@@ -353,6 +353,7 @@ class SwarmFlowRuntimeTests(unittest.TestCase):
             ),
             trace_store=self.store,
             swarmflow_adapter=adapter,
+            archive_enabled=False,
         )
 
         status = api.dispatch("GET", "/api/v1/swarmflows", origin=ALLOWED_ORIGIN)

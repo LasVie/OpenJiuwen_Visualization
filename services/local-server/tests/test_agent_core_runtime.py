@@ -334,6 +334,7 @@ class AgentCoreRuntimeTests(unittest.TestCase):
             ),
             trace_store=self.store,
             agent_core_adapter=adapter,
+            archive_enabled=False,
         )
 
         status = api.dispatch("GET", "/api/v1/agent-core", origin=ALLOWED_ORIGIN)

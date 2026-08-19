@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import tempfile
 import threading
 import unittest
 from pathlib import Path
@@ -18,11 +19,22 @@ ALLOWED_ORIGIN = "http://127.0.0.1:4173"
 class LocalRepositoryApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        runtime_temp = REPOSITORY_ROOT / ".runtime-temp"
+        runtime_temp.mkdir(exist_ok=True)
+        cls.archive_temp = tempfile.TemporaryDirectory(
+            prefix="archive-api-",
+            dir=runtime_temp,
+        )
         config = LocalServiceConfig.create(
             allowed_roots=[REPOSITORY_ROOT],
             allowed_origins=[ALLOWED_ORIGIN],
+            archive_path=Path(cls.archive_temp.name) / "archive.sqlite3",
         )
         cls.api = LocalRepositoryApi(config)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.archive_temp.cleanup()
 
     def test_reports_read_only_health_and_scans_an_authorized_scope(self) -> None:
         health = self.api.dispatch("GET", "/api/v1/health", origin=ALLOWED_ORIGIN)
@@ -55,13 +67,16 @@ class LocalRepositoryApiTests(unittest.TestCase):
         self.assertIn("repository.source.read", health.body["capabilities"])
         self.assertIn("repository.scan.cache.memory", health.body["capabilities"])
         self.assertIn("github.pull-request.read", health.body["capabilities"])
+        self.assertIn("trace.archive.sqlite", health.body["capabilities"])
+        self.assertEqual(health.body["traceStorage"], "memory-live+sqlite-archive")
+        self.assertEqual(health.body["archiveStorage"]["journalMode"], "wal")
 
     def test_reuses_a_validated_memory_only_definition_scan(self) -> None:
         config = LocalServiceConfig.create(
             allowed_roots=[REPOSITORY_ROOT],
             allowed_origins=[ALLOWED_ORIGIN],
         )
-        api = LocalRepositoryApi(config)
+        api = LocalRepositoryApi(config, archive_enabled=False)
         first = api.dispatch(
             "POST",
             "/api/v1/repositories/scan",
@@ -197,6 +212,7 @@ class LocalRepositoryApiTests(unittest.TestCase):
         api = LocalRepositoryApi(
             self.api.config,
             github_pull_request_inspector=StubGitHubInspector(),  # type: ignore[arg-type]
+            archive_enabled=False,
         )
         response = api.dispatch(
             "POST",
@@ -263,10 +279,107 @@ class LocalRepositoryApiTests(unittest.TestCase):
         )
         self.assertEqual(denied.status, 403)
 
+    def test_archive_routes_default_to_redacted_and_gate_full_local_text(self) -> None:
+        created = self.api.dispatch(
+            "POST",
+            "/api/v1/traces",
+            body={"owner": "agent-core", "label": "Archive API trace", "maxTokens": 8192},
+            origin=ALLOWED_ORIGIN,
+        )
+        trace = created.body["trace"]
+        token = created.body["writeToken"]
+        appended = self.api.dispatch(
+            "POST",
+            f"/api/v1/traces/{trace['id']}/events",
+            body={
+                "events": [
+                    {
+                        "eventId": "raw-context",
+                        "kind": "context.delta",
+                        "phase": "instant",
+                        "timestampMs": 1,
+                        "spanId": "context",
+                        "summary": "用户消息已加入 Context；正文默认隐藏。",
+                        "context": {
+                            "operation": "append",
+                            "messages": [
+                                {
+                                    "id": "user-1",
+                                    "role": "user",
+                                    "label": "User input",
+                                    "raw": "API-RAW-SECRET",
+                                    "preview": "用户请求（已脱敏）",
+                                    "tokens": 5,
+                                    "source": "runtime.input",
+                                }
+                            ],
+                        },
+                    },
+                    {
+                        "eventId": "archive-terminal",
+                        "kind": "trace.status",
+                        "phase": "end",
+                        "timestampMs": 2,
+                        "spanId": "trace",
+                        "summary": "运行完成。",
+                    },
+                ]
+            },
+            origin=ALLOWED_ORIGIN,
+            trace_token=token,
+        )
+        listing = self.api.dispatch(
+            "GET",
+            "/api/v1/archive/sessions?limit=100&offset=0",
+            origin=ALLOWED_ORIGIN,
+        )
+        preview = self.api.dispatch(
+            "GET",
+            f"/api/v1/archive/sessions/{trace['id']}",
+            origin=ALLOWED_ORIGIN,
+        )
+        raw = self.api.dispatch(
+            "POST",
+            f"/api/v1/archive/sessions/{trace['id']}/raw",
+            body={"mode": "context"},
+            origin=ALLOWED_ORIGIN,
+        )
+        exported = self.api.dispatch(
+            "GET",
+            f"/api/v1/archive/sessions/{trace['id']}/export",
+            origin=ALLOWED_ORIGIN,
+        )
+
+        self.assertEqual(appended.status, 202)
+        self.assertTrue(appended.body["archived"])
+        self.assertEqual(listing.status, 200)
+        self.assertTrue(any(item["id"] == trace["id"] for item in listing.body["sessions"]))
+        self.assertNotIn("API-RAW-SECRET", json.dumps(preview.body, ensure_ascii=False))
+        self.assertFalse(preview.body["rawIncluded"])
+        self.assertIn("API-RAW-SECRET", json.dumps(raw.body, ensure_ascii=False))
+        self.assertTrue(raw.body["rawIncluded"])
+        self.assertIn("API-RAW-SECRET", json.dumps(exported.body, ensure_ascii=False))
+        self.assertTrue(exported.body["containsFullText"])
+
+        deleted = self.api.dispatch(
+            "DELETE",
+            f"/api/v1/archive/sessions/{trace['id']}",
+            origin=ALLOWED_ORIGIN,
+        )
+        missing = self.api.dispatch(
+            "GET",
+            f"/api/v1/archive/sessions/{trace['id']}",
+            origin=ALLOWED_ORIGIN,
+        )
+        self.assertEqual(deleted.status, 200)
+        self.assertTrue(deleted.body["deletedFullText"])
+        self.assertEqual(missing.status, 404)
+
     def test_http_stream_delivers_ordered_event_and_terminal_frame(self) -> None:
         config = LocalServiceConfig.create(
             allowed_roots=[REPOSITORY_ROOT],
             allowed_origins=[ALLOWED_ORIGIN],
+            archive_path=Path(self.archive_temp.name) / "http-archive.sqlite3",
         )
         server = create_http_server(config, port=0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
