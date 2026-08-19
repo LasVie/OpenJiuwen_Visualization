@@ -1,6 +1,7 @@
 import { projectTraceGraph } from "../domain/trace/projection";
 import { VisualizationPluginRegistry } from "../kernel";
 import { agentCorePlugin } from "../plugins/agent-core";
+import { agentCoreExecutorPlugin } from "../plugins/agent-core-executor";
 import { deterministicReplayPlugin } from "../plugins/deterministic-replay";
 import { jiuwenSwarmPlugin } from "../plugins/jiuwenswarm";
 import { localRepositoryPlugin } from "../plugins/local-repository";
@@ -16,6 +17,7 @@ export function createDefaultPluginRegistry() {
     agentCorePlugin,
     modelProviderPlugin,
     openRouterProviderPlugin,
+    agentCoreExecutorPlugin,
     jiuwenSwarmPlugin,
     openJiuwenIntegrationPlugin,
     deterministicReplayPlugin,

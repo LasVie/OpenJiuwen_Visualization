@@ -99,6 +99,7 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.agent-core", "enabled"],
         ["openjiuwen.model-provider", "enabled"],
         ["openjiuwen.openrouter-provider", "enabled"],
+        ["openjiuwen.agent-core-executor", "enabled"],
         ["openjiuwen.jiuwenswarm", "enabled"],
         ["openjiuwen.integration", "enabled"],
         ["openjiuwen.deterministic-replay", "enabled"],
@@ -138,6 +139,9 @@ describe("visualization plugin registry", () => {
     expect(defaultWorkbench.capabilities["runtime.model.openrouter.v1"]).toEqual([
       "openjiuwen.openrouter-provider",
     ]);
+    expect(defaultWorkbench.capabilities["runtime.agent-core.execute.v1"]).toEqual([
+      "openjiuwen.agent-core-executor",
+    ]);
     expect(defaultWorkbench.capabilities["graph.change.impact.v1"]).toEqual([
       "openjiuwen.git-change",
     ]);
@@ -166,6 +170,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.agent-core": "disabled",
       "openjiuwen.model-provider": "blocked",
       "openjiuwen.openrouter-provider": "blocked",
+      "openjiuwen.agent-core-executor": "blocked",
       "openjiuwen.jiuwenswarm": "enabled",
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",

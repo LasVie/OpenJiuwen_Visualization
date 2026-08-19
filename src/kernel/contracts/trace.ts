@@ -84,6 +84,7 @@ export interface HookInvocation {
   mutationDiff: string;
   controlSignal: string;
   noop?: boolean;
+  examines?: string[];
 }
 
 export interface CompressionEvent {

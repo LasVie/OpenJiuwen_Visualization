@@ -106,6 +106,7 @@ describe("Core Runtime trace projection", () => {
     expect(scenario.steps[1].hooks[0]).toMatchObject({
       rail: "ContextAssembleRail",
       mutationDiff: "+ runtime prompt",
+      examines: ["ModelCallInputs.messages"],
     });
     expect(scenario.messages[0].raw).toContain("整段运行时原文");
     expect(scenario.messages[0].addedAt).toBe(0);

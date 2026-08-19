@@ -12,6 +12,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from .agent_core_runtime import (
+    AgentCoreRuntimeAdapter,
+    AgentCoreRuntimeConfig,
+    AgentCoreRuntimeError,
+)
 from .config import LocalServiceConfig, PathAccessError
 from .git_changes import GitChangeError, GitChangeInspector, GitChangeOptions
 from .github_pull_requests import (
@@ -44,6 +49,9 @@ TRACE_EVENTS_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)/events$")
 TRACE_STREAM_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)/stream$")
 OPENROUTER_CANCEL_ROUTE = re.compile(
     r"^/api/v1/model-providers/openrouter/invocations/([^/]+)/cancel$"
+)
+AGENT_CORE_CANCEL_ROUTE = re.compile(
+    r"^/api/v1/agent-core/invocations/([^/]+)/cancel$"
 )
 
 
@@ -89,6 +97,7 @@ class LocalRepositoryApi:
         github_pull_request_inspector: GitHubPullRequestInspector | None = None,
         source_reader: SourceReader | None = None,
         openrouter_adapter: OpenRouterRuntimeAdapter | None = None,
+        agent_core_adapter: AgentCoreRuntimeAdapter | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -102,8 +111,17 @@ class LocalRepositoryApi:
             github_pull_request_inspector or GitHubPullRequestInspector()
         )
         self._source_reader = source_reader or SourceReader()
+        provider_config = (
+            openrouter_adapter.config
+            if openrouter_adapter is not None
+            else OpenRouterProviderConfig.from_environment()
+        )
         self.openrouter_adapter = openrouter_adapter or OpenRouterRuntimeAdapter(
-            OpenRouterProviderConfig.from_environment(),
+            provider_config,
+            self.trace_store,
+        )
+        self.agent_core_adapter = agent_core_adapter or AgentCoreRuntimeAdapter(
+            AgentCoreRuntimeConfig.from_environment(provider_config),
             self.trace_store,
         )
 
@@ -139,12 +157,19 @@ class LocalRepositoryApi:
                         "trace.ephemeral",
                         "model.provider.openrouter.registry",
                         *(["model.provider.openrouter.invoke"] if openrouter_ready else []),
+                        "runtime.agent-core.registry",
                     ],
                     "traceStorage": "memory-only",
                 },
             )
         if method == "GET" and route == "/api/v1/model-providers/openrouter":
             return ApiResponse(HTTPStatus.OK, self.openrouter_adapter.descriptor())
+        if method == "GET" and route == "/api/v1/agent-core":
+            refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
+            return ApiResponse(
+                HTTPStatus.OK,
+                self.agent_core_adapter.descriptor(refresh=refresh),
+            )
         if method == "GET" and route == "/api/v1/repositories":
             return ApiResponse(
                 HTTPStatus.OK,
@@ -171,9 +196,14 @@ class LocalRepositoryApi:
             return self._create_trace(body or {})
         if method == "POST" and route == "/api/v1/model-providers/openrouter/invocations":
             return self._start_openrouter(body or {}, trace_token)
+        if method == "POST" and route == "/api/v1/agent-core/invocations":
+            return self._start_agent_core(body or {}, trace_token)
         openrouter_cancel_match = OPENROUTER_CANCEL_ROUTE.fullmatch(route)
         if method == "POST" and openrouter_cancel_match:
             return self._cancel_openrouter(openrouter_cancel_match.group(1), trace_token)
+        agent_core_cancel_match = AGENT_CORE_CANCEL_ROUTE.fullmatch(route)
+        if method == "POST" and agent_core_cancel_match:
+            return self._cancel_agent_core(agent_core_cancel_match.group(1), trace_token)
         trace_match = TRACE_ROUTE.fullmatch(route)
         if method == "GET" and trace_match:
             return self._trace_snapshot(trace_match.group(1), split_path.query)
@@ -201,6 +231,28 @@ class LocalRepositoryApi:
         try:
             result = self.openrouter_adapter.cancel(invocation_id, trace_token)
         except OpenRouterProviderError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.ACCEPTED, result)
+
+    def _start_agent_core(
+        self,
+        body: dict[str, Any],
+        trace_token: str | None,
+    ) -> ApiResponse:
+        try:
+            result = self.agent_core_adapter.start(body, trace_token)
+        except AgentCoreRuntimeError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.ACCEPTED, result)
+
+    def _cancel_agent_core(
+        self,
+        invocation_id: str,
+        trace_token: str | None,
+    ) -> ApiResponse:
+        try:
+            result = self.agent_core_adapter.cancel(invocation_id, trace_token)
+        except AgentCoreRuntimeError as exc:
             return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
 

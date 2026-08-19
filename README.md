@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、Model Provider 录制回放与 OpenRouter 实时调用、工作树/commit range/GitHub PR 的节点影响图，以及带依赖解析的模块开关。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent + OpenRouter 执行、Model Provider 录制回放、工作树/commit range/GitHub PR 的节点影响图，以及带依赖解析的模块开关。
 
 ## 本地运行
 
@@ -17,7 +17,7 @@ npm run check
 
 ## 绑定本地仓库
 
-本地仓读取通过独立的只读服务完成。启动时必须明确给出允许访问的目录；服务只监听 loopback，不导入或执行目标仓代码：
+本地仓读取通过独立的只读服务完成。启动时必须明确给出允许访问的目录；Repository API 不导入或执行目标仓代码。真实 Agent Core 执行位于另一个显式、可选的隔离进程边界：
 
 ```powershell
 python -B services/local-server/scripts/run_server.py `
@@ -59,11 +59,15 @@ python -B services/local-server/scripts/scan_repository.py `
 
 ## Core Runtime
 
-运行链路的数据源可以在“演示 / Core Trace / Swarm Trace”之间切换。Core Trace 创建一个本机内存会话，通过 SSE 接收归一化的 Agent、ReAct、Rail、Context、Model、Tool 和 Ability 事件；它不会自行执行 `agent-core`、工具或模型。
+运行链路的数据源可以在“演示 / Core Trace / Swarm Trace”之间切换。Core Trace 创建一个本机内存会话，通过 SSE 接收归一化的 Agent、ReAct、Rail、Context、Model、Tool 和 Ability 事件；既可由外部 producer 写入，也可从“Agent Core”面板显式启动真实独立 DeepAgent。
 
 页面把事件顺序直接映射到已有的上一步/下一步、节点高亮、Rail 决策画布和 ContextWindow。停留在最新步骤时自动跟随新事件；回退查看历史后保持当前位置。Context 的分段模式默认脱敏，展开显示原文，连续原文始终保留完整消息。
 
 事件合同、接入请求和 Rail 精确证据规则见 [`docs/core-runtime-v1.md`](docs/core-runtime-v1.md)。
+
+### Agent Core 真实执行
+
+Core Trace 的“Agent Core”入口会先探测独立 Python 环境，然后在固定子进程中导入 `create_deep_agent`。内部运行真实 ReAct loop，模型使用 Agent Core 自带的 OpenRouter client；V1 只注册一个只读 `inspect_input` 工具。输入审查、最终 ContextWindow、模型流、Tool allowlist、工具结果、每轮 ReAct、usage、完成或取消都会进入同一时间轴和 Rail 深入画布。运行环境配置、API、安全边界和事件映射见 [`docs/agent-core-execution-v1.md`](docs/agent-core-execution-v1.md)。
 
 ## Swarm Runtime
 
@@ -79,7 +83,7 @@ Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，
 
 ### OpenRouter 实时调用
 
-切换到 Core Trace 后点击“OpenRouter”，可从本地服务注册的模型白名单中选择模型、输入文字、设置可选 system prompt 与输出上限。页面会创建独立内存 Trace；输入 Context、流式输出、最终 usage/费用、完成或取消会进入同一时间轴，并继续支持上一步/下一步与 Context 原文查看。API key 仅在本地服务环境变量中，默认模型白名单只有 `openrouter/free`。配置与安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
+OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback adapter。默认网页入口现在通过 Agent Core Executor 使用 Agent Core 自带的 OpenRouter client，避免把普通模型调用误画成 Agent。API key 仅在本地服务环境变量中，默认模型白名单只有 `openrouter/free`。Provider 配置与底层安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
 
 ### Git Change Plane
 
@@ -118,10 +122,11 @@ src/
 │  └─ scenarios/               # 一个文件一个演示轨迹
 ├─ features/
 │  ├─ context-window/          # 脱敏、原文和展示 Token 模型
+│  ├─ agent-core-execution/    # DeepAgent 状态探测、运行表单、取消与输入关联
 │  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
-│  ├─ openrouter-runtime/      # OpenRouter 注册状态、调用表单与取消控制
+│  ├─ openrouter-runtime/      # Provider-only OpenRouter 调用组件（底层模块）
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
 │  ├─ relation-explorer/       # Definition/Change 共享节点关系深入画布
 │  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期
@@ -136,7 +141,7 @@ src/
 ├─ types/                      # 兼容导出；稳定合同由 kernel 管理
 └─ workbench/                  # 组合默认插件并生成当前工作台快照
 services/
-└─ local-server/               # 路径白名单、Git/AST 只读索引与内存 Trace 采集
+└─ local-server/               # 只读索引、内存 Trace、Provider 与隔离 Agent Core bridge
 examples/                       # 可直接投递的归一化事件示例
 ```
 

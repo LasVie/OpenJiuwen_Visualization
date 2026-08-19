@@ -156,7 +156,9 @@ function reviewPayload(
   definition: RailNodeDefinition,
   step: TraceStep,
   runInput: string,
+  invocation?: HookInvocation,
 ) {
+  if (invocation?.examines?.length) return invocation.examines.join("\n\n");
   if (definition.id === "rail-safety") return runInput;
   if (definition.id === "rail-init") {
     return definition.hooks.map((hook) => `${hook.event} · p${hook.priority}`).join("\n");
@@ -223,7 +225,7 @@ export function buildRailReviewSnapshot(
   return {
     status,
     profile,
-    payload: reviewPayload(definition, step, runInput),
+    payload: reviewPayload(definition, step, runInput, invocation),
     invocation,
     checks,
     outcome,

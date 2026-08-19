@@ -20,6 +20,7 @@ export interface WorkbenchAvailability {
   tools: boolean;
   modelRuntime: boolean;
   openRouter: boolean;
+  agentCoreExecution: boolean;
   subagentRuntime: boolean;
   railReview: boolean;
   runtimeSources: {
@@ -88,6 +89,9 @@ export function workbenchAvailability(
     tools: workbench.toolCatalogSources.length > 0,
     modelRuntime: workbench.modelProviders.length > 0,
     openRouter: Boolean(workbench.capabilities["runtime.model.openrouter.v1"]),
+    agentCoreExecution: Boolean(
+      workbench.capabilities["runtime.agent-core.execute.v1"],
+    ),
     subagentRuntime: Boolean(
       workbench.capabilities["runtime.subagent.execution.v1"],
     ),

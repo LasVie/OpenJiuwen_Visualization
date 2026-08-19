@@ -73,7 +73,7 @@ export function CoreRuntimeSessionBar({
           <code>{trace.id}</code>
         </div>
       ) : (
-        <p>{error ?? "Trace 监听不执行 agent-core 或工具；模型需从 OpenRouter 显式启动。"}</p>
+        <p>{error ?? "Trace 监听本身不执行 Agent 或工具；真实 Agent 需从 Agent Core 面板显式启动。"}</p>
       )}
 
       {created ? (

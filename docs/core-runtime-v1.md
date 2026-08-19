@@ -1,6 +1,6 @@
 # Core Runtime V1
 
-Core Runtime V1 是 `agent-core` 与 Visualization Web 之间的归一化事件边界。它不执行 Agent、工具或模型，也不 import 目标仓代码；生产者主动把事件写入 loopback 服务，浏览器只读取内存中的 Trace 并进行投影。
+Core Runtime V1 是 `agent-core` 与 Visualization Web 之间的归一化事件边界。外部生产者可以主动写入；可选的 Agent Core Executor 也能在固定隔离进程中执行真实 DeepAgent 并写入同一协议。浏览器始终只读取内存 Trace，不 import Python 或接触凭据。
 
 ## 真实观测边界
 
@@ -128,4 +128,4 @@ X-Trace-Token: {writeToken}
 | `GET` | `/api/v1/traces/{id}?after=N` | 获取 N 之后的快照 |
 | `GET` | `/api/v1/traces/{id}/stream?after=N` | SSE 增量流；支持 `Last-Event-ID` 重连 |
 
-服务仍只允许 loopback host。Repository API 保持严格只读；Trace endpoint 本身只修改进程内存，不提供文件、Git、命令执行或凭据持久化能力。真实模型调用位于独立、显式授权的 OpenRouter Provider 路由，复用 Trace 作为唯一观测输出，见 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)。
+服务仍只允许 loopback host。Repository API 保持严格只读；Trace endpoint 本身只修改进程内存，不提供文件、Git、命令执行或凭据持久化能力。Provider-only 调用见 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)；真实 DeepAgent/ReAct 执行使用另一个固定 bridge 路由，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)。

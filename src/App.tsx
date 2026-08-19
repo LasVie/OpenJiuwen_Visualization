@@ -33,9 +33,9 @@ import {
 import { MagnetControls } from "./features/trace-graph";
 import { ModelRuntimePanel, projectModelRuntime } from "./features/model-runtime";
 import {
-  OpenRouterRuntimeLauncher,
-  useOpenRouterRuntime,
-} from "./features/openrouter-runtime";
+  AgentCoreRuntimeLauncher,
+  useAgentCoreExecution,
+} from "./features/agent-core-execution";
 import {
   PluginControlWorkspace,
   usePluginWorkbench,
@@ -122,7 +122,7 @@ export default function App() {
     toggleMagnet,
     setMagnetStrength,
   } = useReplayStore();
-  const createOpenRouterTrace = useCallback(async (label: string) => {
+  const createAgentCoreTrace = useCallback(async (label: string) => {
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -137,9 +137,9 @@ export default function App() {
     selectNode,
     toggleInspector,
   ]);
-  const openRouterRuntime = useOpenRouterRuntime({
-    enabled: availability.openRouter,
-    createTrace: createOpenRouterTrace,
+  const agentCoreExecution = useAgentCoreExecution({
+    enabled: availability.agentCoreExecution,
+    createTrace: createAgentCoreTrace,
     trace: coreRuntime.trace,
     traceClient: coreRuntime.client,
   });
@@ -163,7 +163,11 @@ export default function App() {
     ? fixtureStepIndex
     : Math.min(liveStepIndex, liveLastStep);
   const step = scenario.steps[stepIndex];
-  const activeRunInput = runtimeSource === "fixture" ? runInput : "";
+  const activeRunInput = runtimeSource === "fixture"
+    ? runInput
+    : runtimeSource === "core-runtime"
+      ? agentCoreExecution.lastInput
+      : "";
   const runtimeEventCount = runtimeSource === "core-runtime"
     ? coreRuntime.events.length
     : runtimeSource === "swarm-runtime"
@@ -282,7 +286,7 @@ export default function App() {
   }, [runtimeSource, scenario, stepIndex, liveLastStep, workbenchMode]);
 
   async function createCoreTrace() {
-    if (openRouterRuntime.active) return;
+    if (agentCoreExecution.active) return;
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -292,7 +296,7 @@ export default function App() {
   }
 
   async function loadModelRecording() {
-    if (!defaultModelRecording || openRouterRuntime.active) return;
+    if (!defaultModelRecording || agentCoreExecution.active) return;
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -459,7 +463,7 @@ export default function App() {
               placeholder={runtimeSource === "fixture"
                 ? "输入一段文字，按确定性轨迹模拟运行"
                 : runtimeSource === "core-runtime"
-                  ? "填写 Trace 标签；模型只从 OpenRouter 面板显式启动"
+                  ? "填写 Trace 标签；真实 DeepAgent 从 Agent Core 面板显式启动"
                   : "填写 Trace 标签；采集器不会执行 Swarm 或模型"}
               autoComplete="off"
             />
@@ -469,7 +473,7 @@ export default function App() {
               disabled={
                 runtimeSource === "core-runtime"
                   ? coreRuntime.connection === "creating"
-                    || openRouterRuntime.active
+                    || agentCoreExecution.active
                   : runtimeSource === "swarm-runtime"
                     ? swarmRuntime.connection === "creating"
                     : false
@@ -536,9 +540,9 @@ export default function App() {
               recordingAvailable={Boolean(defaultModelRecording)}
               recordingLoading={recordingLoading}
               recordingError={recordingError}
-              providerBusy={openRouterRuntime.active}
-              providerAction={availability.openRouter ? (
-                <OpenRouterRuntimeLauncher controller={openRouterRuntime} />
+              providerBusy={agentCoreExecution.active}
+              providerAction={availability.agentCoreExecution ? (
+                <AgentCoreRuntimeLauncher controller={agentCoreExecution} />
               ) : null}
             />
           ) : (

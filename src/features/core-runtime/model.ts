@@ -251,6 +251,7 @@ function hookInvocation(event: CoreRuntimeEvent, hook: RuntimeHookObservation) {
     mutationDiff: hook.mutationDiff,
     controlSignal: hook.controlSignal,
     noop: hook.noop,
+    examines: hook.examines,
   };
 }
 
@@ -317,7 +318,7 @@ export function emptyRuntimeScenario(
     name: trace?.label ?? "Core Runtime",
     shortName: "Live trace",
     description: trace
-      ? "采集器已就绪，等待 agent-core 事件；服务不会执行 Agent 或模型。"
+      ? "采集器已就绪；可等待外部事件，也可从 Agent Core 面板启动真实 DeepAgent。"
       : "创建本机内存 Trace 会话后，运行事件会按到达顺序进入链路。",
     defaultInput: "",
     railNodeIds: [],
@@ -399,7 +400,7 @@ export function projectCoreRuntimeTrace(
     id: `runtime:${trace.id}`,
     name: trace.label,
     shortName: "Live trace",
-    description: "来自本机内存采集器的 agent-core 事件；单个 Rail 决策仅在显式探针提供时标记为精确。",
+    description: "来自本机内存采集器的 agent-core 事件；真实执行桥接的显式 Rail 探针会标记精确审查证据。",
     defaultInput: "",
     railNodeIds: [...railNodeIds],
     maxTokens,

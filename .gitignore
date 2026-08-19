@@ -9,3 +9,9 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 .venv/
+.venv-agent-core/
+.agent-core-runtime/
+.uv-cache-agent-core/
+.pip-cache-agent-core/
+.runtime-temp/
+logs/

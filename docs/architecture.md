@@ -9,7 +9,7 @@
 - Change：本地 Git、commit 和 GitHub PR 的变更与影响关系。
 - Modules：插件启停、依赖状态与 capability 可见性。
 
-浏览器只负责交互与渲染。未来读取本地仓库、运行 Python、执行 Git 或调用模型的能力必须进入独立本地服务，不允许 React 组件直接访问凭据或执行目标仓代码。
+浏览器只负责交互与渲染。读取本地仓库、运行 Python、执行 Git 或调用模型的能力必须进入独立本地服务，不允许 React 组件直接访问凭据或执行目标仓代码。Repository API 始终只读且不 import 目标仓；真实 Agent Core 只通过显式启动的固定子进程 bridge 运行。
 
 ## 依赖方向
 
@@ -78,6 +78,7 @@ repository@revision:path:symbol
 | `openjiuwen.jiuwenswarm` | Swarm 请求/响应定义与 Team/Workflow/Subagent Runtime |
 | `openjiuwen.model-provider` | Provider 流、用量、取消与确定性录制回放 |
 | `openjiuwen.openrouter-provider` | 服务端 OpenRouter 调用、模型白名单、流式 Trace 与取消 |
+| `openjiuwen.agent-core-executor` | 隔离执行真实 DeepAgent/ReAct，并将 Rail、Context、Tool 与 OpenRouter 事件写入 Trace |
 | `openjiuwen.git-change` | 工作树、commit refs 与节点级影响映射 |
 | `openjiuwen.github-pull-request` | GitHub PR 只读文件变更、远端 head 对齐与节点影响映射 |
 | `openjiuwen.tool-catalog` | Tool 声明、静态注册路径与 `ability.register` 运行确认 |
@@ -85,7 +86,7 @@ repository@revision:path:symbol
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务、静态定义图、有界源码证据与 Git Change 客户端，默认开启 |
 
-`openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。组件不会读取 Python 对象或原始日志格式。
+`openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。`openjiuwen.agent-core-executor` 只增加显式执行入口，依赖 Core 和 OpenRouter 两个模块；组件不会读取 Python 对象或原始日志格式。
 
 后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
 
@@ -221,6 +222,8 @@ Model Provider 作为独立插件注册 adapter 与确定性 recording，不把�
 `features/model-runtime/` 按当前 Trace sequence 重建调用，因此上一步不会看到未来 delta。输出默认脱敏，完整输出需要显式展开；费用以整数微单位保存，页面不推断价格。默认 recording 通过同一个 loopback 内存 Trace endpoint 加载，验证整条 Provider 观测链但不执行真实模型请求。
 
 `openjiuwen.openrouter-provider` 是首个实时实现。`features/openrouter-runtime/` 只读取无凭据注册表、采集模拟输入并控制调用；本地服务固定 OpenRouter 域名、持有 key、解析 SSE、执行取消，再写回同一 Trace。完整合同见 [`model-provider-v1.md`](model-provider-v1.md) 与 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)。
+
+真实独立 Agent 由 `features/agent-core-execution/` 与可选 subprocess adapter 提供。网页只提交 Trace authority 和有界运行参数；bridge 从指定 source checkout 导入 `create_deep_agent`，让 Agent Core 自身执行 ReAct、Rail、AbilityManager 和 OpenRouter Model Client，再输出规范事件。完整边界见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)。
 
 ## Git Change Plane V1
 
