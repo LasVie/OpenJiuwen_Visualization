@@ -1,6 +1,6 @@
 # Local Repository Service
 
-该服务为 Visualization Web 提供本地仓库的只读边界、临时 Runtime Trace、可选 OpenRouter provider-only adapter，以及显式启动的 Agent Core / JiuwenSwarm / Subagent 隔离执行器。主服务只使用 Python 标准库；Repository API 不导入目标仓模块、不执行仓库脚本，也不提供 Git 或文件写接口。三个真实执行器仅通过各自固定 bridge 与单独 Python 环境运行，OpenRouter 仅在用户显式启动且服务端已配置密钥时访问外网。
+该服务为 Visualization Web 提供本地仓库的只读边界、临时 Runtime Trace、可选 OpenRouter provider-only adapter，以及显式启动的 Agent Core / JiuwenSwarm / SwarmFlow / Subagent 隔离执行器。主服务只使用 Python 标准库；Repository API 不导入目标仓模块、不执行仓库脚本，也不提供 Git 或文件写接口。四个真实执行器仅通过各自固定 bridge 与单独 Python 环境运行，OpenRouter 仅在用户显式启动且服务端已配置密钥时访问外网。
 
 ## 启动
 
@@ -41,6 +41,9 @@ python -B services/local-server/scripts/run_server.py `
 | `GET` | `/api/v1/subagents` | 探测固定 TaskTool Subagent bridge、Agent Core 依赖与父子工具策略 |
 | `POST` | `/api/v1/subagents/invocations` | 用 Swarm Trace authority 启动真实父 DeepAgent → child DeepAgent |
 | `POST` | `/api/v1/subagents/invocations/{id}/cancel` | 终止父子 bridge 进程并关闭 Trace |
+| `GET` | `/api/v1/swarmflows` | 探测 Agent Core SwarmFlow、JiuwenSwarm Workflow monitor、固定 profile 与 OpenRouter |
+| `POST` | `/api/v1/swarmflows/invocations` | 用 Swarm Trace authority 启动真实固定两阶段 SwarmFlow |
+| `POST` | `/api/v1/swarmflows/invocations/{id}/cancel` | 终止 workflow bridge 并关闭 Swarm Trace |
 
 扫描请求：
 
@@ -91,6 +94,8 @@ Tool 目录请求：
 - Team harness 内部资源在最后一个 `before_model_call` Rail 被按角色收敛：Leader 只看到 `create_task / view_task / send_message`，Analyst 只看到 `view_task / send_message / member_complete_task`；`before_tool_call` 再执行一次 deny 检查。一次最多运行一个 Team bridge。
 - Subagent endpoint 固定运行单层、单 child、前台 `task_tool` 委派；父模型最终只看见 `task_tool`，child 最终只看见只读 `inspect_delegated_task`。两侧在最终 `before_model_call` 过滤 schema，并在 `before_tool_call` 再次 deny；文件、Shell、Git、网络、MCP、Skill、通用 Agent、后台 spawn 与嵌套 child 都关闭。一次最多运行一个 Subagent bridge。
 - Subagent child 使用独立 session、Context owner 和父 workspace 下的子目录；取消会终止整个固定父子进程，已接收证据保留。
+- SwarmFlow endpoint 只运行仓内固定两阶段脚本；浏览器不能提交脚本、路径、Phase、Agent、Tool、并行或 HITL 配置。两个 `agent()` 分别进入真实临时 TeamHarness，最终 Rail 清空所有模型可见 Tool schema，并在 `before_tool_call` 拒绝任何意外调用。
+- SwarmFlow 的 Workflow/Phase/Agent 状态来自 Agent Core `WorkflowProgressEvent` 经 JiuwenSwarm `WorkflowMonitorHandler` 的结构化聚合；两个 Worker 使用独立 Context owner，取消终止完整固定进程并保留已接收证据。
 - JiuwenSwarm 的 Team、Member、Task、Message、Rail、Model、Tool 与 Context 事件都进入同一 Trace；每个成员使用独立 Context owner，不把完整原文复制到日志或错误元数据。
 - Runtime Trace 使用高熵会话 ID 和独立写入令牌；数据有数量、请求体和过期限制，只保存在内存。
 - `agent-core` 会话只接受 Core 事件；`jiuwenswarm` 会话的非终止事件必须声明 `subject`，Context 还必须声明 `context.ownerId`，避免跨主体混合或无层级事件进入 UI。
@@ -101,7 +106,7 @@ Tool 目录请求：
 - GitHub PR API 只接受结构化 owner/repository/PR 编号，固定访问 `api.github.com` 且拒绝重定向；浏览器不接触凭据，本地 Git 与远端 PR 都不会被修改。公共仓默认无需 token；可选的 `OPENJIUWEN_GITHUB_TOKEN` 只从服务端进程环境读取。
 - Tool Catalog 仅解析候选文件 AST，不 import、执行或实例化 Tool；注册数据流无法静态解析时保留为 `dynamic`，返回始终声明 `writeOperations: false`。
 
-Trace、Provider、Agent 执行、源码、缓存、变更与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/subagent-execution-v1.md`](../../docs/subagent-execution-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
+Trace、Provider、Agent 执行、源码、缓存、变更与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md)、[`docs/swarmflow-execution-v1.md`](../../docs/swarmflow-execution-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/subagent-execution-v1.md`](../../docs/subagent-execution-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
 
 仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 
@@ -114,3 +119,5 @@ python -B services/local-server/scripts/run_tests.py
 不访问 OpenRouter 的 JiuwenSwarm 框架自检见 [`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md#环境配置)。
 
 不访问 OpenRouter、但真实执行 `SubagentRail → task_tool → create_subagent` 的父子框架自检见 [`docs/subagent-execution-v1.md`](../../docs/subagent-execution-v1.md#无网络框架自检)。
+
+不访问 OpenRouter、但真实执行 `run_swarmflow → TeamWorkerBackend → WorkflowMonitorHandler` 的工作流自检见 [`docs/swarmflow-execution-v1.md`](../../docs/swarmflow-execution-v1.md#无网络真实框架自检)。

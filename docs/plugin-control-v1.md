@@ -60,6 +60,8 @@ localStorage["openjiuwen.visualization.plugin-states.v1"]
 - OpenRouter 调用入口：存在 `runtime.model.openrouter.v1` capability；
 - Agent Core 真实执行入口：存在 `runtime.agent-core.execute.v1` capability；
 - JiuwenSwarm Agent Team 真实执行入口：存在 `runtime.jiuwenswarm.execute.v1` capability；
+- Agent Core SwarmFlow 真实执行入口：存在 `runtime.swarmflow.execute.v1` capability；
+- Agent Core Subagent 真实执行入口：存在 `runtime.subagent.execute.v1` capability；
 - Subagent 深入画布：存在 `runtime.subagent.execution.v1` capability；
 - Rail 深入画布：存在 `graph.rail` capability。
 
@@ -75,6 +77,8 @@ Definition/Trace 图使用当前快照重新投影，不继续读取启动时的
 openjiuwen.agent-core ──→ openjiuwen.model-provider ──→ openjiuwen.openrouter-provider
 (openjiuwen.agent-core + openjiuwen.openrouter-provider) ──→ openjiuwen.agent-core-executor
 (openjiuwen.jiuwenswarm + openjiuwen.openrouter-provider) ──→ openjiuwen.jiuwenswarm-executor
+(openjiuwen.agent-core + openjiuwen.jiuwenswarm + openjiuwen.openrouter-provider) ──→ openjiuwen.swarmflow-executor
+(openjiuwen.agent-core + openjiuwen.jiuwenswarm + openjiuwen.openrouter-provider) ──→ openjiuwen.subagent-executor
 (openjiuwen.agent-core + openjiuwen.jiuwenswarm) ──→ openjiuwen.integration ──→ openjiuwen.deterministic-replay
 
 openjiuwen.local-repository ──→ openjiuwen.tool-catalog

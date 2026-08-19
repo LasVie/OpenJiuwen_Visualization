@@ -45,6 +45,10 @@ import {
   useSubagentExecution,
 } from "./features/subagent-execution";
 import {
+  SwarmFlowRuntimeLauncher,
+  useSwarmFlowExecution,
+} from "./features/swarmflow-execution";
+import {
   PluginControlWorkspace,
   usePluginWorkbench,
   workbenchAvailability,
@@ -180,6 +184,12 @@ export default function App() {
     trace: swarmRuntime.trace,
     traceClient: swarmRuntime.client,
   });
+  const swarmFlowExecution = useSwarmFlowExecution({
+    enabled: availability.swarmFlowExecution,
+    createTrace: createJiuwenSwarmTrace,
+    trace: swarmRuntime.trace,
+    traceClient: swarmRuntime.client,
+  });
   const runtimeSourceAvailability = useMemo<
     Readonly<Record<RuntimeSourceMode, boolean>>
   >(() => ({
@@ -204,9 +214,13 @@ export default function App() {
     ? runInput
     : runtimeSource === "core-runtime"
       ? agentCoreExecution.lastInput
-      : subagentExecution.traceId === swarmRuntime.trace?.id
-        ? subagentExecution.lastInput
-        : jiuwenSwarmExecution.lastInput;
+      : swarmFlowExecution.traceId === swarmRuntime.trace?.id
+        ? swarmFlowExecution.lastInput
+        : subagentExecution.traceId === swarmRuntime.trace?.id
+          ? subagentExecution.lastInput
+          : jiuwenSwarmExecution.invocation?.traceId === swarmRuntime.trace?.id
+            ? jiuwenSwarmExecution.lastInput
+            : "";
   const runtimeEventCount = runtimeSource === "core-runtime"
     ? coreRuntime.events.length
     : runtimeSource === "swarm-runtime"
@@ -362,7 +376,11 @@ export default function App() {
   }
 
   async function createSwarmTrace() {
-    if (jiuwenSwarmExecution.active || subagentExecution.active) return;
+    if (
+      jiuwenSwarmExecution.active ||
+      subagentExecution.active ||
+      swarmFlowExecution.active
+    ) return;
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -379,7 +397,8 @@ export default function App() {
     if (
       !defaultSwarmRecording ||
       jiuwenSwarmExecution.active ||
-      subagentExecution.active
+      subagentExecution.active ||
+      swarmFlowExecution.active
     ) return;
     setLiveStepIndex(0);
     setFollowLive(true);
@@ -508,7 +527,7 @@ export default function App() {
                 ? "输入一段文字，按确定性轨迹模拟运行"
                 : runtimeSource === "core-runtime"
                   ? "填写 Trace 标签；真实 DeepAgent 从 Agent Core 面板显式启动"
-                  : "填写 Trace 标签；真实团队从 Agent Team 面板显式启动"}
+                  : "填写 Trace 标签；Agent Team、SwarmFlow 或 Subagent 从对应面板显式启动"}
               autoComplete="off"
             />
             <button
@@ -522,6 +541,7 @@ export default function App() {
                     ? swarmRuntime.connection === "creating"
                       || jiuwenSwarmExecution.active
                       || subagentExecution.active
+                      || swarmFlowExecution.active
                     : false
               }
             >
@@ -603,21 +623,33 @@ export default function App() {
               recordingAvailable={Boolean(defaultSwarmRecording)}
               recordingLoading={swarmRecordingLoading}
               recordingError={swarmRecordingError}
-              providerBusy={jiuwenSwarmExecution.active || subagentExecution.active}
+              providerBusy={
+                jiuwenSwarmExecution.active ||
+                subagentExecution.active ||
+                swarmFlowExecution.active
+              }
               providerAction={(
-                availability.jiuwenSwarmExecution || availability.subagentExecution
+                availability.jiuwenSwarmExecution ||
+                availability.swarmFlowExecution ||
+                availability.subagentExecution
               ) ? (
                 <div className="swarm-runtime-session__providers">
                   {availability.jiuwenSwarmExecution ? (
                     <JiuwenSwarmRuntimeLauncher
                       controller={jiuwenSwarmExecution}
-                      disabled={subagentExecution.active}
+                      disabled={subagentExecution.active || swarmFlowExecution.active}
+                    />
+                  ) : null}
+                  {availability.swarmFlowExecution ? (
+                    <SwarmFlowRuntimeLauncher
+                      controller={swarmFlowExecution}
+                      disabled={jiuwenSwarmExecution.active || subagentExecution.active}
                     />
                   ) : null}
                   {availability.subagentExecution ? (
                     <SubagentRuntimeLauncher
                       controller={subagentExecution}
-                      disabled={jiuwenSwarmExecution.active}
+                      disabled={jiuwenSwarmExecution.active || swarmFlowExecution.active}
                     />
                   ) : null}
                 </div>

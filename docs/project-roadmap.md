@@ -9,7 +9,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 长期能力按四个平面组织：
 
 - Definition：仓库、符号、Tool、Rail、Hook、Agent、Workflow 与配置定义；
-- Runtime：Agent、Agent Team、Subagent、未来的 SwarmFlow、Model、Tool、Context 和决策过程；
+- Runtime：Agent、Agent Team、SwarmFlow、Subagent、Model、Tool、Context 和决策过程；
 - Change：工作树、commit range、GitHub PR 与受影响节点；
 - Modules：Provider、执行器、数据源和深入画布的可开关插件。
 
@@ -29,6 +29,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | Agent Core 真实执行 | 已完成 | 固定隔离 bridge、真实 DeepAgent/ReAct/Rail/只读 Tool/OpenRouter、取消与自检 |
 | JiuwenSwarm Agent Team 真实执行 | 已完成 | 固定双成员 Team、真实 Team Runner/TeamMonitor、角色 Tool 边界、成员独立 Context |
 | Agent Core Subagent 真实执行 | 已完成 | 父 DeepAgent → TaskTool → child DeepAgent、父子 session/Context、双重 Tool 边界、取消与自检 |
+| Agent Core SwarmFlow 真实执行 | 已完成 | 固定两阶段 Workflow、真实 TeamWorkerBackend、结构化 WorkflowMonitor、Worker Rail/ReAct 与独立 Context |
 
 ## 当前已支持功能
 
@@ -63,6 +64,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 真实独立 Agent Core DeepAgent，包含 ReAct、Rail、Model、Tool、Context 和取消；
 - 真实 JiuwenSwarm 两成员 Agent Team，包含 Team/Member/Task/Message、成员 Rail、Model、团队 Tool 和独立 Context；
 - 真实 Agent Core 前台单层 Subagent，包含父侧 `task_tool`、child ReAct/Rail/只读 Tool、独立 session/workspace/Context 与结果回传；
+- 真实 Agent Core 两阶段 SwarmFlow，包含 Workflow/Phase/临时 Worker、真实 ReAct/Rail/Model、结构化状态聚合与每 Worker 独立 Context；
 - Rail 卡片进入独立画布，逐帧查看读取、检查、变更、控制信号与输出证据；
 - Provider 录制回放和 OpenRouter 实时流式调用。
 
@@ -78,33 +80,34 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - Runtime Trace 与 Context 默认只在 local service 内存中保存；
 - JiuwenSwarm V1 是固定双成员 Agent Team，不是 SwarmFlow，一次最多一个执行；
 - Subagent V1 固定为单层、单 child、前台执行，不支持并行、后台 spawn、sticky resume 或嵌套 child；
+- SwarmFlow V1 固定为两个串行 Phase、每阶段一个临时 Worker，无并行、HITL、任意脚本/配置上传或工具执行；
 - WorkflowProgress 尚无可靠的结构化 tool activity，页面不会从文本猜 Tool 调用；
 - 执行器不开放任意 Shell、Git 写入、文件写入、MCP、Skill 或浏览器自定义工具；
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
 - 还没有持久化运行归档、跨运行比较、协作权限或远端部署控制面。
 
-## 下一阶段：SwarmFlow Executor V1
+## 下一阶段：Runtime ↔ Definition ↔ Change 收敛 V1
 
-下一阶段将从“固定 Agent Team”和“固定前台 Subagent”继续向真实 SwarmFlow 推进，但必须保留三者不同的产品语义。目标是选择一个可重复、无动态代码注入的最小 workflow，在真实 Workflow/Phase/Agent 状态机上验证分阶段执行、控制流边和每个执行主体的 Context，而不是把 Agent Team 事件重新换标签。
+下一阶段把已经稳定的真实 Runtime 证据连接到 Definition 与 Change 平面。目标不是新增第四套节点，而是让一次 Agent/Team/SwarmFlow/Subagent 运行可以跳转到其精确源码定义，并让工作树或 PR 影响图明确标出“被修改且在本次运行中实际经过”的节点。
 
 计划交付：
 
-1. 只读检视 JiuwenSwarm WorkflowAgent、WorkflowMonitorHandler、WorkflowProgress 与 Runner 的真实装配/停止入口；
-2. 选择一个固定最小 workflow，明确 Phase、Agent、转移条件、失败/取消和 Context owner；
-3. 定义独立 `runtime.swarmflow.execute.v1` 插件与 API，不复用 Agent Team/Subagent 的运行时身份；
-4. 在隔离 bridge 中运行真实 workflow，并只从结构化 monitor/callback 归一化 Workflow/Phase/Agent 事件；
-5. 让阶段切换、当前分支、上一步/下一步与 Context owner 在现有 Swarm 画布中精确联动；
-6. 增加无网络框架自检、服务测试、前端测试和真实浏览器验收。
+1. 定义跨平面的稳定 source identity，统一 repository、revision、path、symbol 与 runtime subject/span；
+2. 从带 `definition` 的 Runtime event 精确关联 AST Definition node，缺失或 revision 不一致时显式降级而不靠名称猜测；
+3. 在 Definition inspector 中显示本次 Trace 的调用次数、最后状态、Token 与可跳转步骤；
+4. 在 Change 图叠加实际运行覆盖，区分 direct change、关系影响与 runtime-observed 三种证据；
+5. 提供 `运行节点 → 源码定义 → 变更影响 → 原运行步骤` 的往返导航，并保持当前 Trace/revision 上下文；
+6. 增加 identity、脏工作树/PR revision 降级、前端投影和真实浏览器验收。
 
-默认边界是固定 workflow、固定 Agent/Phase、无任意代码/配置上传、无人工审批节点、OpenRouter 首个 Provider；若上游真实入口要求在“可重复 workflow”与“Human-in-the-loop”之间做不可兼容选择，再请求产品决策。
+默认只做只读关联，不自动 fetch、checkout、编辑、生成补丁或提交；若同一源码定义在多仓/多 revision 下无法保持唯一 identity，再请求数据模型决策。
 
 ## 后续路线
 
 | 优先级 | 阶段 | 核心结果 | 进入前的决策点 |
 |---:|---|---|---|
 | 已完成 | 真实 Subagent Executor | 父子 session/Context/Tool/结果的真实链路 | 固定单 child profile 已落地 |
-| P1 | SwarmFlow Executor | Workflow/Phase/Agent 的真实流程运行和控制 | 先选择一个可重复的最小 workflow；不能复用 Agent Team 标签 |
-| P2 | Runtime ↔ Definition ↔ Change 收敛 | 运行节点跳转源码，PR 标出受影响且实际运行的链路 | 稳定 source identity 与 revision 对齐策略 |
+| 已完成 | SwarmFlow Executor | Workflow/Phase/Agent 的真实流程运行和控制 | 固定两阶段 profile 已落地，身份独立于 Agent Team/Subagent |
+| P1 | Runtime ↔ Definition ↔ Change 收敛 | 运行节点跳转源码，PR 标出受影响且实际运行的链路 | 稳定 source identity 与 revision 对齐策略 |
 | P3 | 运行归档与对比 | 可选持久化、跨运行 diff、Token/费用/决策比较 | 本地数据库、脱敏和保留周期 |
 | P4 | Provider 与插件 Host | 更多模型 Provider、注册工具插件、权限声明 | 插件签名、密钥隔离和 capability 审批 |
 | P5 | 辅助开发闭环 | 从受影响节点生成测试/修改建议并回写受控分支 | 任何写操作都需要独立权限和可审计审批 |

@@ -34,6 +34,7 @@ describe("plugin control model", () => {
           "openjiuwen.model-provider",
           "openjiuwen.agent-core-executor",
           "openjiuwen.subagent-executor",
+          "openjiuwen.swarmflow-executor",
           "openjiuwen.integration",
         ],
       });
@@ -54,6 +55,7 @@ describe("plugin control model", () => {
       openRouter: true,
       agentCoreExecution: true,
       jiuwenSwarmExecution: true,
+      swarmFlowExecution: true,
       subagentExecution: true,
       subagentRuntime: true,
       railReview: true,
@@ -75,6 +77,7 @@ describe("plugin control model", () => {
       openRouter: false,
       agentCoreExecution: false,
       jiuwenSwarmExecution: false,
+      swarmFlowExecution: false,
       subagentExecution: false,
       subagentRuntime: true,
       railReview: false,
@@ -89,6 +92,7 @@ describe("plugin control model", () => {
       openRouter: false,
       agentCoreExecution: false,
       jiuwenSwarmExecution: false,
+      swarmFlowExecution: false,
       subagentExecution: false,
     });
     expect(withoutOpenRouter.modelProviders.map((provider) => provider.id))

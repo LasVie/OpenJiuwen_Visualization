@@ -1,0 +1,106 @@
+.swarmflow-launcher__trigger {
+  color: #155d72;
+  background: #e6f4f7;
+  box-shadow: inset 0 0 0 1px rgb(31 111 139 / 0.25);
+}
+
+.swarmflow-launcher__trigger:hover {
+  background: #d8edf2;
+  box-shadow: inset 0 0 0 1px rgb(31 111 139 / 0.43);
+}
+
+.swarmflow-launcher__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.swarmflow-dialog {
+  --provider-accent: #1f6f8b;
+}
+
+.swarmflow-dialog__mark {
+  color: white;
+  background: #1f6f8b;
+}
+
+.swarmflow-form__notice {
+  color: #164e60;
+  background: #eaf6f8;
+  box-shadow: inset 0 0 0 1px rgb(31 111 139 / 0.2);
+}
+
+.swarmflow-form__route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.swarmflow-form__route > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.swarmflow-form__route > div > span {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 14px;
+  color: #174f61;
+  background: #f1f9fa;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgb(31 111 139 / 0.18);
+}
+
+.swarmflow-form__route small {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #568291;
+}
+
+.swarmflow-form__route strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swarmflow-form__route em {
+  overflow: hidden;
+  font-size: 11px;
+  font-style: normal;
+  color: #52727c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swarmflow-form__route svg {
+  flex: 0 0 auto;
+  color: #5d8c9a;
+}
+
+.swarmflow-form__invocation {
+  color: #164e60;
+  background: #f1f9fa;
+}
+
+.swarmflow-form__run {
+  background: #1f6f8b;
+}
+
+.swarmflow-form__run:hover:not(:disabled) {
+  background: #185d76;
+}
+
+@media (max-width: 720px) {
+  .swarmflow-form__route {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .swarmflow-form__route > div > svg {
+    display: none;
+  }
+}

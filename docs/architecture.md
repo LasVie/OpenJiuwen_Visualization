@@ -81,6 +81,7 @@ repository@revision:path:symbol
 | `openjiuwen.agent-core-executor` | 隔离执行真实 DeepAgent/ReAct，并将 Rail、Context、Tool 与 OpenRouter 事件写入 Trace |
 | `openjiuwen.jiuwenswarm-executor` | 隔离执行真实两成员 Agent Team，并将主体、任务、消息、Rail 与独立 Context 写入 Swarm Trace |
 | `openjiuwen.subagent-executor` | 隔离执行真实父 DeepAgent → TaskTool → child DeepAgent，并写入父子 session、Rail、Tool 与独立 Context |
+| `openjiuwen.swarmflow-executor` | 隔离执行固定两阶段 SwarmFlow，并写入 Workflow、Phase、临时 Worker、Rail 与独立 Context |
 | `openjiuwen.git-change` | 工作树、commit refs 与节点级影响映射 |
 | `openjiuwen.github-pull-request` | GitHub PR 只读文件变更、远端 head 对齐与节点影响映射 |
 | `openjiuwen.tool-catalog` | Tool 声明、静态注册路径与 `ability.register` 运行确认 |
@@ -88,7 +89,7 @@ repository@revision:path:symbol
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务、静态定义图、有界源码证据与 Git Change 客户端，默认开启 |
 
-`openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。三个 Executor 只增加各自显式执行入口：独立 DeepAgent、Agent Team 和 TaskTool Subagent 拥有不同 capability 与 bridge；它们依赖对应 Runtime source 与 OpenRouter 模块，组件不会读取 Python 对象或原始日志格式。
+`openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。四个 Executor 只增加各自显式执行入口：独立 DeepAgent、Agent Team、固定 SwarmFlow 和 TaskTool Subagent 拥有不同 capability 与 bridge；它们依赖对应 Runtime source 与 OpenRouter 模块，组件不会读取 Python 对象或原始日志格式。
 
 后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
 
@@ -211,6 +212,8 @@ subject.id + subject.kind + subject.parentId
 
 可选的 `features/jiuwenswarm-execution/` 只负责无凭据状态、启动/取消和页面关联；服务端固定 bridge 从两个 source checkout 执行 `enrich_team_spec_for_swarm`、Agent Core Team Runner 与 TeamMonitor，再把真实团队证据归一化回同一协议。V1 固定为双成员 `scheduled + inprocess` Agent Team，明确关闭 SwarmFlow，并由最后一道 Rail 按成员角色收敛模型可见团队工具。完整边界见 [`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)。
 
+`features/swarmflow-execution/` 与 `openjiuwen.swarmflow-executor` 使用另一条独立身份和 API。服务端只运行仓内 `swarmflow_v1.py`：Agent Core `run_swarmflow` 为两个串行 `agent()` 分别创建临时 `TeamWorkerBackend/TeamHarness`，JiuwenSwarm `WorkflowMonitorHandler` 从结构化 progress 聚合 workflow/phase/agent。Worker Rail 最终清空工具 schema，并为每个 Worker 输出独立 Context。它不复用 Agent Team roster、Task/Message 或 Subagent dispatcher 语义。完整边界见 [`swarmflow-execution-v1.md`](swarmflow-execution-v1.md)。
+
 ## Subagent Execution Plane V1
 
 Subagent 是 Swarm 主体层级下的独立执行边界，不等同于 Team Member 的 child AgentSession。`swarm.subagent` 必须提供结构化 observation，明确 dispatcher、前后台模式、父/子 session、Context owner、session policy、workspace isolation 与 Tool policy；同一 invocation 的身份字段由服务端保持稳定。
@@ -227,7 +230,7 @@ Model Provider 作为独立插件注册 adapter 与确定性 recording，不把�
 
 `openjiuwen.openrouter-provider` 是首个实时实现。`features/openrouter-runtime/` 只读取无凭据注册表、采集模拟输入并控制调用；本地服务固定 OpenRouter 域名、持有 key、解析 SSE、执行取消，再写回同一 Trace。完整合同见 [`model-provider-v1.md`](model-provider-v1.md) 与 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)。
 
-真实独立 Agent 由 `features/agent-core-execution/` 与可选 subprocess adapter 提供。网页只提交 Trace authority 和有界运行参数；bridge 从指定 source checkout 导入 `create_deep_agent`，让 Agent Core 自身执行 ReAct、Rail、AbilityManager 和 OpenRouter Model Client，再输出规范事件。真实 Agent Team 与真实 TaskTool Subagent 各走独立 bridge，不能复用 provider-only adapter 或彼此的身份冒充编排。完整边界见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)、[`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md) 与 [`subagent-execution-v1.md`](subagent-execution-v1.md)。
+真实独立 Agent 由 `features/agent-core-execution/` 与可选 subprocess adapter 提供。网页只提交 Trace authority 和有界运行参数；bridge 从指定 source checkout 导入 `create_deep_agent`，让 Agent Core 自身执行 ReAct、Rail、AbilityManager 和 OpenRouter Model Client，再输出规范事件。真实 Agent Team、固定 SwarmFlow 与真实 TaskTool Subagent 各走独立 bridge，不能复用 provider-only adapter 或彼此的身份冒充编排。完整边界见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)、[`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)、[`swarmflow-execution-v1.md`](swarmflow-execution-v1.md) 与 [`subagent-execution-v1.md`](subagent-execution-v1.md)。
 
 ## Git Change Plane V1
 

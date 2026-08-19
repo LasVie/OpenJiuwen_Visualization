@@ -8,6 +8,7 @@ from .openrouter_provider import OpenRouterProviderConfig, OpenRouterRuntimeAdap
 from .scanner import PythonRepositoryScanner, ScanOptions
 from .trace_store import RuntimeTraceStore, TraceStoreError
 from .subagent_runtime import SubagentRuntimeAdapter, SubagentRuntimeConfig
+from .swarmflow_runtime import SwarmFlowRuntimeAdapter, SwarmFlowRuntimeConfig
 
 __all__ = [
     "LocalRepositoryApi",
@@ -24,5 +25,7 @@ __all__ = [
     "TraceStoreError",
     "SubagentRuntimeAdapter",
     "SubagentRuntimeConfig",
+    "SwarmFlowRuntimeAdapter",
+    "SwarmFlowRuntimeConfig",
     "create_http_server",
 ]

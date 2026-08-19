@@ -43,6 +43,11 @@ from .subagent_runtime import (
     SubagentRuntimeConfig,
     SubagentRuntimeError,
 )
+from .swarmflow_runtime import (
+    SwarmFlowRuntimeAdapter,
+    SwarmFlowRuntimeConfig,
+    SwarmFlowRuntimeError,
+)
 from .scanner import (
     PythonRepositoryScanner,
     ScanOptions,
@@ -68,6 +73,9 @@ JIUWENSWARM_CANCEL_ROUTE = re.compile(
 )
 SUBAGENT_CANCEL_ROUTE = re.compile(
     r"^/api/v1/subagents/invocations/([^/]+)/cancel$"
+)
+SWARMFLOW_CANCEL_ROUTE = re.compile(
+    r"^/api/v1/swarmflows/invocations/([^/]+)/cancel$"
 )
 
 
@@ -116,6 +124,7 @@ class LocalRepositoryApi:
         agent_core_adapter: AgentCoreRuntimeAdapter | None = None,
         jiuwenswarm_adapter: JiuwenSwarmRuntimeAdapter | None = None,
         subagent_adapter: SubagentRuntimeAdapter | None = None,
+        swarmflow_adapter: SwarmFlowRuntimeAdapter | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -148,6 +157,10 @@ class LocalRepositoryApi:
         )
         self.subagent_adapter = subagent_adapter or SubagentRuntimeAdapter(
             SubagentRuntimeConfig.from_environment(provider_config),
+            self.trace_store,
+        )
+        self.swarmflow_adapter = swarmflow_adapter or SwarmFlowRuntimeAdapter(
+            SwarmFlowRuntimeConfig.from_environment(provider_config),
             self.trace_store,
         )
 
@@ -186,6 +199,7 @@ class LocalRepositoryApi:
                         "runtime.agent-core.registry",
                         "runtime.jiuwenswarm.registry",
                         "runtime.subagent.registry",
+                        "runtime.swarmflow.registry",
                     ],
                     "traceStorage": "memory-only",
                 },
@@ -209,6 +223,12 @@ class LocalRepositoryApi:
             return ApiResponse(
                 HTTPStatus.OK,
                 self.subagent_adapter.descriptor(refresh=refresh),
+            )
+        if method == "GET" and route == "/api/v1/swarmflows":
+            refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
+            return ApiResponse(
+                HTTPStatus.OK,
+                self.swarmflow_adapter.descriptor(refresh=refresh),
             )
         if method == "GET" and route == "/api/v1/repositories":
             return ApiResponse(
@@ -242,6 +262,8 @@ class LocalRepositoryApi:
             return self._start_jiuwenswarm(body or {}, trace_token)
         if method == "POST" and route == "/api/v1/subagents/invocations":
             return self._start_subagent(body or {}, trace_token)
+        if method == "POST" and route == "/api/v1/swarmflows/invocations":
+            return self._start_swarmflow(body or {}, trace_token)
         openrouter_cancel_match = OPENROUTER_CANCEL_ROUTE.fullmatch(route)
         if method == "POST" and openrouter_cancel_match:
             return self._cancel_openrouter(openrouter_cancel_match.group(1), trace_token)
@@ -254,6 +276,9 @@ class LocalRepositoryApi:
         subagent_cancel_match = SUBAGENT_CANCEL_ROUTE.fullmatch(route)
         if method == "POST" and subagent_cancel_match:
             return self._cancel_subagent(subagent_cancel_match.group(1), trace_token)
+        swarmflow_cancel_match = SWARMFLOW_CANCEL_ROUTE.fullmatch(route)
+        if method == "POST" and swarmflow_cancel_match:
+            return self._cancel_swarmflow(swarmflow_cancel_match.group(1), trace_token)
         trace_match = TRACE_ROUTE.fullmatch(route)
         if method == "GET" and trace_match:
             return self._trace_snapshot(trace_match.group(1), split_path.query)
@@ -347,6 +372,28 @@ class LocalRepositoryApi:
         try:
             result = self.subagent_adapter.cancel(invocation_id, trace_token)
         except SubagentRuntimeError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.ACCEPTED, result)
+
+    def _start_swarmflow(
+        self,
+        body: dict[str, Any],
+        trace_token: str | None,
+    ) -> ApiResponse:
+        try:
+            result = self.swarmflow_adapter.start(body, trace_token)
+        except SwarmFlowRuntimeError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.ACCEPTED, result)
+
+    def _cancel_swarmflow(
+        self,
+        invocation_id: str,
+        trace_token: str | None,
+    ) -> ApiResponse:
+        try:
+            result = self.swarmflow_adapter.cancel(invocation_id, trace_token)
+        except SwarmFlowRuntimeError as exc:
             return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
 

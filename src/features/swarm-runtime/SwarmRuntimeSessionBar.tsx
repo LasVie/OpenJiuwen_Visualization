@@ -73,7 +73,7 @@ export function SwarmRuntimeSessionBar({
           <code>{trace.id}</code>
         </div>
       ) : (
-        <p>{error ?? "Trace 监听本身不执行团队或模型；真实团队需从 Agent Team 面板显式启动。"}</p>
+        <p>{error ?? "Trace 监听本身不执行模型；Agent Team、SwarmFlow 与 Subagent 均需从对应面板显式启动。"}</p>
       )}
 
       {created ? (

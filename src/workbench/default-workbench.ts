@@ -6,6 +6,7 @@ import { deterministicReplayPlugin } from "../plugins/deterministic-replay";
 import { jiuwenSwarmPlugin } from "../plugins/jiuwenswarm";
 import { jiuwenSwarmExecutorPlugin } from "../plugins/jiuwenswarm-executor";
 import { subagentExecutorPlugin } from "../plugins/subagent-executor";
+import { swarmFlowExecutorPlugin } from "../plugins/swarmflow-executor";
 import { localRepositoryPlugin } from "../plugins/local-repository";
 import { gitChangePlugin } from "../plugins/git-change";
 import { githubPullRequestPlugin } from "../plugins/github-pull-request";
@@ -23,6 +24,7 @@ export function createDefaultPluginRegistry() {
     jiuwenSwarmPlugin,
     jiuwenSwarmExecutorPlugin,
     subagentExecutorPlugin,
+    swarmFlowExecutorPlugin,
     openJiuwenIntegrationPlugin,
     deterministicReplayPlugin,
     localRepositoryPlugin,

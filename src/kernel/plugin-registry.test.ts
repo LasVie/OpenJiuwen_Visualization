@@ -103,6 +103,7 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.jiuwenswarm", "enabled"],
         ["openjiuwen.jiuwenswarm-executor", "enabled"],
         ["openjiuwen.subagent-executor", "enabled"],
+        ["openjiuwen.swarmflow-executor", "enabled"],
         ["openjiuwen.integration", "enabled"],
         ["openjiuwen.deterministic-replay", "enabled"],
         ["openjiuwen.local-repository", "enabled"],
@@ -150,6 +151,9 @@ describe("visualization plugin registry", () => {
     expect(defaultWorkbench.capabilities["runtime.subagent.execute.v1"]).toEqual([
       "openjiuwen.subagent-executor",
     ]);
+    expect(defaultWorkbench.capabilities["runtime.swarmflow.execute.v1"]).toEqual([
+      "openjiuwen.swarmflow-executor",
+    ]);
     expect(defaultWorkbench.capabilities["graph.change.impact.v1"]).toEqual([
       "openjiuwen.git-change",
     ]);
@@ -182,6 +186,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.jiuwenswarm": "enabled",
       "openjiuwen.jiuwenswarm-executor": "blocked",
       "openjiuwen.subagent-executor": "blocked",
+      "openjiuwen.swarmflow-executor": "blocked",
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",
       "openjiuwen.local-repository": "enabled",
