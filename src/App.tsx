@@ -51,10 +51,15 @@ import {
   useSwarmFlowExecution,
 } from "./features/swarmflow-execution";
 import {
-  PluginControlWorkspace,
   usePluginWorkbench,
   workbenchAvailability,
 } from "./features/plugin-control";
+import {
+  PluginManagementWorkspace,
+  hostPluginIdForWorkbench,
+  hostWorkbenchStateOverrides,
+  usePluginHost,
+} from "./features/plugin-host";
 import {
   SwarmContextScopeBar,
   SwarmRuntimeSessionBar,
@@ -97,12 +102,29 @@ export default function App() {
   const [changeNavigation, setChangeNavigation] =
     useState<SourceNavigationRequest | null>(null);
   const sourceNavigationId = useRef(0);
-  const pluginWorkbench = usePluginWorkbench();
+  const pluginHost = usePluginHost();
+  const hostPluginStates = useMemo(
+    () => hostWorkbenchStateOverrides(pluginHost.snapshot),
+    [pluginHost.snapshot],
+  );
+  const pluginWorkbench = usePluginWorkbench(hostPluginStates);
   const { workbench } = pluginWorkbench;
   const availability = useMemo(
     () => workbenchAvailability(workbench),
     [workbench],
   );
+  const setManagedPluginEnabled = useCallback(async (
+    pluginId: string,
+    enabled: boolean,
+  ) => {
+    const hostPluginId = hostPluginIdForWorkbench(pluginId);
+    if (hostPluginId && pluginHost.snapshot) {
+      const updated = await pluginHost.setEnabled(hostPluginId, enabled);
+      if (!updated) return;
+      return;
+    }
+    pluginWorkbench.setPluginEnabled(pluginId, enabled);
+  }, [pluginHost, pluginWorkbench]);
   const traceGraph = useMemo(
     () => projectTraceGraph(workbench.graph),
     [workbench.graph],
@@ -199,6 +221,22 @@ export default function App() {
     trace: swarmRuntime.trace,
     traceClient: swarmRuntime.client,
   });
+  useEffect(() => {
+    if (pluginHost.connection !== "ready") return;
+    void Promise.all([
+      agentCoreExecution.refresh(),
+      jiuwenSwarmExecution.refresh(),
+      subagentExecution.refresh(),
+      swarmFlowExecution.refresh(),
+    ]);
+  }, [
+    agentCoreExecution.refresh,
+    jiuwenSwarmExecution.refresh,
+    pluginHost.connection,
+    pluginHost.snapshot?.audit.lastEventId,
+    subagentExecution.refresh,
+    swarmFlowExecution.refresh,
+  ]);
   const runtimeSourceAvailability = useMemo<
     Readonly<Record<RuntimeSourceMode, boolean>>
   >(() => ({
@@ -647,7 +685,7 @@ export default function App() {
             <Box size={17} />
             <span>
               <strong>Module Control Plane</strong>
-              <small>插件开关 · 依赖解析 · 浏览器持久化</small>
+              <small>工作台模块 · Host 生命周期 · 权限与本机审计</small>
             </span>
           </div>
         )}
@@ -913,11 +951,12 @@ export default function App() {
           onMagnetStrengthChange={setMagnetStrength}
         />
       ) : (
-        <PluginControlWorkspace
+        <PluginManagementWorkspace
           plugins={workbench.plugins}
           hasOverrides={pluginWorkbench.hasOverrides}
-          onSetEnabled={pluginWorkbench.setPluginEnabled}
+          onSetEnabled={(id, enabled) => void setManagedPluginEnabled(id, enabled)}
           onReset={pluginWorkbench.resetPluginStates}
+          host={pluginHost}
         />
       )}
 

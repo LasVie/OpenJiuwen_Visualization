@@ -3494,6 +3494,20 @@ kbd {
   }
 }
 
+@media (max-width: 1120px) {
+  .app-header {
+    grid-template-columns: 44px auto minmax(220px, 1fr) auto;
+  }
+
+  .brand__text {
+    display: none;
+  }
+
+  .runtime-key {
+    min-width: 210px;
+  }
+}
+
 @media (max-height: 780px) {
   .stage-column {
     grid-template-rows: 60px 48px minmax(230px, 1fr) auto 112px;

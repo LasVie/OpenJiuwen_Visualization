@@ -1,15 +1,15 @@
-# Plugin Control Plane V1
+# Browser Plugin Control Plane V1
 
 ## 目标
 
-Plugin Control Plane 把已注册插件从启动时的隐藏配置提升为可检查、可启停的产品能力。它回答四个问题：
+Browser Plugin Control Plane 把已注册的页面 contribution 从启动时隐藏配置提升为可检查、可启停的产品能力。它回答四个问题：
 
 1. 当前安装了哪些模块；
 2. 用户希望哪些模块开启；
 3. 哪些模块因依赖不可用而被阻塞；
 4. 开关变化后，哪些工作台入口和数据贡献仍然有效。
 
-V1 只控制浏览器内的 Workbench 解析，不安装、卸载插件，不启动本地服务，也不修改目标仓库。
+本合同只控制浏览器内的 Workbench 解析，不安装、卸载插件，也不修改目标仓库。OpenRouter 与 Tool Catalog 已额外接入独立 Local Plugin Host，由服务端生命周期和权限作为最终执行权威；完整边界见 [`plugin-host-v1.md`](plugin-host-v1.md)。
 
 ## 状态语义
 
@@ -71,6 +71,19 @@ localStorage["openjiuwen.visualization.plugin-states.v1"]
 
 Definition/Trace 图使用当前快照重新投影，不继续读取启动时的静态默认图。Fixture store 仍可保留播放状态，但只有 `openjiuwen.deterministic-replay` 实际启用时才暴露演示入口。
 
+## 与 Local Plugin Host 收敛
+
+“模块”页面现在同时提供“工作台模块”和“Local Plugin Host”两个视图。下列稳定映射将浏览器意图与服务端权威收敛：
+
+| Browser module | Host plugin |
+|---|---|
+| `openjiuwen.openrouter-provider` | `openjiuwen.host.openrouter` |
+| `openjiuwen.tool-catalog` | `openjiuwen.host.tool-catalog` |
+
+映射模块的开关会提交到 Host；Host 返回的 `active / blocked / disabled` 再覆盖 Workbench 的实际可用性。权限恢复或生命周期重新启用后，依赖模块仍按原有 `requestedEnabled` 自动恢复。Host 离线时不得仅凭 localStorage 判断 Provider 或 Tool 服务可调用。
+
+其余浏览器插件仍是静态打包的 contribution，没有被描述成服务端可安装插件。浏览器状态只决定页面装配；所有模型、Executor 和 Tool 索引请求还会在本地服务执行最终 Host gate。
+
 ## V1 依赖图
 
 下图箭头表示“依赖 → 下游模块”：
@@ -101,5 +114,5 @@ openjiuwen.trace-archive       （独立 workspace 根插件，无 Core/Swarm/Pr
 - 新插件必须通过 manifest 暴露依赖、group 和 capabilities，不能在 `App.tsx` 内硬编码数据贡献。
 - 新顶层平面应从 Workbench contribution 或 capability 推导可用性。
 - Archive 平面只依赖 `trace.archive.local.v1`；关闭插件后隐藏入口，但不会删除本机 Session。删除仍必须由 Session 管理显式执行。
-- 真实插件安装、签名、权限审批和服务生命周期不属于 V1；后续应由独立 adapter/host 管理。
+- 服务生命周期和风险分级权限由 Local Plugin Host V1 管理；页面安装、卸载、升级、第三方签名链与动态代码执行仍不属于当前版本。
 - 涉及模型密钥、GitHub token 或文件写入的插件必须在本地服务或受控 host 中实现，不能把凭据写入插件偏好。

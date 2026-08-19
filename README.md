@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、本机 SQLite 运行归档与跨运行对比、工作树/commit range/GitHub PR 的节点影响图、Runtime ↔ Definition ↔ Change 证据往返，以及带依赖解析的模块开关。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、本机 SQLite 运行归档与跨运行对比、工作树/commit range/GitHub PR 的节点影响图、Runtime ↔ Definition ↔ Change 证据往返，以及由 Local Plugin Host 约束生命周期和权限的模块控制。
 
 已交付能力、阶段记录和后续路线见 [`docs/project-roadmap.md`](docs/project-roadmap.md)。
 
@@ -26,7 +26,7 @@ python -B services/local-server/scripts/run_server.py `
   --allow-root "C:\Users\soong\Documents\OpenJiuwen_Visualization"
 ```
 
-服务默认在首个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 中增量保存完整 Runtime 原文，并使用 WAL、30 天保留期和 2 GiB 逻辑上限。可用 `--archive-path`、`--archive-retention-days` 与 `--archive-max-bytes` 覆盖；数据库路径必须仍在允许根目录内。
+服务默认在首个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 中增量保存完整 Runtime 原文，并使用 WAL、30 天保留期和 2 GiB 逻辑上限。Local Plugin Host 另用同目录的 `plugin-host.sqlite3` 保存生命周期、授权与无原文审计。可用 `--archive-path`、`--archive-retention-days`、`--archive-max-bytes` 与 `--plugin-host-path` 覆盖；数据库路径必须仍在允许根目录内。
 
 四个真实执行器（独立 DeepAgent、Agent Team、SwarmFlow、Subagent）都使用独立固定 bridge；浏览器不能提交 Python 入口、工作流源码或工具配置。只读扫描烟测：
 
@@ -114,9 +114,9 @@ OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback ada
 
 ### 模块控制中心
 
-顶部“模块”进入插件依赖配电盘。每个模块可独立请求开启或关闭；依赖缺失时，模块显示为“等待依赖”但保留用户的开启意图，依赖恢复后自动重新启用。Runtime 来源、Definition/Change 导航、Tool 注册表、Model 录制、Rail 和 Subagent 深入入口都从当前 Workbench 快照推导，不会继续暴露已关闭模块的数据贡献。
+顶部“模块”包含“工作台模块”和“Local Plugin Host”两个视图。工作台模块管理浏览器 contribution 与依赖图；Host 管理内置 OpenRouter/Tool Catalog 的来源、生命周期、网络/secret 权限、opaque credential handle 与本机审计。每个模块可独立请求开启或关闭；依赖缺失时保留用户开启意图，恢复后自动重新启用。Runtime 来源、Definition/Change 导航、Tool 注册表、Model 录制、Rail 和 Subagent 深入入口都从当前 Workbench 与 Host 快照推导，不会继续暴露已关闭或被撤权模块的数据贡献。
 
-偏好只保存在当前浏览器，并可一键恢复 manifest 默认值；不会保存仓库路径、Trace 原文或凭据。状态合同、依赖图和扩展边界见 [`docs/plugin-control-v1.md`](docs/plugin-control-v1.md)。
+浏览器偏好只保存在当前浏览器，并可一键恢复 manifest 默认值；Host 状态与授权保存在本机 SQLite/WAL。二者都不保存 Trace 原文或凭据值。状态合同、依赖图和安全边界见 [`docs/plugin-control-v1.md`](docs/plugin-control-v1.md) 与 [`docs/plugin-host-v1.md`](docs/plugin-host-v1.md)。
 
 完整事件矩阵、层级规则和可直接投递的示例见 [`docs/swarm-runtime-v1.md`](docs/swarm-runtime-v1.md) 与 [`examples/swarm-runtime-v1.events.json`](examples/swarm-runtime-v1.events.json)。
 
@@ -152,6 +152,7 @@ src/
 │  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
+│  ├─ plugin-host/             # Host 生命周期、权限、凭据句柄与本机审计界面
 │  ├─ openrouter-runtime/      # Provider-only OpenRouter 调用组件（底层模块）
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
 │  ├─ relation-explorer/       # Definition/Change 共享节点关系深入画布
@@ -168,7 +169,7 @@ src/
 ├─ types/                      # 兼容导出；稳定合同由 kernel 管理
 └─ workbench/                  # 组合默认插件并生成当前工作台快照
 services/
-└─ local-server/               # 只读索引、实时 Trace、SQLite 归档、Provider 与固定执行 bridge
+└─ local-server/               # 只读索引、Trace/归档、Plugin Host、Provider 与固定执行 bridge
 examples/                       # 可直接投递的归一化事件示例
 ```
 

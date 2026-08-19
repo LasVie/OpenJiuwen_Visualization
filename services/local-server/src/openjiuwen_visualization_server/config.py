@@ -19,6 +19,9 @@ class LocalServiceConfig:
     archive_path: Path | None = None
     archive_retention_days: int = 30
     archive_max_bytes: int = 2 * 1024 * 1024 * 1024
+    plugin_host_path: Path | None = None
+    allow_unsigned_plugins: bool = False
+    plugin_developer_roots: tuple[Path, ...] = ()
 
     @classmethod
     def create(
@@ -30,6 +33,9 @@ class LocalServiceConfig:
         archive_path: str | Path | None = None,
         archive_retention_days: int = 30,
         archive_max_bytes: int = 2 * 1024 * 1024 * 1024,
+        plugin_host_path: str | Path | None = None,
+        allow_unsigned_plugins: bool = False,
+        plugin_developer_roots: Iterable[str | Path] = (),
     ) -> "LocalServiceConfig":
         resolved_roots: list[Path] = []
         for raw_root in allowed_roots:
@@ -60,6 +66,34 @@ class LocalServiceConfig:
         if not any(resolved_archive.is_relative_to(root) for root in resolved_roots):
             raise PathAccessError("Archive path must stay inside an allowed root.")
 
+        resolved_plugin_host = (
+            Path(plugin_host_path).expanduser().resolve(strict=False)
+            if plugin_host_path is not None
+            else resolved_roots[0]
+            / ".openjiuwen-visualization"
+            / "plugin-host.sqlite3"
+        )
+        if resolved_plugin_host.exists() and resolved_plugin_host.is_dir():
+            raise PathAccessError("Plugin Host path must be a file, not a directory.")
+        if not any(resolved_plugin_host.is_relative_to(root) for root in resolved_roots):
+            raise PathAccessError("Plugin Host path must stay inside an allowed root.")
+
+        resolved_developer_roots: list[Path] = []
+        for raw_root in plugin_developer_roots:
+            root = Path(raw_root).expanduser().resolve(strict=True)
+            if not root.is_dir():
+                raise PathAccessError(f"Plugin developer root is not a directory: {root}")
+            if not any(root == allowed or root.is_relative_to(allowed) for allowed in resolved_roots):
+                raise PathAccessError(
+                    "Plugin developer roots must stay inside an allowed root."
+                )
+            if root not in resolved_developer_roots:
+                resolved_developer_roots.append(root)
+        if resolved_developer_roots and not allow_unsigned_plugins:
+            raise ValueError(
+                "Plugin developer roots require allow_unsigned_plugins=True."
+            )
+
         normalized_origins = frozenset(
             origin.rstrip("/") for origin in allowed_origins if origin.strip()
         )
@@ -70,6 +104,9 @@ class LocalServiceConfig:
             resolved_archive,
             archive_retention_days,
             archive_max_bytes,
+            resolved_plugin_host,
+            allow_unsigned_plugins,
+            tuple(resolved_developer_roots),
         )
 
     def authorize_directory(self, raw_path: str | Path) -> Path:

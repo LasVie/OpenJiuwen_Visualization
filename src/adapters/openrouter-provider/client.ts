@@ -21,7 +21,7 @@ export interface OpenRouterProviderLimits {
 export interface OpenRouterProviderStatus {
   id: "openrouter";
   label: string;
-  status: "ready" | "unconfigured";
+  status: "ready" | "unconfigured" | "blocked" | "disabled";
   configured: boolean;
   protocol: string;
   credentialPolicy: "local-service-only";
@@ -34,6 +34,11 @@ export interface OpenRouterProviderStatus {
   network: {
     origin: "https://openrouter.ai";
     endpoint: string;
+  };
+  host?: {
+    pluginId: string;
+    status: "active" | "blocked" | "disabled";
+    diagnostic: { code: string; message: string };
   };
 }
 
@@ -80,10 +85,11 @@ function providerStatus(value: unknown): OpenRouterProviderStatus {
   const models = provider.models;
   const limits = provider.limits;
   const network = provider.network;
+  const host = provider.host;
   if (
     provider.id !== "openrouter" ||
     typeof provider.label !== "string" ||
-    !["ready", "unconfigured"].includes(String(provider.status)) ||
+    !["ready", "unconfigured", "blocked", "disabled"].includes(String(provider.status)) ||
     typeof provider.configured !== "boolean" ||
     provider.configured !== (provider.status === "ready") ||
     typeof provider.protocol !== "string" ||
@@ -109,7 +115,15 @@ function providerStatus(value: unknown): OpenRouterProviderStatus {
     !nonNegativeInteger(limits.maxActiveInvocations) ||
     !isRecord(network) ||
     network.origin !== "https://openrouter.ai" ||
-    typeof network.endpoint !== "string"
+    typeof network.endpoint !== "string" ||
+    (host !== undefined && (
+      !isRecord(host) ||
+      typeof host.pluginId !== "string" ||
+      !["active", "blocked", "disabled"].includes(String(host.status)) ||
+      !isRecord(host.diagnostic) ||
+      typeof host.diagnostic.code !== "string" ||
+      typeof host.diagnostic.message !== "string"
+    ))
   ) {
     throw new TypeError("OpenRouter provider registry has an invalid shape.");
   }

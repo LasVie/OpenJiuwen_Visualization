@@ -1,24 +1,25 @@
 # OpenRouter Provider V1
 
-OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的 `openjiuwen.openrouter-provider` 插件：本地服务独占 API key、维护模型 allowlist，并提供固定域名的 provider-only 调用合同。这个底层 adapter 不是完整 Agent 执行器；真实 DeepAgent、真实两成员 Agent Team、真实固定 SwarmFlow 与真实 TaskTool Subagent 分别由依赖它的 `openjiuwen.agent-core-executor`、`openjiuwen.jiuwenswarm-executor`、`openjiuwen.swarmflow-executor` 和 `openjiuwen.subagent-executor` 提供，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)、[`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)、[`swarmflow-execution-v1.md`](swarmflow-execution-v1.md) 与 [`subagent-execution-v1.md`](subagent-execution-v1.md)。
+OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的浏览器模块 `openjiuwen.openrouter-provider` 和服务端插件 `openjiuwen.host.openrouter`：本地服务独占 API key、维护模型 allowlist，并提供固定域名的 provider-only 调用合同。这个底层 adapter 不是完整 Agent 执行器；真实 DeepAgent、真实两成员 Agent Team、真实固定 SwarmFlow 与真实 TaskTool Subagent 分别由依赖它的 `openjiuwen.agent-core-executor`、`openjiuwen.jiuwenswarm-executor`、`openjiuwen.swarmflow-executor` 和 `openjiuwen.subagent-executor` 提供，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)、[`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)、[`swarmflow-execution-v1.md`](swarmflow-execution-v1.md)、[`subagent-execution-v1.md`](subagent-execution-v1.md) 与 [`plugin-host-v1.md`](plugin-host-v1.md)。
 
 ## 数据流与权限边界
 
 ```mermaid
 flowchart LR
   UI["OpenRouter 启动面板"] -->|"创建实时 Trace + 归档 Session"| Trace["Runtime Trace V1"]
-  UI -->|"traceId + X-Trace-Token + 输入"| Adapter["本地 OpenRouter adapter"]
-  Env["服务进程环境变量"] -->|"API key / 模型白名单"| Adapter
+  UI -->|"traceId + X-Trace-Token + 输入"| Host["Local Plugin Host\nlifecycle + permission gate"]
+  Env["服务进程环境变量"] -->|"opaque handle 解析"| Host
+  Host -->|"授权后的本机调用"| Adapter["本地 OpenRouter adapter"]
   Adapter -->|"HTTPS / Bearer"| OR["openrouter.ai\nchat/completions"]
   OR -->|"SSE delta / usage / finish"| Adapter
   Adapter -->|"context + model.* + trace.status"| Trace
   Trace -->|"SSE"| UI
 ```
 
-- API key 只从本地服务进程环境读取，不进入 React state、请求正文、API 响应、Trace、日志、插件偏好或磁盘。模型输入与输出作为 Runtime 事件进入本机归档，但 key 永不进入事件。
+- API key 只从本地服务进程环境读取。Host 向插件和浏览器只公开 `openrouter.default` opaque handle 的 resolved 状态，不公开环境变量名或值；key 不进入 React state、请求正文、API 响应、Trace、审计、日志、插件偏好或磁盘。模型输入与输出作为 Runtime 事件进入本机归档，并会在显式调用时发送给 OpenRouter，但 key 永不进入事件。
 - 浏览器仍持有当前 Trace 的高熵写入令牌；Provider endpoint 必须用它证明本次调用属于一个开放的 `agent-core` Trace。
 - Provider URL 固定为 `https://openrouter.ai/api/v1/chat/completions`，拒绝重定向，不接受浏览器提供 base URL。
-- 插件关闭后，Provider contribution 消失，依赖它的 Agent Core、JiuwenSwarm、SwarmFlow 与 Subagent Executor 都进入 blocked；本地服务不会因此卸载，也不会自动发起请求。
+- 浏览器模块关闭后会同步关闭 Host 生命周期；撤销 `network.openrouter.invoke` 或 `secret.openrouter.use` 后 Host 进入 blocked。两种情况都会让 Provider contribution 及其 Agent Core、JiuwenSwarm、SwarmFlow、Subagent Executor 依赖收敛，并在每次新调用前由服务端最终拒绝；既有调用仍保留取消入口。
 
 ## 服务端配置
 
@@ -52,6 +53,8 @@ python -B services/local-server/scripts/run_server.py `
 | `GET` | `/api/v1/model-providers/openrouter` | 读取无凭据的状态、模型 allowlist、默认模型和本地上限 |
 | `POST` | `/api/v1/model-providers/openrouter/invocations` | 校验 Trace authority 后异步启动流式调用 |
 | `POST` | `/api/v1/model-providers/openrouter/invocations/{id}/cancel` | 用同一个 Trace token 请求取消并关闭上游流 |
+
+Provider 注册表会附带无凭据 `host` 诊断。Host lifecycle、权限或 secret handle 不满足时，注册表明确返回 `blocked` / `disabled` 原因；调用路由在验证 Trace authority 前后仍会执行最终 Host gate，不能由旧页面状态绕过。
 
 启动请求只接受：
 

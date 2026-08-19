@@ -6,6 +6,7 @@ import {
   Play,
   RefreshCw,
   Server,
+  ShieldAlert,
   ShieldCheck,
   X,
 } from "lucide-react";
@@ -76,13 +77,18 @@ export function OpenRouterRuntimeLauncher({
   }
 
   const providerReady = Boolean(controller.provider?.configured);
+  const hostStatus = controller.provider?.host?.status;
   const triggerStatus = controller.active
     ? phaseLabel[controller.phase]
     : controller.providerLoading
       ? "检查中"
       : controller.providerError
         ? "服务不可达"
-        : providerReady
+        : hostStatus === "disabled"
+          ? "Host 已关闭"
+          : hostStatus === "blocked"
+            ? "授权阻塞"
+            : providerReady
           ? "已就绪"
           : "待配置";
 
@@ -150,6 +156,22 @@ export function OpenRouterRuntimeLauncher({
                   <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />重试
                 </button>
               </div>
+            ) : hostStatus === "disabled" || hostStatus === "blocked" ? (
+              <div className="openrouter-dialog__state openrouter-dialog__state--configure" role="status">
+                <ShieldAlert size={20} strokeWidth={2} aria-hidden="true" />
+                <div>
+                  <strong>
+                    {hostStatus === "disabled"
+                      ? "OpenRouter Host 生命周期已关闭"
+                      : "OpenRouter Host 正在等待授权"}
+                  </strong>
+                  <p>{controller.provider?.host?.diagnostic.message}</p>
+                  <p>请在“模块 → Local Plugin Host”中恢复生命周期或所需权限。</p>
+                </div>
+                <button type="button" onClick={() => void controller.refresh()}>
+                  <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />重试
+                </button>
+              </div>
             ) : !providerReady ? (
               <div className="openrouter-dialog__state openrouter-dialog__state--configure" role="status">
                 <KeyRound size={20} strokeWidth={2} aria-hidden="true" />
@@ -166,7 +188,7 @@ export function OpenRouterRuntimeLauncher({
               <form className="openrouter-form" onSubmit={submit}>
                 <div className="openrouter-form__notice">
                   <ShieldCheck size={17} strokeWidth={2} aria-hidden="true" />
-                  <p><strong>密钥仅在本地服务进程中。</strong>输入与输出只写入内存 Trace，但请求正文会发送到 OpenRouter 及其路由的上游模型；非免费模型可能产生费用。</p>
+                  <p><strong>密钥仅在本地服务进程中。</strong>完整输入、Context 增量与流式输出会写入本机 Trace 档案，UI 默认显示脱敏摘要；请求正文也会发送到 OpenRouter 及其路由的上游模型，非免费模型可能产生费用。</p>
                 </div>
 
                 <label className="openrouter-form__field">

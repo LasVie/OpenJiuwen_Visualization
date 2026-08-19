@@ -5,6 +5,7 @@ from .config import LocalServiceConfig, PathAccessError
 from .repository import RepositoryIdentity, RepositoryResolver
 from .scan_cache import DefinitionScanCache
 from .openrouter_provider import OpenRouterProviderConfig, OpenRouterRuntimeAdapter
+from .plugin_host import PluginHost, PluginHostError
 from .scanner import PythonRepositoryScanner, ScanOptions
 from .trace_store import RuntimeTraceStore, TraceStoreError
 from .trace_archive import TraceArchiveError, TraceArchiveStore
@@ -16,6 +17,8 @@ __all__ = [
     "LocalServiceConfig",
     "OpenRouterProviderConfig",
     "OpenRouterRuntimeAdapter",
+    "PluginHost",
+    "PluginHostError",
     "DefinitionScanCache",
     "PathAccessError",
     "PythonRepositoryScanner",

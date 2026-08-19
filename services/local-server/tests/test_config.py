@@ -52,6 +52,22 @@ class LocalServiceConfigTests(unittest.TestCase):
         self.assertEqual(configured.archive_retention_days, 90)
         self.assertEqual(configured.archive_max_bytes, 4 * 1024 * 1024)
 
+    def test_scopes_unsigned_plugin_discovery_to_explicit_allowed_paths(self) -> None:
+        with self.assertRaises(ValueError):
+            LocalServiceConfig.create(
+                allowed_roots=[REPOSITORY_ROOT],
+                plugin_developer_roots=[REPOSITORY_ROOT],
+            )
+
+        configured = LocalServiceConfig.create(
+            allowed_roots=[REPOSITORY_ROOT],
+            allow_unsigned_plugins=True,
+            plugin_developer_roots=[REPOSITORY_ROOT],
+        )
+
+        self.assertTrue(configured.allow_unsigned_plugins)
+        self.assertEqual(configured.plugin_developer_roots, (REPOSITORY_ROOT,))
+
 
 if __name__ == "__main__":
     unittest.main()

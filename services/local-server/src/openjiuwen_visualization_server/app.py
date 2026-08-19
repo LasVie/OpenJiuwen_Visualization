@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from .agent_core_runtime import (
     AgentCoreRuntimeAdapter,
@@ -34,6 +34,13 @@ from .openrouter_provider import (
     OpenRouterProviderConfig,
     OpenRouterProviderError,
     OpenRouterRuntimeAdapter,
+)
+from .plugin_host import (
+    OPENROUTER_HOST_PLUGIN_ID,
+    TOOL_CATALOG_HOST_PLUGIN_ID,
+    PluginAuthorization,
+    PluginHost,
+    PluginHostError,
 )
 from .repository import RepositoryResolutionError, RepositoryResolver
 from .scan_cache import DefinitionScanCache
@@ -85,6 +92,12 @@ SUBAGENT_CANCEL_ROUTE = re.compile(
 SWARMFLOW_CANCEL_ROUTE = re.compile(
     r"^/api/v1/swarmflows/invocations/([^/]+)/cancel$"
 )
+PLUGIN_STATE_ROUTE = re.compile(
+    r"^/api/v1/plugin-host/plugins/([^/]+)/state$"
+)
+PLUGIN_PERMISSION_ROUTE = re.compile(
+    r"^/api/v1/plugin-host/plugins/([^/]+)/permissions/([^/]+)$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +148,8 @@ class LocalRepositoryApi:
         swarmflow_adapter: SwarmFlowRuntimeAdapter | None = None,
         archive_store: TraceArchiveStore | None = None,
         archive_enabled: bool = True,
+        plugin_host: PluginHost | None = None,
+        plugin_host_enabled: bool = True,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -169,6 +184,25 @@ class LocalRepositoryApi:
             openrouter_adapter.config
             if openrouter_adapter is not None
             else OpenRouterProviderConfig.from_environment()
+        )
+        plugin_host_path = config.plugin_host_path or (
+            config.allowed_roots[0]
+            / ".openjiuwen-visualization"
+            / "plugin-host.sqlite3"
+        )
+        self.plugin_host = (
+            plugin_host
+            if plugin_host is not None
+            else PluginHost(
+                plugin_host_path,
+                secret_resolvers={
+                    "openrouter.default": lambda: provider_config.configured,
+                },
+                allow_unsigned_plugins=config.allow_unsigned_plugins,
+                developer_roots=config.plugin_developer_roots,
+            )
+            if plugin_host_enabled
+            else None
         )
         self.openrouter_adapter = openrouter_adapter or OpenRouterRuntimeAdapter(
             provider_config,
@@ -206,7 +240,16 @@ class LocalRepositoryApi:
         split_path = urlsplit(path)
         route = split_path.path.rstrip("/") or "/"
         if method == "GET" and route == "/api/v1/health":
-            openrouter_ready = self.openrouter_adapter.config.configured
+            openrouter_authorization = self._host_authorization(
+                OPENROUTER_HOST_PLUGIN_ID
+            )
+            tool_authorization = self._host_authorization(
+                TOOL_CATALOG_HOST_PLUGIN_ID
+            )
+            openrouter_ready = (
+                openrouter_authorization.allowed
+                and self.openrouter_adapter.config.configured
+            )
             return ApiResponse(
                 HTTPStatus.OK,
                 {
@@ -216,7 +259,11 @@ class LocalRepositoryApi:
                     "capabilities": [
                         "repository.read",
                         "repository.scan.cache.memory",
-                        "repository.tools.read",
+                        *(
+                            ["repository.tools.read"]
+                            if tool_authorization.allowed
+                            else []
+                        ),
                         "repository.source.read",
                         "git.change.read",
                         "github.pull-request.read",
@@ -228,6 +275,8 @@ class LocalRepositoryApi:
                         "runtime.jiuwenswarm.registry",
                         "runtime.subagent.registry",
                         "runtime.swarmflow.registry",
+                        "plugin.host.registry",
+                        "plugin.host.audit.local",
                     ],
                     "traceStorage": "memory-live+sqlite-archive"
                     if self.archive_store
@@ -235,33 +284,56 @@ class LocalRepositoryApi:
                     "archiveStorage": self.archive_store.descriptor()
                     if self.archive_store
                     else None,
+                    "pluginHost": {
+                        "enabled": self.plugin_host is not None,
+                        "openRouterStatus": openrouter_authorization.plugin_status,
+                        "toolCatalogStatus": tool_authorization.plugin_status,
+                    },
                 },
             )
+        if method == "GET" and route == "/api/v1/plugin-host":
+            if self.plugin_host is None:
+                return _error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "plugin_host_disabled",
+                    "Plugin Host is disabled for this service process.",
+                )
+            return ApiResponse(HTTPStatus.OK, self.plugin_host.descriptor())
+        if method == "GET" and route == "/api/v1/plugin-host/audit":
+            return self._plugin_host_audit(split_path.query)
         if method == "GET" and route == "/api/v1/model-providers/openrouter":
-            return ApiResponse(HTTPStatus.OK, self.openrouter_adapter.descriptor())
+            return ApiResponse(HTTPStatus.OK, self._provider_descriptor())
         if method == "GET" and route == "/api/v1/agent-core":
             refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
             return ApiResponse(
                 HTTPStatus.OK,
-                self.agent_core_adapter.descriptor(refresh=refresh),
+                self._runtime_descriptor(
+                    self.agent_core_adapter.descriptor(refresh=refresh)
+                ),
             )
         if method == "GET" and route == "/api/v1/jiuwenswarm":
             refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
             return ApiResponse(
                 HTTPStatus.OK,
-                self.jiuwenswarm_adapter.descriptor(refresh=refresh),
+                self._runtime_descriptor(
+                    self.jiuwenswarm_adapter.descriptor(refresh=refresh)
+                ),
             )
         if method == "GET" and route == "/api/v1/subagents":
             refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
             return ApiResponse(
                 HTTPStatus.OK,
-                self.subagent_adapter.descriptor(refresh=refresh),
+                self._runtime_descriptor(
+                    self.subagent_adapter.descriptor(refresh=refresh)
+                ),
             )
         if method == "GET" and route == "/api/v1/swarmflows":
             refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
             return ApiResponse(
                 HTTPStatus.OK,
-                self.swarmflow_adapter.descriptor(refresh=refresh),
+                self._runtime_descriptor(
+                    self.swarmflow_adapter.descriptor(refresh=refresh)
+                ),
             )
         if method == "GET" and route == "/api/v1/repositories":
             return ApiResponse(
@@ -313,6 +385,19 @@ class LocalRepositoryApi:
             return self._start_subagent(body or {}, trace_token)
         if method == "POST" and route == "/api/v1/swarmflows/invocations":
             return self._start_swarmflow(body or {}, trace_token)
+        plugin_state_match = PLUGIN_STATE_ROUTE.fullmatch(route)
+        if method == "POST" and plugin_state_match:
+            return self._set_plugin_state(
+                unquote(plugin_state_match.group(1)),
+                body or {},
+            )
+        plugin_permission_match = PLUGIN_PERMISSION_ROUTE.fullmatch(route)
+        if method == "POST" and plugin_permission_match:
+            return self._set_plugin_permission(
+                unquote(plugin_permission_match.group(1)),
+                unquote(plugin_permission_match.group(2)),
+                body or {},
+            )
         openrouter_cancel_match = OPENROUTER_CANCEL_ROUTE.fullmatch(route)
         if method == "POST" and openrouter_cancel_match:
             return self._cancel_openrouter(openrouter_cancel_match.group(1), trace_token)
@@ -347,11 +432,165 @@ class LocalRepositoryApi:
             return self._append_trace(events_match.group(1), trace_token, body or {})
         return _error(HTTPStatus.NOT_FOUND, "not_found", "API route was not found.")
 
+    def _host_authorization(self, plugin_id: str) -> PluginAuthorization:
+        if self.plugin_host is None:
+            return PluginAuthorization(
+                True,
+                "host_bypass_internal",
+                "Plugin Host is disabled for this internal API instance.",
+                "active",
+            )
+        try:
+            return self.plugin_host.authorize(plugin_id)
+        except PluginHostError as exc:
+            return PluginAuthorization(False, exc.code, str(exc), "blocked")
+
+    def _host_gate(self, plugin_id: str) -> ApiResponse | None:
+        authorization = self._host_authorization(plugin_id)
+        if authorization.allowed:
+            return None
+        status = (
+            HTTPStatus.SERVICE_UNAVAILABLE
+            if authorization.code == "plugin_disabled"
+            else HTTPStatus.FORBIDDEN
+        )
+        return _error(status, authorization.code, authorization.message)
+
+    def _provider_descriptor(self) -> dict[str, object]:
+        descriptor = self.openrouter_adapter.descriptor()
+        provider = descriptor.get("provider")
+        authorization = self._host_authorization(OPENROUTER_HOST_PLUGIN_ID)
+        if isinstance(provider, dict):
+            provider["host"] = {
+                "pluginId": OPENROUTER_HOST_PLUGIN_ID,
+                "status": authorization.plugin_status,
+                "diagnostic": {
+                    "code": authorization.code,
+                    "message": authorization.message,
+                },
+            }
+            if not authorization.allowed:
+                provider["status"] = (
+                    "disabled"
+                    if authorization.plugin_status == "disabled"
+                    else "blocked"
+                )
+                provider["configured"] = False
+        return descriptor
+
+    def _runtime_descriptor(self, descriptor: dict[str, object]) -> dict[str, object]:
+        runtime = descriptor.get("runtime")
+        authorization = self._host_authorization(OPENROUTER_HOST_PLUGIN_ID)
+        if isinstance(runtime, dict):
+            runtime["host"] = {
+                "pluginId": OPENROUTER_HOST_PLUGIN_ID,
+                "status": authorization.plugin_status,
+            }
+            if not authorization.allowed:
+                runtime["status"] = "unavailable"
+                runtime["configured"] = False
+                runtime["diagnostic"] = {
+                    "code": authorization.code,
+                    "message": authorization.message,
+                }
+        return descriptor
+
+    def _plugin_host_audit(self, query: str) -> ApiResponse:
+        if self.plugin_host is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "plugin_host_disabled",
+                "Plugin Host is disabled for this service process.",
+            )
+        parameters = parse_qs(query)
+        try:
+            after = int(parameters.get("after", ["0"])[0])
+            limit = int(parameters.get("limit", ["100"])[0])
+            return ApiResponse(
+                HTTPStatus.OK,
+                self.plugin_host.audit_events(after=after, limit=limit),
+            )
+        except (ValueError, PluginHostError) as exc:
+            if isinstance(exc, PluginHostError):
+                return _error(exc.status, exc.code, str(exc))
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_audit_cursor",
+                "after and limit must be integers.",
+            )
+
+    def _set_plugin_state(
+        self,
+        plugin_id: str,
+        body: dict[str, Any],
+    ) -> ApiResponse:
+        if self.plugin_host is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "plugin_host_disabled",
+                "Plugin Host is disabled for this service process.",
+            )
+        unknown = set(body) - {"enabled", "confirmed"}
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_plugin_state",
+                f"Unsupported plugin state field: {sorted(unknown)[0]}",
+            )
+        confirmed = body.get("confirmed", False)
+        if not isinstance(confirmed, bool):
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_plugin_state",
+                "confirmed must be a boolean.",
+            )
+        try:
+            result = self.plugin_host.set_enabled(
+                plugin_id,
+                body.get("enabled"),
+                confirmed=confirmed,
+            )
+        except PluginHostError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _set_plugin_permission(
+        self,
+        plugin_id: str,
+        permission_id: str,
+        body: dict[str, Any],
+    ) -> ApiResponse:
+        if self.plugin_host is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "plugin_host_disabled",
+                "Plugin Host is disabled for this service process.",
+            )
+        unknown = set(body) - {"granted"}
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_permission_grant",
+                f"Unsupported permission field: {sorted(unknown)[0]}",
+            )
+        try:
+            result = self.plugin_host.set_permission(
+                plugin_id,
+                permission_id,
+                body.get("granted"),
+            )
+        except PluginHostError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
     def _start_openrouter(
         self,
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
+        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
         try:
             result = self.openrouter_adapter.start(body, trace_token)
         except OpenRouterProviderError as exc:
@@ -374,6 +613,9 @@ class LocalRepositoryApi:
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
+        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
         try:
             result = self.agent_core_adapter.start(body, trace_token)
         except AgentCoreRuntimeError as exc:
@@ -396,6 +638,9 @@ class LocalRepositoryApi:
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
+        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
         try:
             result = self.jiuwenswarm_adapter.start(body, trace_token)
         except JiuwenSwarmRuntimeError as exc:
@@ -418,6 +663,9 @@ class LocalRepositoryApi:
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
+        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
         try:
             result = self.subagent_adapter.start(body, trace_token)
         except SubagentRuntimeError as exc:
@@ -440,6 +688,9 @@ class LocalRepositoryApi:
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
+        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
         try:
             result = self.swarmflow_adapter.start(body, trace_token)
         except SwarmFlowRuntimeError as exc:
@@ -834,6 +1085,9 @@ class LocalRepositoryApi:
         return ApiResponse(HTTPStatus.OK, result)
 
     def _tool_catalog(self, body: dict[str, Any]) -> ApiResponse:
+        denied = self._host_gate(TOOL_CATALOG_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
         repository_path = body.get("path")
         if not isinstance(repository_path, str) or not repository_path.strip():
             return _error(HTTPStatus.BAD_REQUEST, "invalid_path", "path must be a non-empty string.")

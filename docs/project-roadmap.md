@@ -33,6 +33,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | Agent Core SwarmFlow 真实执行 | 已完成 | 固定两阶段 Workflow、真实 TeamWorkerBackend、结构化 WorkflowMonitor、Worker Rail/ReAct 与独立 Context |
 | Runtime ↔ Definition ↔ Change 收敛 | 已完成 | 稳定 source identity、方法级定位、revision 降级、Runtime 聚合、Change 运行证据叠加与精确往返 |
 | 运行归档与对比 V1 | 已完成 | SQLite/WAL 增量归档、默认完整本机原文、脱敏读取、Session 管理、保留策略与双运行结构化 diff |
+| Provider 与 Local Plugin Host V1 | 已完成 | 内置 OpenRouter/Tool Host、信任来源、持久生命周期、风险分级权限、opaque secret handle、最终调用 gate 与本机审计 |
 
 ## 当前已支持功能
 
@@ -90,6 +91,11 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 公共或服务端 token 授权的 GitHub PR 只读变更图；
 - Change 节点叠加 `runtimeObserved` 证据，并支持 Runtime → Definition → Change → 原运行步骤往返；
 - 插件按 dependency/capability 开关，关闭后相关入口和 contribution 一起收敛；
+- “模块”同时展示浏览器 Workbench 与 Local Plugin Host，两者通过稳定映射同步 OpenRouter/Tool 生命周期；
+- Host 内置插件自动信任；未签名本地 manifest 仅在显式开发模式和 allow-root 内 path scope 下发现，V1 不执行其代码；
+- read 权限安装时固定，network/secret 可撤销，write 强制逐操作审批；新 Provider、Executor、Tool 请求均经过服务端最终 gate；
+- OpenRouter key 只通过 `openrouter.default` opaque handle 解析，浏览器、插件快照、Host 数据库和审计均看不到值；
+- Host 使用 SQLite/WAL 持久化生命周期和授权，最多保留 5,000 条不含 secret 或业务原文的本机审计；
 - Core、Swarm、Provider、Repository、Change、Tool、深入画布与执行器均按 feature/plugin/adapter 分层。
 
 ## 当前明确限制
@@ -102,22 +108,25 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 执行器不开放任意 Shell、Git 写入、文件写入、MCP、Skill 或浏览器自定义工具；
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
 - 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
-- 还没有插件签名/安装 Host、协作权限或远端部署控制面。
+- Host V1 不提供页面安装/卸载/升级、第三方签名链、动态插件代码执行、进程沙箱或崩溃监督；内置 integrity 只是本地发布摘要；
+- OpenRouter 凭据仍由服务进程环境配置，尚无通用本机 vault/系统凭据录入 UI；
+- Tool Catalog 目前区分静态声明/注册路径与 `ability.register` 观察，但尚未统一“已安装 / 已授权 / Runtime 已注册 / 已调用”四态及逐 Tool 权限；
+- 还没有协作权限或远端部署控制面。
 
-## 下一阶段：Provider 与插件 Host V1（待产品决策）
+## 下一阶段：Tool Registry 运行证据收敛 V1
 
-当前浏览器插件是随前端打包的静态模块，本地服务也在启动时固定装配 Provider 与执行器。下一阶段计划引入受控 Plugin Host，让更多 Model Provider、已注册 Tool 和后续数据源可以独立发现、启停与声明权限，同时保持现有 Graph Kernel capability 和页面模块开关语义。
+Local Plugin Host 已建立服务端生命周期与权限边界，下一步把 Tool 从“静态目录 + 零散 Runtime 事件”收敛为可用于理解和开发的稳定证据对象。目标不是把静态推断冒充运行事实，而是让同一个 Tool node 清晰显示它在哪定义、由谁托管、当前是否授权、在哪次运行完成注册和调用。
 
-候选交付：
+计划交付：
 
-1. 版本化插件 manifest、来源 identity、安装状态与 capability/permission 声明；
-2. 本机 Host 负责发现、校验、启动、停止和故障隔离，浏览器仍不执行第三方代码；
-3. Provider adapter 统一模型列表、请求、流、usage、取消和错误合同，OpenRouter 迁入首个 Host profile；
-4. Tool registry 统一“已安装 / 已授权 / 当前运行已注册 / 已调用”证据，并与 Definition/Runtime 节点往返；
-5. 模块开关从浏览器 contribution 收敛扩展到服务生命周期，同时保留依赖阻塞与恢复语义；
-6. 权限变更、密钥引用、Host 崩溃和插件升级均进入本机可审计事件，不记录 secret 或业务原文。
+1. 定义稳定 Tool identity，把 Definition 声明、Host plugin/capability、Runtime `ability.register` 与 `tool.call` 对齐；
+2. 统一展示“已发现 / 已授权 / 本次运行已注册 / 已调用”四层证据，并明确 exact、inferred、unobserved；
+3. Tool node 可进入独立画布，查看注册者、所属 Agent/Member/Subagent、参数/结果、耗时、错误与源码往返；
+4. 参数和结果沿用默认脱敏、显式原文读取及 owner/session 隔离规则，不复制敏感原文到 Host 审计；
+5. 为未来写 Tool 预留逐次审批事件与本机审计合同，但 V1 继续只接入只读工具；
+6. 为 Subagent 独立 Tool registry/context 和后续 Provider adapter 扩展准备版本化 contribution 合同。
 
-进入实现前需要确定三项安全语义：未签名本地插件是否允许以开发模式加载；密钥由环境变量、系统凭据库还是独立本机 vault 托管；capability 是安装时一次授权、每次运行确认，还是按风险分级组合。Host 隔离和授权模型一旦形成将影响后续所有 Provider/Tool 插件，因此本阶段暂停在设计决策点，不先固化实现。
+这一阶段可直接按现有安全基线开始；只有真正引入写 Tool 时，才需要确定逐次审批的交互、超时和撤销语义。
 
 ## 后续路线
 
@@ -127,8 +136,9 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | 已完成 | SwarmFlow Executor | Workflow/Phase/Agent 的真实流程运行和控制 | 固定两阶段 profile 已落地，身份独立于 Agent Team/Subagent |
 | 已完成 | Runtime ↔ Definition ↔ Change 收敛 | 运行节点跳转源码，Change 标出受影响且实际运行的链路 | 结构化 identity 与显式 revision 降级已落地 |
 | 已完成 | 运行归档与对比 | SQLite/WAL 持久化、Session 管理、原文受控读取、跨运行结构化 diff | SQLite、默认完整本机原文、30 天 / 2 GiB 已落地 |
-| P4 | Provider 与插件 Host | 更多模型 Provider、注册工具插件、权限声明与服务生命周期 | 插件信任、密钥隔离和 capability 审批 |
-| P5 | 辅助开发闭环 | 从受影响节点生成测试/修改建议并回写受控分支 | 任何写操作都需要独立权限和可审计审批 |
+| 已完成 | Provider 与插件 Host V1 | OpenRouter/Tool 生命周期、权限、opaque secret handle、最终 gate 与审计 | bundled trust、path-scoped dev、Host-owned secret、风险分级授权已落地 |
+| P5 | Tool Registry 运行证据收敛 | Tool 四态证据、节点深入画布、Definition/Host/Runtime 往返 | V1 只读；写 Tool 仍不开放 |
+| P6 | 辅助开发闭环 | 从受影响节点生成测试/修改建议并回写受控分支 | 任何写操作都需要独立权限和可审计逐次审批 |
 
 ## 阶段管理规则
 

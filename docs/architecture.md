@@ -8,7 +8,7 @@
 - Runtime：确定性回放或真实 Agent/Workflow 运行事件。
 - Archive：本机历史 Session、受控原文读取和跨运行对比。
 - Change：本地 Git、commit 和 GitHub PR 的变更与影响关系。
-- Modules：插件启停、依赖状态与 capability 可见性。
+- Modules：浏览器 Workbench contribution 与本地 Host 生命周期、权限、capability 可见性。
 
 浏览器只负责交互与渲染。读取本地仓库、运行 Python、执行 Git 或调用模型的能力必须进入独立本地服务，不允许 React 组件直接访问凭据或执行目标仓代码。Repository API 始终只读且不 import 目标仓；真实 Agent Core 与 JiuwenSwarm Agent Team 只通过显式启动的固定子进程 bridge 运行。
 
@@ -73,6 +73,22 @@ repository@revision:path:symbol
 注册器按依赖拓扑顺序解析插件。关闭一个插件时，依赖它的插件进入 `blocked`，不会留下悬空边或半可用场景。注册器拒绝重复 ID、缺失依赖、依赖环、悬空边和无效轨迹引用。
 
 `features/plugin-control/` 保存最小浏览器覆盖项，并在每次变化后重新调用同一个注册器生成 Workbench snapshot。`requestedEnabled` 表示用户意图，`state` 表示解析后的实际状态；被依赖阻塞的模块不会丢失开启意图。页面导航、Runtime source、图投影和录制入口只读取当前 snapshot。完整合同见 [`plugin-control-v1.md`](plugin-control-v1.md)。
+
+### Local Plugin Host V1
+
+浏览器插件注册器不是服务端权限边界。`services/local-server/.../plugin_host.py` 维护第二个控制面，负责来源信任、生命周期、必需权限、opaque secret handle 与本机审计；OpenRouter、四个真实 Executor 和 Tool Catalog 在每次新调用前都经过 Host 最终 gate。浏览器关闭入口和 Host 撤销权限会收敛到同一可见状态，但 Host 始终拥有最终授权权威。
+
+```text
+Browser Workbench manifest / requestedEnabled
+                    │ stable mapping
+                    ▼
+Local Plugin Host ── lifecycle + grants + secret handles + audit
+                    │ final gate
+                    ├── OpenRouter provider / Agent executors
+                    └── Tool Catalog repository scan
+```
+
+内置插件随本地服务发布并自动信任；其 integrity 是发布内稳定摘要，不冒充第三方密码学签名。未签名 manifest 只有在显式开发者模式和 allow-root 内的 path scope 下才能被发现，V1 只解析声明而不执行插件代码。SQLite/WAL 只保存状态与无原文审计；Runtime 原文仍由独立 Archive 平面持有。完整合同见 [`plugin-host-v1.md`](plugin-host-v1.md)。
 
 当前默认模块：
 
@@ -247,7 +263,7 @@ Model Provider 作为独立插件注册 adapter 与确定性 recording，不把�
 
 `features/model-runtime/` 按当前 Trace sequence 重建调用，因此上一步不会看到未来 delta。输出默认脱敏，完整输出需要显式展开；费用以整数微单位保存，页面不推断价格。默认 recording 通过同一个 loopback 内存 Trace endpoint 加载，验证整条 Provider 观测链但不执行真实模型请求。
 
-`openjiuwen.openrouter-provider` 是首个实时实现。`features/openrouter-runtime/` 只读取无凭据注册表、采集模拟输入并控制调用；本地服务固定 OpenRouter 域名、持有 key、解析 SSE、执行取消，再写回同一 Trace。完整合同见 [`model-provider-v1.md`](model-provider-v1.md) 与 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)。
+`openjiuwen.openrouter-provider` 是首个实时实现。`features/openrouter-runtime/` 只读取无凭据注册表、采集模拟输入并控制调用；本地服务固定 OpenRouter 域名、由 Plugin Host 以 opaque handle 解析 key、在调用前执行 lifecycle/network/secret 最终 gate，再解析 SSE、执行取消并写回同一 Trace。完整合同见 [`model-provider-v1.md`](model-provider-v1.md)、[`openrouter-provider-v1.md`](openrouter-provider-v1.md) 与 [`plugin-host-v1.md`](plugin-host-v1.md)。
 
 真实独立 Agent 由 `features/agent-core-execution/` 与可选 subprocess adapter 提供。网页只提交 Trace authority 和有界运行参数；bridge 从指定 source checkout 导入 `create_deep_agent`，让 Agent Core 自身执行 ReAct、Rail、AbilityManager 和 OpenRouter Model Client，再输出规范事件。真实 Agent Team、固定 SwarmFlow 与真实 TaskTool Subagent 各走独立 bridge，不能复用 provider-only adapter 或彼此的身份冒充编排。完整边界见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)、[`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)、[`swarmflow-execution-v1.md`](swarmflow-execution-v1.md) 与 [`subagent-execution-v1.md`](subagent-execution-v1.md)。
 

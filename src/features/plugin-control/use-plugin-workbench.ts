@@ -26,14 +26,18 @@ function initialPluginStates(): PluginStatePreferences {
   }
 }
 
-export function usePluginWorkbench() {
+export function usePluginWorkbench(
+  externalPluginStates: PluginStatePreferences = {},
+) {
   const registry = useMemo(() => createDefaultPluginRegistry(), []);
   const [pluginStates, setPluginStates] = useState<PluginStatePreferences>(
     initialPluginStates,
   );
   const workbench = useMemo(
-    () => registry.resolve({ pluginStates }),
-    [pluginStates, registry],
+    () => registry.resolve({
+      pluginStates: { ...pluginStates, ...externalPluginStates },
+    }),
+    [externalPluginStates, pluginStates, registry],
   );
 
   useEffect(() => {

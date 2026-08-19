@@ -44,6 +44,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     serve.add_argument("--archive-retention-days", type=int, default=30)
     serve.add_argument("--archive-max-bytes", type=int, default=2 * 1024 * 1024 * 1024)
+    serve.add_argument(
+        "--plugin-host-path",
+        help="Plugin Host SQLite path inside an allowed root.",
+    )
+    serve.add_argument(
+        "--allow-unsigned-plugins",
+        action="store_true",
+        help=(
+            "Enable declarative discovery of unsigned local manifests. "
+            "V1 never executes their code."
+        ),
+    )
+    serve.add_argument(
+        "--plugin-dev-root",
+        action="append",
+        default=[],
+        help=(
+            "Explicit path scope for unsigned *.openjiuwen-plugin.json manifests. "
+            "Repeat for multiple roots."
+        ),
+    )
 
     scan = subparsers.add_parser("scan", help="Scan one repository and print JSON.")
     _add_common_arguments(scan)
@@ -77,6 +98,9 @@ def _config(arguments: argparse.Namespace) -> LocalServiceConfig:
             "archive_max_bytes",
             2 * 1024 * 1024 * 1024,
         ),
+        plugin_host_path=getattr(arguments, "plugin_host_path", None),
+        allow_unsigned_plugins=getattr(arguments, "allow_unsigned_plugins", False),
+        plugin_developer_roots=getattr(arguments, "plugin_dev_root", ()),
     )
 
 
@@ -102,7 +126,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             server.server_close()
         return 0
 
-    api = LocalRepositoryApi(config, archive_enabled=False)
+    api = LocalRepositoryApi(
+        config,
+        archive_enabled=False,
+        plugin_host_enabled=False,
+    )
     response = api.dispatch(
         "POST",
         "/api/v1/repositories/scan",

@@ -1,6 +1,6 @@
 # Local Repository Service
 
-该服务为 Visualization Web 提供本地仓库的只读边界、实时 Runtime Trace、本机 SQLite/WAL 运行归档、可选 OpenRouter provider-only adapter，以及显式启动的 Agent Core / JiuwenSwarm / SwarmFlow / Subagent 隔离执行器。主服务只使用 Python 标准库；Repository API 不导入目标仓模块、不执行仓库脚本，也不提供 Git 或文件写接口。四个真实执行器仅通过各自固定 bridge 与单独 Python 环境运行，OpenRouter 仅在用户显式启动且服务端已配置密钥时访问外网。
+该服务为 Visualization Web 提供本地仓库的只读边界、实时 Runtime Trace、本机 SQLite/WAL 运行归档、Local Plugin Host、可选 OpenRouter provider-only adapter，以及显式启动的 Agent Core / JiuwenSwarm / SwarmFlow / Subagent 隔离执行器。主服务只使用 Python 标准库；Repository API 不导入目标仓模块、不执行仓库脚本，也不提供 Git 或文件写接口。四个真实执行器仅通过各自固定 bridge 与单独 Python 环境运行，OpenRouter 仅在用户显式启动、Host 授权且服务端已配置密钥时访问外网。
 
 ## 启动
 
@@ -15,6 +15,17 @@ python -B services/local-server/scripts/run_server.py `
 默认只监听 `127.0.0.1:8765`。`--allow-root` 可重复；所有扫描路径及 Git 根都必须位于其中。非 loopback host 会被拒绝。
 
 服务默认在第一个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 保存完整 Runtime 事件，保留 30 天且逻辑上限为 2 GiB。可使用 `--archive-path`、`--archive-retention-days` 和 `--archive-max-bytes` 覆盖；归档路径仍必须位于允许根目录内。
+
+Local Plugin Host 默认使用同目录下的 `.openjiuwen-visualization/plugin-host.sqlite3` 保存生命周期、可撤销权限和无业务原文的审计，并启用 WAL。可使用 `--plugin-host-path` 覆盖，路径仍必须位于允许根目录内。内置 OpenRouter 与 Tool Catalog 插件自动信任；未签名本地 manifest 默认关闭。开发时必须同时显式提供：
+
+```powershell
+python -B services/local-server/scripts/run_server.py `
+  --allow-root "C:\path\to\workspace" `
+  --allow-unsigned-plugins `
+  --plugin-dev-root "C:\path\to\workspace\local-plugins"
+```
+
+开发根必须是 allow-root 内的真实目录。V1 只读取 `*.openjiuwen-plugin.json` 声明，不执行第三方插件代码；首次启用未签名插件还需通过 Host API 显式确认。
 
 ## API V1
 
@@ -37,6 +48,10 @@ python -B services/local-server/scripts/run_server.py `
 | `POST` | `/api/v1/archive/sessions/{id}/raw` | 显式按事件或 Context 模式读取本机原文 |
 | `GET` | `/api/v1/archive/sessions/{id}/export` | 显式导出含完整原文的 Session JSON |
 | `DELETE` | `/api/v1/archive/sessions/{id}` | 级联删除已关闭 Session 的原文、摘要、指标与事件 |
+| `GET` | `/api/v1/plugin-host` | 读取 Host 策略、插件生命周期、权限与 opaque secret handle 状态 |
+| `GET` | `/api/v1/plugin-host/audit` | 游标读取本机无业务原文审计 |
+| `POST` | `/api/v1/plugin-host/plugins/{id}/state` | 启用或关闭 Host 插件生命周期 |
+| `POST` | `/api/v1/plugin-host/plugins/{id}/permissions/{permissionId}` | 授予或撤销可变 Host 权限 |
 | `GET` | `/api/v1/model-providers/openrouter` | 读取无凭据的 Provider 状态与模型白名单 |
 | `POST` | `/api/v1/model-providers/openrouter/invocations` | 用 Trace authority 启动服务端流式调用 |
 | `POST` | `/api/v1/model-providers/openrouter/invocations/{id}/cancel` | 请求取消并关闭上游流 |
@@ -96,6 +111,9 @@ Tool 目录请求：
 - 请求体有大小上限，文件、文件数量和边数量均有扫描上限。
 - Definition cache 最多保存 8 个深拷贝快照、默认 300 秒过期，并限制单条 24 MB、总计 96 MB；源码指纹最多读取 128 MB，任一上限超出都会绕过缓存而不是返回未经验证的旧图。
 - Repository API 没有任何写、命令执行或凭据接口；Provider 与 Agent 执行位于独立显式路由，不扩大 Repository 权限。
+- Local Plugin Host 是 Provider、四个真实 Executor 和 Tool Catalog 新调用的最终授权边界。内置插件自动信任；其 integrity 是本地发布摘要，不等于第三方密码学签名。未签名插件只有在显式开发模式和 allow-root 内 path scope 下才能发现，且 V1 不执行其代码。
+- Host 将 read 视为安装时固定授权，将 network/secret 视为可撤销授权，将 write 强制为逐操作审批；当前没有通用写执行器。撤销后新调用失败，但取消既有调用始终可用。
+- OpenRouter key 只由 Host 通过 `openrouter.default` opaque handle 在调用时解析。Host 快照仅返回 handle 是否 resolved；Host 数据库和最多 5,000 条本机审计均不保存 secret、prompt、Context、Tool/Rail 原文或模型输出。
 - Agent Core endpoint 只运行仓库自带的固定 bridge，浏览器不能提交解释器、源码路径、命令或工具。bridge stdout 只接收固定前缀的有界 JSON event；其他运行日志被丢弃。
 - V1 Agent Core 只注册只读 `inspect_input` 工具，不开放文件、shell、Git、MCP、Subagent 或写操作。DeepAgent workspace 与日志限制在 `.agent-core-runtime/`。
 - JiuwenSwarm endpoint 只运行固定的两成员 `scheduled + inprocess` Agent Team，明确关闭 SwarmFlow、动态组队、外部 CLI、MCP、Skill 与 Subagent。浏览器不能覆盖 roster、team identity、workspace、工具、源码路径或命令。
@@ -118,7 +136,7 @@ Tool 目录请求：
 - GitHub PR API 只接受结构化 owner/repository/PR 编号，固定访问 `api.github.com` 且拒绝重定向；浏览器不接触凭据，本地 Git 与远端 PR 都不会被修改。公共仓默认无需 token；可选的 `OPENJIUWEN_GITHUB_TOKEN` 只从服务端进程环境读取。
 - Tool Catalog 仅解析候选文件 AST，不 import、执行或实例化 Tool；注册数据流无法静态解析时保留为 `dynamic`，返回始终声明 `writeOperations: false`。
 
-Trace、归档、Provider、Agent 执行、源码、缓存、变更、跨平面收敛与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/runtime-archive-and-compare-v1.md`](../../docs/runtime-archive-and-compare-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md)、[`docs/swarmflow-execution-v1.md`](../../docs/swarmflow-execution-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/subagent-execution-v1.md`](../../docs/subagent-execution-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/runtime-definition-change-convergence-v1.md`](../../docs/runtime-definition-change-convergence-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
+Trace、归档、Plugin Host、Provider、Agent 执行、源码、缓存、变更、跨平面收敛与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/runtime-archive-and-compare-v1.md`](../../docs/runtime-archive-and-compare-v1.md)、[`docs/plugin-host-v1.md`](../../docs/plugin-host-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md)、[`docs/swarmflow-execution-v1.md`](../../docs/swarmflow-execution-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/subagent-execution-v1.md`](../../docs/subagent-execution-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/runtime-definition-change-convergence-v1.md`](../../docs/runtime-definition-change-convergence-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
 
 仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 

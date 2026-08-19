@@ -88,7 +88,7 @@ export function PluginControlWorkspace({
           <span aria-hidden="true">·</span>
           <strong>{blockedCount}</strong> 个等待依赖
           <span aria-hidden="true">·</span>
-          配置保存在当前浏览器
+          浏览器偏好；Provider / Tool 开关联动本地 Host
         </p>
         <button
           type="button"
