@@ -41,6 +41,10 @@ import {
   useJiuwenSwarmExecution,
 } from "./features/jiuwenswarm-execution";
 import {
+  SubagentRuntimeLauncher,
+  useSubagentExecution,
+} from "./features/subagent-execution";
+import {
   PluginControlWorkspace,
   usePluginWorkbench,
   workbenchAvailability,
@@ -170,6 +174,12 @@ export default function App() {
     trace: swarmRuntime.trace,
     traceClient: swarmRuntime.client,
   });
+  const subagentExecution = useSubagentExecution({
+    enabled: availability.subagentExecution,
+    createTrace: createJiuwenSwarmTrace,
+    trace: swarmRuntime.trace,
+    traceClient: swarmRuntime.client,
+  });
   const runtimeSourceAvailability = useMemo<
     Readonly<Record<RuntimeSourceMode, boolean>>
   >(() => ({
@@ -194,7 +204,9 @@ export default function App() {
     ? runInput
     : runtimeSource === "core-runtime"
       ? agentCoreExecution.lastInput
-      : jiuwenSwarmExecution.lastInput;
+      : subagentExecution.traceId === swarmRuntime.trace?.id
+        ? subagentExecution.lastInput
+        : jiuwenSwarmExecution.lastInput;
   const runtimeEventCount = runtimeSource === "core-runtime"
     ? coreRuntime.events.length
     : runtimeSource === "swarm-runtime"
@@ -350,7 +362,7 @@ export default function App() {
   }
 
   async function createSwarmTrace() {
-    if (jiuwenSwarmExecution.active) return;
+    if (jiuwenSwarmExecution.active || subagentExecution.active) return;
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -364,7 +376,11 @@ export default function App() {
   }
 
   async function loadSwarmRecording() {
-    if (!defaultSwarmRecording || jiuwenSwarmExecution.active) return;
+    if (
+      !defaultSwarmRecording ||
+      jiuwenSwarmExecution.active ||
+      subagentExecution.active
+    ) return;
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -505,6 +521,7 @@ export default function App() {
                   : runtimeSource === "swarm-runtime"
                     ? swarmRuntime.connection === "creating"
                       || jiuwenSwarmExecution.active
+                      || subagentExecution.active
                     : false
               }
             >
@@ -586,9 +603,24 @@ export default function App() {
               recordingAvailable={Boolean(defaultSwarmRecording)}
               recordingLoading={swarmRecordingLoading}
               recordingError={swarmRecordingError}
-              providerBusy={jiuwenSwarmExecution.active}
-              providerAction={availability.jiuwenSwarmExecution ? (
-                <JiuwenSwarmRuntimeLauncher controller={jiuwenSwarmExecution} />
+              providerBusy={jiuwenSwarmExecution.active || subagentExecution.active}
+              providerAction={(
+                availability.jiuwenSwarmExecution || availability.subagentExecution
+              ) ? (
+                <div className="swarm-runtime-session__providers">
+                  {availability.jiuwenSwarmExecution ? (
+                    <JiuwenSwarmRuntimeLauncher
+                      controller={jiuwenSwarmExecution}
+                      disabled={subagentExecution.active}
+                    />
+                  ) : null}
+                  {availability.subagentExecution ? (
+                    <SubagentRuntimeLauncher
+                      controller={subagentExecution}
+                      disabled={jiuwenSwarmExecution.active}
+                    />
+                  ) : null}
+                </div>
               ) : null}
             />
           )}

@@ -173,6 +173,12 @@
   opacity: 0.58;
 }
 
+.swarm-runtime-session__providers {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .swarm-runtime-session__error {
   grid-column: 1 / -1;
   margin: 0;
@@ -684,10 +690,11 @@
 
 @media (max-width: 1280px) {
   .swarm-runtime-session {
-    grid-template-columns: minmax(180px, 1fr) auto auto auto;
+    grid-template-columns: minmax(180px, 1fr) auto auto auto auto;
   }
 
   .swarm-runtime-session__metrics,
+  .swarm-runtime-session > p:not(.swarm-runtime-session__error),
   .swarm-context-scope__metrics code {
     display: none;
   }

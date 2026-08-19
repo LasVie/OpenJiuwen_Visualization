@@ -13,6 +13,8 @@ __pycache__/
 .agent-core-runtime/
 .jiuwenswarm-runtime/
 .jiuwenswarm-runtime-self-test/
+.subagent-runtime/
+.subagent-runtime-self-test/
 .uv-cache-agent-core/
 .pip-cache-agent-core/
 .runtime-temp/

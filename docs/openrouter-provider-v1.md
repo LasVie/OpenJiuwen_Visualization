@@ -1,6 +1,6 @@
 # OpenRouter Provider V1
 
-OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的 `openjiuwen.openrouter-provider` 插件：本地服务独占 API key、维护模型 allowlist，并提供固定域名的 provider-only 调用合同。这个底层 adapter 不是完整 Agent 执行器；真实 DeepAgent 与真实两成员 Agent Team 分别由依赖它的 `openjiuwen.agent-core-executor` 和 `openjiuwen.jiuwenswarm-executor` 提供，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md) 与 [`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)。
+OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的 `openjiuwen.openrouter-provider` 插件：本地服务独占 API key、维护模型 allowlist，并提供固定域名的 provider-only 调用合同。这个底层 adapter 不是完整 Agent 执行器；真实 DeepAgent、真实两成员 Agent Team 与真实 TaskTool Subagent 分别由依赖它的 `openjiuwen.agent-core-executor`、`openjiuwen.jiuwenswarm-executor` 和 `openjiuwen.subagent-executor` 提供，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)、[`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md) 与 [`subagent-execution-v1.md`](subagent-execution-v1.md)。
 
 ## 数据流与权限边界
 

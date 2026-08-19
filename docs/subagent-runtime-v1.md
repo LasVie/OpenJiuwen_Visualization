@@ -112,10 +112,16 @@ Subagent Context 事件必须使用 observation 声明的 child `contextOwnerId`
 4. final result 回填父 Context；
 5. 主时间轴回退时独立画布同步收缩。
 
+## 可选真实执行器
+
+`openjiuwen.subagent-executor` 在同一观察合同之上增加显式“Subagent”运行入口。它不改变画布或事件投影，而是在固定子进程中执行真实 Agent Core 链路：父 `DeepAgent` 由框架 `SubagentRail` 注册 `task_tool`，`TaskTool.invoke` 创建独立 child session/workspace，child `DeepAgent` 完成自己的 ReAct/Rail/Model/只读 Tool 后把结果返回父 Context。
+
+执行 profile 固定为单层、单 child、前台、ephemeral session；父模型只看见 `task_tool`，child 模型只看见 `inspect_delegated_task`。服务端提供状态、启动和取消 API，浏览器不能覆盖 Tool、child type、深度、源码路径、workspace 或命令。完整 profile、安全边界、API、事件映射和无网络框架自检见 [`subagent-execution-v1.md`](subagent-execution-v1.md)。
+
 ## 安全与限制
 
-- 本地服务只校验和存储归一化 JSON，不创建 Subagent，不执行 dispatcher。
+- 通用 Trace API 只校验和存储归一化 JSON；只有用户显式启用并启动的 Subagent Executor 才会在独立固定 bridge 中创建 child、执行 dispatcher。
 - Trace 仍是有界、带 TTL 的 memory-only 数据；write token 只授权当前 Trace。
 - V1 展示生产者明确提供的 workspace/tool policy 枚举，不接收 workspace 绝对路径或工具凭据。
-- 后台 Subagent 的取消/重启可以通过后续 lifecycle 事件表现；V1 不提供实际控制按钮。
-- 一个 Subagent 内再次派发 Subagent 时，child subject 的 `parentId` 指向父 Subagent，并使用新的 invocation/session/context identity。
+- 外部 producer 可用 lifecycle 事件表达后台 Subagent；真实 Executor V1 只支持前台 child，并提供整个父子进程的取消按钮。
+- 通用协议允许生产者表达嵌套 Subagent（child `parentId` 指向父 Subagent）；真实 Executor V1 明确关闭嵌套派发。

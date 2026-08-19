@@ -22,6 +22,7 @@ export interface WorkbenchAvailability {
   openRouter: boolean;
   agentCoreExecution: boolean;
   jiuwenSwarmExecution: boolean;
+  subagentExecution: boolean;
   subagentRuntime: boolean;
   railReview: boolean;
   runtimeSources: {
@@ -95,6 +96,9 @@ export function workbenchAvailability(
     ),
     jiuwenSwarmExecution: Boolean(
       workbench.capabilities["runtime.jiuwenswarm.execute.v1"],
+    ),
+    subagentExecution: Boolean(
+      workbench.capabilities["runtime.subagent.execute.v1"],
     ),
     subagentRuntime: Boolean(
       workbench.capabilities["runtime.subagent.execution.v1"],

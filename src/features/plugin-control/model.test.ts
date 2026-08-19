@@ -33,6 +33,7 @@ describe("plugin control model", () => {
         dependants: [
           "openjiuwen.model-provider",
           "openjiuwen.agent-core-executor",
+          "openjiuwen.subagent-executor",
           "openjiuwen.integration",
         ],
       });
@@ -53,6 +54,7 @@ describe("plugin control model", () => {
       openRouter: true,
       agentCoreExecution: true,
       jiuwenSwarmExecution: true,
+      subagentExecution: true,
       subagentRuntime: true,
       railReview: true,
       runtimeSources: { fixture: true, core: true, swarm: true },
@@ -73,6 +75,7 @@ describe("plugin control model", () => {
       openRouter: false,
       agentCoreExecution: false,
       jiuwenSwarmExecution: false,
+      subagentExecution: false,
       subagentRuntime: true,
       railReview: false,
       runtimeSources: { fixture: false, core: false, swarm: true },
@@ -86,6 +89,7 @@ describe("plugin control model", () => {
       openRouter: false,
       agentCoreExecution: false,
       jiuwenSwarmExecution: false,
+      subagentExecution: false,
     });
     expect(withoutOpenRouter.modelProviders.map((provider) => provider.id))
       .toEqual(["openjiuwen.recording-replay"]);

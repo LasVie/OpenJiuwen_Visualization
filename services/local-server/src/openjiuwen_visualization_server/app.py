@@ -38,6 +38,11 @@ from .openrouter_provider import (
 from .repository import RepositoryResolutionError, RepositoryResolver
 from .scan_cache import DefinitionScanCache
 from .source_reader import SourceReadError, SourceReadOptions, SourceReader
+from .subagent_runtime import (
+    SubagentRuntimeAdapter,
+    SubagentRuntimeConfig,
+    SubagentRuntimeError,
+)
 from .scanner import (
     PythonRepositoryScanner,
     ScanOptions,
@@ -60,6 +65,9 @@ AGENT_CORE_CANCEL_ROUTE = re.compile(
 )
 JIUWENSWARM_CANCEL_ROUTE = re.compile(
     r"^/api/v1/jiuwenswarm/invocations/([^/]+)/cancel$"
+)
+SUBAGENT_CANCEL_ROUTE = re.compile(
+    r"^/api/v1/subagents/invocations/([^/]+)/cancel$"
 )
 
 
@@ -107,6 +115,7 @@ class LocalRepositoryApi:
         openrouter_adapter: OpenRouterRuntimeAdapter | None = None,
         agent_core_adapter: AgentCoreRuntimeAdapter | None = None,
         jiuwenswarm_adapter: JiuwenSwarmRuntimeAdapter | None = None,
+        subagent_adapter: SubagentRuntimeAdapter | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -135,6 +144,10 @@ class LocalRepositoryApi:
         )
         self.jiuwenswarm_adapter = jiuwenswarm_adapter or JiuwenSwarmRuntimeAdapter(
             JiuwenSwarmRuntimeConfig.from_environment(provider_config),
+            self.trace_store,
+        )
+        self.subagent_adapter = subagent_adapter or SubagentRuntimeAdapter(
+            SubagentRuntimeConfig.from_environment(provider_config),
             self.trace_store,
         )
 
@@ -172,6 +185,7 @@ class LocalRepositoryApi:
                         *(["model.provider.openrouter.invoke"] if openrouter_ready else []),
                         "runtime.agent-core.registry",
                         "runtime.jiuwenswarm.registry",
+                        "runtime.subagent.registry",
                     ],
                     "traceStorage": "memory-only",
                 },
@@ -189,6 +203,12 @@ class LocalRepositoryApi:
             return ApiResponse(
                 HTTPStatus.OK,
                 self.jiuwenswarm_adapter.descriptor(refresh=refresh),
+            )
+        if method == "GET" and route == "/api/v1/subagents":
+            refresh = parse_qs(split_path.query).get("refresh", ["0"])[0] == "1"
+            return ApiResponse(
+                HTTPStatus.OK,
+                self.subagent_adapter.descriptor(refresh=refresh),
             )
         if method == "GET" and route == "/api/v1/repositories":
             return ApiResponse(
@@ -220,6 +240,8 @@ class LocalRepositoryApi:
             return self._start_agent_core(body or {}, trace_token)
         if method == "POST" and route == "/api/v1/jiuwenswarm/invocations":
             return self._start_jiuwenswarm(body or {}, trace_token)
+        if method == "POST" and route == "/api/v1/subagents/invocations":
+            return self._start_subagent(body or {}, trace_token)
         openrouter_cancel_match = OPENROUTER_CANCEL_ROUTE.fullmatch(route)
         if method == "POST" and openrouter_cancel_match:
             return self._cancel_openrouter(openrouter_cancel_match.group(1), trace_token)
@@ -229,6 +251,9 @@ class LocalRepositoryApi:
         jiuwenswarm_cancel_match = JIUWENSWARM_CANCEL_ROUTE.fullmatch(route)
         if method == "POST" and jiuwenswarm_cancel_match:
             return self._cancel_jiuwenswarm(jiuwenswarm_cancel_match.group(1), trace_token)
+        subagent_cancel_match = SUBAGENT_CANCEL_ROUTE.fullmatch(route)
+        if method == "POST" and subagent_cancel_match:
+            return self._cancel_subagent(subagent_cancel_match.group(1), trace_token)
         trace_match = TRACE_ROUTE.fullmatch(route)
         if method == "GET" and trace_match:
             return self._trace_snapshot(trace_match.group(1), split_path.query)
@@ -300,6 +325,28 @@ class LocalRepositoryApi:
         try:
             result = self.jiuwenswarm_adapter.cancel(invocation_id, trace_token)
         except JiuwenSwarmRuntimeError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.ACCEPTED, result)
+
+    def _start_subagent(
+        self,
+        body: dict[str, Any],
+        trace_token: str | None,
+    ) -> ApiResponse:
+        try:
+            result = self.subagent_adapter.start(body, trace_token)
+        except SubagentRuntimeError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.ACCEPTED, result)
+
+    def _cancel_subagent(
+        self,
+        invocation_id: str,
+        trace_token: str | None,
+    ) -> ApiResponse:
+        try:
+            result = self.subagent_adapter.cancel(invocation_id, trace_token)
+        except SubagentRuntimeError as exc:
             return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
 

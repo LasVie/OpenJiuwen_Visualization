@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent 与真实双成员 JiuwenSwarm Agent Team + OpenRouter 执行、Model Provider 录制回放、工作树/commit range/GitHub PR 的节点影响图，以及带依赖解析的模块开关。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、工作树/commit range/GitHub PR 的节点影响图，以及带依赖解析的模块开关。
 
 已交付能力、阶段记录和后续路线见 [`docs/project-roadmap.md`](docs/project-roadmap.md)。
 
@@ -19,7 +19,7 @@ npm run check
 
 ## 绑定本地仓库
 
-本地仓读取通过独立的只读服务完成。启动时必须明确给出允许访问的目录；Repository API 不导入或执行目标仓代码。真实 Agent Core 与 JiuwenSwarm Agent Team 执行位于显式、可选的隔离子进程边界：
+本地仓读取通过独立的只读服务完成。启动时必须明确给出允许访问的目录；Repository API 不导入或执行目标仓代码。真实 Agent Core、JiuwenSwarm Agent Team 与 Subagent 执行位于显式、可选且彼此独立的隔离子进程边界：
 
 ```powershell
 python -B services/local-server/scripts/run_server.py `
@@ -81,7 +81,7 @@ Context 事件必须携带 `context.ownerId`。Team/Member/Agent/Subagent 可以
 
 Swarm Trace 的“Agent Team”入口会在固定 bridge 中运行真实两成员团队：JiuwenSwarm 完成 provider assembly，Agent Core Team Runner、TeamMonitor 和成员 DeepAgent 执行生命周期。Leader 与 Analyst 拥有独立 Context，任务、消息、Rail、Model 与允许的团队工具按主体进入同一可回放时间轴。V1 明确是 `scheduled + inprocess` Agent Team，`enable_swarmflow=false`，不会把它标成 SwarmFlow；浏览器也不能改变 roster、工具、源码路径或运行命令。完整配置、安全边界和事件映射见 [`docs/jiuwenswarm-execution-v1.md`](docs/jiuwenswarm-execution-v1.md)。
 
-结构化 Subagent 卡片可以进入独立执行画布，按同一时间轴查看 `dispatcher → child session → Context / Agent / Rail / Model / Tool → result`。派发器、前后台模式、父/子 session、workspace 隔离与 Tool 策略都来自显式事件；父 Context 与 child Context 不会合并。页面内置一段不执行 Agent/模型的确定性录制用于验证，完整合同见 [`docs/subagent-runtime-v1.md`](docs/subagent-runtime-v1.md)。
+结构化 Subagent 卡片可以进入独立执行画布，按同一时间轴查看 `dispatcher → child session → Context / Agent / Rail / Model / Tool → result`。派发器、前后台模式、父/子 session、workspace 隔离与 Tool 策略都来自显式事件；父 Context 与 child Context 不会合并。页面既保留不执行 Agent/模型的确定性录制，也提供“Subagent”入口运行真实 `Parent DeepAgent → task_tool → analysis_subagent`：父侧只看见 `task_tool`，child 只看见只读 `inspect_delegated_task`，固定单层、单 child、前台执行。观察合同见 [`docs/subagent-runtime-v1.md`](docs/subagent-runtime-v1.md)，真实执行 profile、API 和自检见 [`docs/subagent-execution-v1.md`](docs/subagent-execution-v1.md)。
 
 ### Model Provider 录制
 
@@ -89,7 +89,7 @@ Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，
 
 ### OpenRouter 实时调用
 
-OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback adapter。真实 DeepAgent 与 JiuwenSwarm Agent Team 分别通过自己的 Executor 使用框架 OpenRouter client，避免把普通模型调用误画成 Agent 或 Team。API key 仅在本地服务环境变量中，默认模型白名单只有 `openrouter/free`。Provider 配置与底层安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
+OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback adapter。真实 DeepAgent、JiuwenSwarm Agent Team 与 TaskTool Subagent 分别通过自己的 Executor 使用框架 OpenRouter client，避免把普通模型调用误画成 Agent、Team 或 child。API key 仅在本地服务环境变量中，默认模型白名单只有 `openrouter/free`。Provider 配置与底层安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
 
 ### Git Change Plane
 
@@ -130,6 +130,7 @@ src/
 │  ├─ context-window/          # 脱敏、原文和展示 Token 模型
 │  ├─ agent-core-execution/    # DeepAgent 状态探测、运行表单、取消与输入关联
 │  ├─ jiuwenswarm-execution/   # Agent Team 状态探测、运行表单、取消与主体关联
+│  ├─ subagent-execution/      # 真实 TaskTool child 状态探测、启动、取消与 Trace 关联
 │  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性

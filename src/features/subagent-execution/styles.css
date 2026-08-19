@@ -1,0 +1,83 @@
+.subagent-launcher__trigger {
+  color: #8a4e27;
+  background: #fbefe5;
+  box-shadow: inset 0 0 0 1px rgb(173 104 57 / 0.28);
+}
+
+.subagent-launcher__trigger:hover:not(:disabled) {
+  background: #f7e5d7;
+  box-shadow: inset 0 0 0 1px rgb(173 104 57 / 0.45);
+}
+
+.subagent-launcher__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.subagent-dialog {
+  --provider-accent: #ad6839;
+}
+
+.subagent-dialog__mark {
+  color: white;
+  background: #ad6839;
+}
+
+.subagent-form__notice {
+  color: #70401f;
+  background: #fff6ef;
+  box-shadow: inset 0 0 0 1px rgb(173 104 57 / 0.22);
+}
+
+.subagent-form__route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 11px 12px;
+  color: #714326;
+  background: #fbf6f1;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgb(173 104 57 / 0.18);
+}
+
+.subagent-form__route span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.subagent-form__route code {
+  padding: 4px 7px;
+  font-size: 11px;
+  color: #824a25;
+  background: white;
+  border-radius: 6px;
+}
+
+.subagent-form__profile {
+  color: #70401f;
+  background: #fff8f2;
+}
+
+.subagent-form__run {
+  background: #ad6839;
+}
+
+.subagent-form__run:hover:not(:disabled) {
+  background: #93552d;
+}
+
+@media (max-width: 760px) {
+  .subagent-form__route {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .subagent-form__route > svg {
+    transform: rotate(90deg);
+  }
+}

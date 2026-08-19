@@ -9,6 +9,11 @@
   box-shadow: inset 0 0 0 1px rgb(107 86 166 / 0.42);
 }
 
+.jiuwenswarm-launcher__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .jiuwenswarm-dialog {
   --provider-accent: var(--swarm);
 }

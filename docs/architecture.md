@@ -80,6 +80,7 @@ repository@revision:path:symbol
 | `openjiuwen.openrouter-provider` | 服务端 OpenRouter 调用、模型白名单、流式 Trace 与取消 |
 | `openjiuwen.agent-core-executor` | 隔离执行真实 DeepAgent/ReAct，并将 Rail、Context、Tool 与 OpenRouter 事件写入 Trace |
 | `openjiuwen.jiuwenswarm-executor` | 隔离执行真实两成员 Agent Team，并将主体、任务、消息、Rail 与独立 Context 写入 Swarm Trace |
+| `openjiuwen.subagent-executor` | 隔离执行真实父 DeepAgent → TaskTool → child DeepAgent，并写入父子 session、Rail、Tool 与独立 Context |
 | `openjiuwen.git-change` | 工作树、commit refs 与节点级影响映射 |
 | `openjiuwen.github-pull-request` | GitHub PR 只读文件变更、远端 head 对齐与节点影响映射 |
 | `openjiuwen.tool-catalog` | Tool 声明、静态注册路径与 `ability.register` 运行确认 |
@@ -87,7 +88,7 @@ repository@revision:path:symbol
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务、静态定义图、有界源码证据与 Git Change 客户端，默认开启 |
 
-`openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。`openjiuwen.agent-core-executor` 与 `openjiuwen.jiuwenswarm-executor` 只增加各自显式执行入口，并依赖对应 Runtime source 与 OpenRouter 模块；组件不会读取 Python 对象或原始日志格式。
+`openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。三个 Executor 只增加各自显式执行入口：独立 DeepAgent、Agent Team 和 TaskTool Subagent 拥有不同 capability 与 bridge；它们依赖对应 Runtime source 与 OpenRouter 模块，组件不会读取 Python 对象或原始日志格式。
 
 后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
 
@@ -216,7 +217,7 @@ Subagent 是 Swarm 主体层级下的独立执行边界，不等同于 Team Memb
 
 `features/subagent-runtime/` 将父 dispatcher、合成的 session boundary 和绑定同一 subject 的 Core events 投影为独立 ReactFlow。Model frames 按 invocation 聚合，Tool start/end 按 span 聚合，边优先使用 `spanId / parentSpanId`；主时间轴 sequence 是可见性权威，不能展示未来帧。orchestration 节点保持 Swarm 紫色，child Core 活动使用 Core 青色。
 
-确定性录制通过通用 `runtimeRecordings` 插件贡献点进入 workbench，再走真实 loopback Trace API，页面不直接拼装事件。完整协议见 [`subagent-runtime-v1.md`](subagent-runtime-v1.md)。
+确定性录制通过通用 `runtimeRecordings` 插件贡献点进入 workbench，再走真实 loopback Trace API，页面不直接拼装事件。`features/subagent-execution/` 与 `openjiuwen.subagent-executor` 另行提供固定前台单 child 的真实执行入口；服务端运行 Agent Core 自身的 `SubagentRail → task_tool → DeepAgent.create_subagent`，父/子分别通过最后一道 Rail 收敛工具 schema。完整协议见 [`subagent-runtime-v1.md`](subagent-runtime-v1.md) 与 [`subagent-execution-v1.md`](subagent-execution-v1.md)。
 
 ## Model Provider V1
 
@@ -226,7 +227,7 @@ Model Provider 作为独立插件注册 adapter 与确定性 recording，不把�
 
 `openjiuwen.openrouter-provider` 是首个实时实现。`features/openrouter-runtime/` 只读取无凭据注册表、采集模拟输入并控制调用；本地服务固定 OpenRouter 域名、持有 key、解析 SSE、执行取消，再写回同一 Trace。完整合同见 [`model-provider-v1.md`](model-provider-v1.md) 与 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)。
 
-真实独立 Agent 由 `features/agent-core-execution/` 与可选 subprocess adapter 提供。网页只提交 Trace authority 和有界运行参数；bridge 从指定 source checkout 导入 `create_deep_agent`，让 Agent Core 自身执行 ReAct、Rail、AbilityManager 和 OpenRouter Model Client，再输出规范事件。真实 Agent Team 走独立的 JiuwenSwarm bridge，不能复用 provider-only adapter 冒充编排。完整边界见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md) 与 [`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)。
+真实独立 Agent 由 `features/agent-core-execution/` 与可选 subprocess adapter 提供。网页只提交 Trace authority 和有界运行参数；bridge 从指定 source checkout 导入 `create_deep_agent`，让 Agent Core 自身执行 ReAct、Rail、AbilityManager 和 OpenRouter Model Client，再输出规范事件。真实 Agent Team 与真实 TaskTool Subagent 各走独立 bridge，不能复用 provider-only adapter 或彼此的身份冒充编排。完整边界见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)、[`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md) 与 [`subagent-execution-v1.md`](subagent-execution-v1.md)。
 
 ## Git Change Plane V1
 

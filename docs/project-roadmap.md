@@ -9,7 +9,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 长期能力按四个平面组织：
 
 - Definition：仓库、符号、Tool、Rail、Hook、Agent、Workflow 与配置定义；
-- Runtime：Agent、Agent Team、未来的 SwarmFlow/Subagent、Model、Tool、Context 和决策过程；
+- Runtime：Agent、Agent Team、Subagent、未来的 SwarmFlow、Model、Tool、Context 和决策过程；
 - Change：工作树、commit range、GitHub PR 与受影响节点；
 - Modules：Provider、执行器、数据源和深入画布的可开关插件。
 
@@ -28,6 +28,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | 模块控制中心 | 已完成 | 插件启停、依赖阻塞、能力驱动的入口收敛、浏览器偏好 |
 | Agent Core 真实执行 | 已完成 | 固定隔离 bridge、真实 DeepAgent/ReAct/Rail/只读 Tool/OpenRouter、取消与自检 |
 | JiuwenSwarm Agent Team 真实执行 | 已完成 | 固定双成员 Team、真实 Team Runner/TeamMonitor、角色 Tool 边界、成员独立 Context |
+| Agent Core Subagent 真实执行 | 已完成 | 父 DeepAgent → TaskTool → child DeepAgent、父子 session/Context、双重 Tool 边界、取消与自检 |
 
 ## 当前已支持功能
 
@@ -61,6 +62,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 外部 producer 写入的 Core Trace 与 Swarm Trace；
 - 真实独立 Agent Core DeepAgent，包含 ReAct、Rail、Model、Tool、Context 和取消；
 - 真实 JiuwenSwarm 两成员 Agent Team，包含 Team/Member/Task/Message、成员 Rail、Model、团队 Tool 和独立 Context；
+- 真实 Agent Core 前台单层 Subagent，包含父侧 `task_tool`、child ReAct/Rail/只读 Tool、独立 session/workspace/Context 与结果回传；
 - Rail 卡片进入独立画布，逐帧查看读取、检查、变更、控制信号与输出证据；
 - Provider 录制回放和 OpenRouter 实时流式调用。
 
@@ -75,37 +77,37 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 
 - Runtime Trace 与 Context 默认只在 local service 内存中保存；
 - JiuwenSwarm V1 是固定双成员 Agent Team，不是 SwarmFlow，一次最多一个执行；
-- Subagent 已有结构化协议和确定性录制，但尚未接入真实 child execution；
+- Subagent V1 固定为单层、单 child、前台执行，不支持并行、后台 spawn、sticky resume 或嵌套 child；
 - WorkflowProgress 尚无可靠的结构化 tool activity，页面不会从文本猜 Tool 调用；
 - 执行器不开放任意 Shell、Git 写入、文件写入、MCP、Skill 或浏览器自定义工具；
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
 - 还没有持久化运行归档、跨运行比较、协作权限或远端部署控制面。
 
-## 下一阶段：真实 Subagent Executor V1
+## 下一阶段：SwarmFlow Executor V1
 
-下一阶段在现有 `swarm.subagent` 合同之上接入一个真实、固定且有界的 child execution，不先扩展到 SwarmFlow。这样可以优先验证用户最关心的父/子 Context 分离、派发过程和子链路逐层展开，同时复用已经稳定的 Core 事件、Rail 深入画布与 OpenRouter 边界。
+下一阶段将从“固定 Agent Team”和“固定前台 Subagent”继续向真实 SwarmFlow 推进，但必须保留三者不同的产品语义。目标是选择一个可重复、无动态代码注入的最小 workflow，在真实 Workflow/Phase/Agent 状态机上验证分阶段执行、控制流边和每个执行主体的 Context，而不是把 Agent Team 事件重新换标签。
 
 计划交付：
 
-1. 检视 Agent Core/JiuwenSwarm 的真实 Subagent 创建、session、workspace 和 callback 入口；
-2. 定义固定只读 Subagent profile、父子 authority、并发/深度/取消预算；
-3. 在隔离 bridge 中执行真实 dispatcher → child session，并归一化现有 `swarm.subagent` 与 Core events；
-4. 为父 Context、child Context、Tool allowlist、后台/前台状态和 result merge 增加精确证据；
-5. 接入现有 Subagent 深入画布，不在 `App.tsx` 复制投影规则；
+1. 只读检视 JiuwenSwarm WorkflowAgent、WorkflowMonitorHandler、WorkflowProgress 与 Runner 的真实装配/停止入口；
+2. 选择一个固定最小 workflow，明确 Phase、Agent、转移条件、失败/取消和 Context owner；
+3. 定义独立 `runtime.swarmflow.execute.v1` 插件与 API，不复用 Agent Team/Subagent 的运行时身份；
+4. 在隔离 bridge 中运行真实 workflow，并只从结构化 monitor/callback 归一化 Workflow/Phase/Agent 事件；
+5. 让阶段切换、当前分支、上一步/下一步与 Context owner 在现有 Swarm 画布中精确联动；
 6. 增加无网络框架自检、服务测试、前端测试和真实浏览器验收。
 
-默认边界是单层、单 child、前台执行、固定只读工具、OpenRouter 首个 Provider；只有上游真实 API 证明需要变化时才进入方案决策。
+默认边界是固定 workflow、固定 Agent/Phase、无任意代码/配置上传、无人工审批节点、OpenRouter 首个 Provider；若上游真实入口要求在“可重复 workflow”与“Human-in-the-loop”之间做不可兼容选择，再请求产品决策。
 
 ## 后续路线
 
 | 优先级 | 阶段 | 核心结果 | 进入前的决策点 |
 |---:|---|---|---|
-| P1 | 真实 Subagent Executor | 父子 session/Context/Tool/结果的真实链路 | 上游可用执行入口与最小安全 profile |
-| P2 | SwarmFlow Executor | Workflow/Phase/Agent/Human 的真实流程运行和控制 | 先选择一个可重复的最小 workflow；不能复用 Agent Team 标签 |
-| P3 | Runtime ↔ Definition ↔ Change 收敛 | 运行节点跳转源码，PR 标出受影响且实际运行的链路 | 稳定 source identity 与 revision 对齐策略 |
-| P4 | 运行归档与对比 | 可选持久化、跨运行 diff、Token/费用/决策比较 | 本地数据库、脱敏和保留周期 |
-| P5 | Provider 与插件 Host | 更多模型 Provider、注册工具插件、权限声明 | 插件签名、密钥隔离和 capability 审批 |
-| P6 | 辅助开发闭环 | 从受影响节点生成测试/修改建议并回写受控分支 | 任何写操作都需要独立权限和可审计审批 |
+| 已完成 | 真实 Subagent Executor | 父子 session/Context/Tool/结果的真实链路 | 固定单 child profile 已落地 |
+| P1 | SwarmFlow Executor | Workflow/Phase/Agent 的真实流程运行和控制 | 先选择一个可重复的最小 workflow；不能复用 Agent Team 标签 |
+| P2 | Runtime ↔ Definition ↔ Change 收敛 | 运行节点跳转源码，PR 标出受影响且实际运行的链路 | 稳定 source identity 与 revision 对齐策略 |
+| P3 | 运行归档与对比 | 可选持久化、跨运行 diff、Token/费用/决策比较 | 本地数据库、脱敏和保留周期 |
+| P4 | Provider 与插件 Host | 更多模型 Provider、注册工具插件、权限声明 | 插件签名、密钥隔离和 capability 审批 |
+| P5 | 辅助开发闭环 | 从受影响节点生成测试/修改建议并回写受控分支 | 任何写操作都需要独立权限和可审计审批 |
 
 ## 阶段管理规则
 

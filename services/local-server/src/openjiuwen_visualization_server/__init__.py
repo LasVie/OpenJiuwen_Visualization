@@ -7,6 +7,7 @@ from .scan_cache import DefinitionScanCache
 from .openrouter_provider import OpenRouterProviderConfig, OpenRouterRuntimeAdapter
 from .scanner import PythonRepositoryScanner, ScanOptions
 from .trace_store import RuntimeTraceStore, TraceStoreError
+from .subagent_runtime import SubagentRuntimeAdapter, SubagentRuntimeConfig
 
 __all__ = [
     "LocalRepositoryApi",
@@ -21,5 +22,7 @@ __all__ = [
     "ScanOptions",
     "RuntimeTraceStore",
     "TraceStoreError",
+    "SubagentRuntimeAdapter",
+    "SubagentRuntimeConfig",
     "create_http_server",
 ]

@@ -1,40 +1,40 @@
 import {
   Activity,
+  Bot,
   CircleStop,
+  GitFork,
   KeyRound,
-  Network,
   Play,
   RefreshCw,
   Server,
   ShieldCheck,
-  Users,
   Workflow,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type {
-  JiuwenSwarmExecutionController,
-  JiuwenSwarmExecutionPhase,
-} from "./use-jiuwenswarm-execution";
+  SubagentExecutionController,
+  SubagentExecutionPhase,
+} from "./use-subagent-execution";
 
-interface JiuwenSwarmRuntimeLauncherProps {
-  controller: JiuwenSwarmExecutionController;
+interface SubagentRuntimeLauncherProps {
+  controller: SubagentExecutionController;
   disabled?: boolean;
 }
 
-const phaseLabel: Record<JiuwenSwarmExecutionPhase, string> = {
+const phaseLabel: Record<SubagentExecutionPhase, string> = {
   idle: "待运行",
-  starting: "组队中",
-  running: "团队运行中",
+  starting: "委派中",
+  running: "子任务运行中",
   cancelling: "取消中",
   completed: "已完成",
   failed: "失败",
 };
 
-export function JiuwenSwarmRuntimeLauncher({
+export function SubagentRuntimeLauncher({
   controller,
   disabled = false,
-}: JiuwenSwarmRuntimeLauncherProps) {
+}: SubagentRuntimeLauncherProps) {
   const [open, setOpen] = useState(false);
   const [modelId, setModelId] = useState("");
   const [input, setInput] = useState("");
@@ -83,27 +83,27 @@ export function JiuwenSwarmRuntimeLauncher({
   const triggerStatus = disabled
     ? "其他执行器运行中"
     : controller.active
-    ? phaseLabel[controller.phase]
-    : controller.runtimeLoading
-      ? "检查中"
-      : controller.runtimeError
-        ? "服务不可达"
-        : runtimeReady
-          ? "已就绪"
-          : "待配置";
+      ? phaseLabel[controller.phase]
+      : controller.runtimeLoading
+        ? "检查中"
+        : controller.runtimeError
+          ? "服务不可达"
+          : runtimeReady
+            ? "已就绪"
+            : "待配置";
 
   return (
     <>
       <button
         type="button"
-        className={`openrouter-launcher__trigger jiuwenswarm-launcher__trigger ${controller.active ? "openrouter-launcher__trigger--active" : ""}`}
+        className={`openrouter-launcher__trigger subagent-launcher__trigger ${controller.active ? "openrouter-launcher__trigger--active" : ""}`}
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         disabled={disabled}
-        title={`JiuwenSwarm Agent Team · ${triggerStatus}`}
+        title={`Agent Core TaskTool Subagent · ${triggerStatus}`}
       >
-        <Network size={14} strokeWidth={2} aria-hidden="true" />
-        Agent Team
+        <GitFork size={14} strokeWidth={2} aria-hidden="true" />
+        Subagent
         <span aria-hidden="true" />
       </button>
 
@@ -115,19 +115,19 @@ export function JiuwenSwarmRuntimeLauncher({
           }}
         >
           <section
-            className="openrouter-dialog jiuwenswarm-dialog"
+            className="openrouter-dialog subagent-dialog"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="jiuwenswarm-dialog-title"
+            aria-labelledby="subagent-dialog-title"
           >
             <header className="openrouter-dialog__header">
               <div>
-                <span className="openrouter-dialog__mark jiuwenswarm-dialog__mark" aria-hidden="true">
-                  <Network size={19} strokeWidth={2} />
+                <span className="openrouter-dialog__mark subagent-dialog__mark" aria-hidden="true">
+                  <GitFork size={19} strokeWidth={2} />
                 </span>
                 <span>
-                  <small>REAL AGENT TEAM · OPENROUTER</small>
-                  <h2 id="jiuwenswarm-dialog-title">JiuwenSwarm 团队运行</h2>
+                  <small>REAL TASKTOOL SUBAGENT · OPENROUTER</small>
+                  <h2 id="subagent-dialog-title">单层 Subagent 委派</h2>
                 </span>
               </div>
               <span className={`openrouter-dialog__phase openrouter-dialog__phase--${controller.phase}`}>
@@ -140,7 +140,7 @@ export function JiuwenSwarmRuntimeLauncher({
                 type="button"
                 className="openrouter-dialog__close"
                 onClick={() => setOpen(false)}
-                aria-label="关闭 JiuwenSwarm 运行面板"
+                aria-label="关闭 Subagent 运行面板"
               >
                 <X size={18} strokeWidth={2} aria-hidden="true" />
               </button>
@@ -149,7 +149,7 @@ export function JiuwenSwarmRuntimeLauncher({
             {controller.runtimeLoading ? (
               <div className="openrouter-dialog__state" role="status">
                 <Activity size={20} strokeWidth={2} aria-hidden="true" />
-                <div><strong>正在探测团队运行环境</strong><p>验证 JiuwenSwarm assembly 与 Agent Core Team 依赖；不会启动团队或访问模型。</p></div>
+                <div><strong>正在探测 Subagent 运行环境</strong><p>只验证 DeepAgent、SubAgentConfig 与 TaskTool 依赖，不会调用模型。</p></div>
               </div>
             ) : controller.runtimeError ? (
               <div className="openrouter-dialog__state openrouter-dialog__state--error" role="alert">
@@ -163,9 +163,9 @@ export function JiuwenSwarmRuntimeLauncher({
               <div className="openrouter-dialog__state openrouter-dialog__state--configure" role="status">
                 <KeyRound size={20} strokeWidth={2} aria-hidden="true" />
                 <div>
-                  <strong>JiuwenSwarm 运行环境尚未就绪</strong>
+                  <strong>Subagent 运行环境尚未就绪</strong>
                   <p>{controller.runtime?.diagnostic.message ?? "无法读取运行时诊断。"}</p>
-                  <p>Python 入口由 <code>OPENJIUWEN_JIUWENSWARM_PYTHON</code> 指定；JiuwenSwarm 与 Agent Core 源码位置只在本地服务中配置。OpenRouter key 不会进入浏览器。</p>
+                  <p>Python 可由 <code>OPENJIUWEN_SUBAGENT_PYTHON</code> 指定；源码位置和 OpenRouter key 只存在于本地服务。</p>
                 </div>
                 <button type="button" onClick={() => void controller.refresh()}>
                   <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />重新探测
@@ -173,9 +173,9 @@ export function JiuwenSwarmRuntimeLauncher({
               </div>
             ) : (
               <form className="openrouter-form" onSubmit={submit}>
-                <div className="openrouter-form__notice jiuwenswarm-form__notice">
+                <div className="openrouter-form__notice subagent-form__notice">
                   <ShieldCheck size={17} strokeWidth={2} aria-hidden="true" />
-                  <p><strong>这会运行真实的两成员 Agent Team。</strong>Team Leader 与 Analysis Member 使用独立 Context，通过受控团队消息和任务协作；当前 profile 明确不是 SwarmFlow。</p>
+                  <p><strong>这会运行真实的父子 DeepAgent 链路。</strong>父 Agent 通过前台 <code>task_tool</code> 创建一个独立 child session；这不是 Agent Team，也不是 SwarmFlow。</p>
                 </div>
 
                 <label className="openrouter-form__field">
@@ -192,12 +192,12 @@ export function JiuwenSwarmRuntimeLauncher({
                 </label>
 
                 <label className="openrouter-form__field openrouter-form__field--prompt">
-                  <span>团队任务 <small>{input.length} / {controller.runtime!.limits.maxInputCharacters}</small></span>
+                  <span>父 Agent 输入 <small>{input.length} / {controller.runtime!.limits.maxInputCharacters}</small></span>
                   <textarea
                     ref={promptRef}
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
-                    placeholder="输入任务；运行后可逐步查看 Team、成员、任务、消息、成员 ReAct、Rail 与各自 Context Window。"
+                    placeholder="输入任务；运行后可查看父侧 task_tool、child ReAct、Rail、只读 Tool 与两份独立 Context。"
                     maxLength={controller.runtime!.limits.maxInputCharacters}
                     disabled={controller.active || disabled}
                   />
@@ -207,11 +207,11 @@ export function JiuwenSwarmRuntimeLauncher({
                   <summary>高级参数</summary>
                   <div>
                     <label className="openrouter-form__field openrouter-form__field--system">
-                      <span>附加 Leader System prompt <small>OPTIONAL</small></span>
+                      <span>附加 Parent System prompt <small>OPTIONAL</small></span>
                       <textarea
                         value={systemPrompt}
                         onChange={(event) => setSystemPrompt(event.target.value)}
-                        placeholder="可选；固定 roster、工具和隔离约束不可由浏览器覆盖。"
+                        placeholder="可选；委派次数、child 类型、工具和隔离策略不可由浏览器覆盖。"
                         maxLength={controller.runtime!.limits.maxSystemCharacters}
                         disabled={controller.active || disabled}
                       />
@@ -234,15 +234,23 @@ export function JiuwenSwarmRuntimeLauncher({
                   </div>
                 </details>
 
-                <div className="openrouter-form__invocation jiuwenswarm-form__profile">
-                  <span><Users size={12} aria-hidden="true" /> Leader + Analyst</span>
-                  <code>scheduled · in-process</code>
-                  <strong>非 SwarmFlow</strong>
+                <div className="subagent-form__route" aria-label="固定 Subagent 执行路径">
+                  <span><Bot size={13} aria-hidden="true" /> Parent DeepAgent</span>
+                  <GitFork size={14} aria-hidden="true" />
+                  <code>task_tool</code>
+                  <GitFork size={14} aria-hidden="true" />
+                  <span><Bot size={13} aria-hidden="true" /> analysis_subagent</span>
+                </div>
+
+                <div className="openrouter-form__invocation subagent-form__profile">
+                  <span>前台 · 单 child · 单层</span>
+                  <code>child: inspect_delegated_task</code>
+                  <strong>独立 Context</strong>
                 </div>
 
                 {controller.invocation ? (
                   <div className="openrouter-form__invocation">
-                    <span><Workflow size={12} aria-hidden="true" />{controller.invocation.teamName}</span>
+                    <span><Workflow size={12} aria-hidden="true" />{controller.invocation.parentSessionId}</span>
                     <code>{controller.invocation.id}</code>
                     <strong>{phaseLabel[controller.phase]}</strong>
                   </div>
@@ -253,7 +261,7 @@ export function JiuwenSwarmRuntimeLauncher({
                 ) : null}
 
                 <footer className="openrouter-form__actions">
-                  <span>TeamMonitor、成员 Rail、任务/消息和每个成员的完整 Context 会自动进入 Trace。</span>
+                  <span>child 卡片出现后可点击进入独立画布；父子完整 Context 由右侧 owner 作用域切换。</span>
                   {controller.active ? (
                     <button
                       type="button"
@@ -262,15 +270,15 @@ export function JiuwenSwarmRuntimeLauncher({
                       disabled={controller.phase === "starting" || controller.phase === "cancelling"}
                     >
                       <CircleStop size={16} strokeWidth={2} aria-hidden="true" />
-                      {controller.phase === "cancelling" ? "正在取消" : "取消团队"}
+                      {controller.phase === "cancelling" ? "正在取消" : "取消父子链路"}
                     </button>
                   ) : (
                     <button
                       type="submit"
-                      className="openrouter-form__run jiuwenswarm-form__run"
+                      className="openrouter-form__run subagent-form__run"
                       disabled={disabled || !input.trim() || !modelId}
                     >
-                      <Play size={16} strokeWidth={2} aria-hidden="true" />运行 Agent Team
+                      <Play size={16} strokeWidth={2} aria-hidden="true" />运行 Subagent
                     </button>
                   )}
                 </footer>
