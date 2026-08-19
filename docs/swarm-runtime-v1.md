@@ -1,6 +1,8 @@
 # Swarm Runtime V1
 
-Swarm Runtime V1 是 `jiuwenswarm` 与 Visualization Web 之间的归一化事件边界。它不 import 或执行 `jiuwenswarm`，不调用 Agent、工具或模型；生产者把已观测事件主动写入 loopback 内存服务，浏览器按严格顺序投影层级、关系、状态和独立 Context。
+Swarm Runtime V1 是 `jiuwenswarm` 与 Visualization Web 之间的归一化事件边界。协议与通用 ingestion 层本身不 import 或执行 `jiuwenswarm`，也不主动调用 Agent、工具或模型；任何生产者都可以把已观测事件写入 loopback 内存服务，浏览器再按严格顺序投影层级、关系、状态和独立 Context。
+
+可选的 `openjiuwen.jiuwenswarm-executor` 位于协议层之外，会在固定隔离子进程中运行真实两成员 Agent Team，并把框架证据归一化回同一协议。它明确不是 SwarmFlow，完整执行边界见 [`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)。
 
 ## 真实观测边界
 

@@ -37,6 +37,10 @@ import {
   useAgentCoreExecution,
 } from "./features/agent-core-execution";
 import {
+  JiuwenSwarmRuntimeLauncher,
+  useJiuwenSwarmExecution,
+} from "./features/jiuwenswarm-execution";
+import {
   PluginControlWorkspace,
   usePluginWorkbench,
   workbenchAvailability,
@@ -143,6 +147,29 @@ export default function App() {
     trace: coreRuntime.trace,
     traceClient: coreRuntime.client,
   });
+  const createJiuwenSwarmTrace = useCallback(async (label: string) => {
+    setLiveStepIndex(0);
+    setFollowLive(true);
+    selectNode(null);
+    if (inspectorOpen) toggleInspector();
+    closeRailCanvas();
+    setSubagentCanvasSubjectId(null);
+    setSwarmRecordingError(null);
+    setSwarmTraceLabel(label);
+    return swarmRuntime.startSession(label);
+  }, [
+    closeRailCanvas,
+    inspectorOpen,
+    selectNode,
+    swarmRuntime.startSession,
+    toggleInspector,
+  ]);
+  const jiuwenSwarmExecution = useJiuwenSwarmExecution({
+    enabled: availability.jiuwenSwarmExecution,
+    createTrace: createJiuwenSwarmTrace,
+    trace: swarmRuntime.trace,
+    traceClient: swarmRuntime.client,
+  });
   const runtimeSourceAvailability = useMemo<
     Readonly<Record<RuntimeSourceMode, boolean>>
   >(() => ({
@@ -167,7 +194,7 @@ export default function App() {
     ? runInput
     : runtimeSource === "core-runtime"
       ? agentCoreExecution.lastInput
-      : "";
+      : jiuwenSwarmExecution.lastInput;
   const runtimeEventCount = runtimeSource === "core-runtime"
     ? coreRuntime.events.length
     : runtimeSource === "swarm-runtime"
@@ -323,6 +350,7 @@ export default function App() {
   }
 
   async function createSwarmTrace() {
+    if (jiuwenSwarmExecution.active) return;
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -336,7 +364,7 @@ export default function App() {
   }
 
   async function loadSwarmRecording() {
-    if (!defaultSwarmRecording) return;
+    if (!defaultSwarmRecording || jiuwenSwarmExecution.active) return;
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -464,7 +492,7 @@ export default function App() {
                 ? "输入一段文字，按确定性轨迹模拟运行"
                 : runtimeSource === "core-runtime"
                   ? "填写 Trace 标签；真实 DeepAgent 从 Agent Core 面板显式启动"
-                  : "填写 Trace 标签；采集器不会执行 Swarm 或模型"}
+                  : "填写 Trace 标签；真实团队从 Agent Team 面板显式启动"}
               autoComplete="off"
             />
             <button
@@ -476,6 +504,7 @@ export default function App() {
                     || agentCoreExecution.active
                   : runtimeSource === "swarm-runtime"
                     ? swarmRuntime.connection === "creating"
+                      || jiuwenSwarmExecution.active
                     : false
               }
             >
@@ -557,6 +586,10 @@ export default function App() {
               recordingAvailable={Boolean(defaultSwarmRecording)}
               recordingLoading={swarmRecordingLoading}
               recordingError={swarmRecordingError}
+              providerBusy={jiuwenSwarmExecution.active}
+              providerAction={availability.jiuwenSwarmExecution ? (
+                <JiuwenSwarmRuntimeLauncher controller={jiuwenSwarmExecution} />
+              ) : null}
             />
           )}
           <div className="scenario-note">

@@ -1,6 +1,6 @@
 # OpenRouter Provider V1
 
-OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的 `openjiuwen.openrouter-provider` 插件：本地服务独占 API key、维护模型 allowlist，并提供固定域名的 provider-only 调用合同。这个底层 adapter 不是完整 Agent 执行器；真实 DeepAgent 由依赖它的 `openjiuwen.agent-core-executor` 模块提供，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)。
+OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的 `openjiuwen.openrouter-provider` 插件：本地服务独占 API key、维护模型 allowlist，并提供固定域名的 provider-only 调用合同。这个底层 adapter 不是完整 Agent 执行器；真实 DeepAgent 与真实两成员 Agent Team 分别由依赖它的 `openjiuwen.agent-core-executor` 和 `openjiuwen.jiuwenswarm-executor` 提供，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md) 与 [`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)。
 
 ## 数据流与权限边界
 
@@ -18,7 +18,7 @@ flowchart LR
 - API key 只从本地服务进程环境读取，不进入 React state、请求正文、API 响应、Trace、日志、插件偏好或磁盘。
 - 浏览器仍持有当前 Trace 的高熵写入令牌；Provider endpoint 必须用它证明本次调用属于一个开放的 `agent-core` Trace。
 - Provider URL 固定为 `https://openrouter.ai/api/v1/chat/completions`，拒绝重定向，不接受浏览器提供 base URL。
-- 插件关闭后，Provider contribution 消失，依赖它的 Agent Core Executor 进入 blocked；本地服务不会因此卸载，也不会自动发起请求。
+- 插件关闭后，Provider contribution 消失，依赖它的 Agent Core 与 JiuwenSwarm Executor 都进入 blocked；本地服务不会因此卸载，也不会自动发起请求。
 
 ## 服务端配置
 
@@ -97,7 +97,7 @@ Context 卡片的逐消息 Token 在请求发出前只能是字符级估算，`s
 
 ## V1 非目标
 
-- 不做多轮会话持久化、自动 Tool loop、Subagent 或 Swarm 调度；
+- provider-only adapter 本身不做多轮会话持久化、自动 Tool loop、Subagent 或 Swarm 调度；这些生命周期只能由独立 Executor 明确拥有；
 - 不从浏览器新增任意模型、Provider、URL、header 或采样参数；
 - 不管理 OpenRouter key、余额、模型价格或账号设置；
 - 不把 live 调用伪装成确定性 replay；既有录制演示继续独立存在。

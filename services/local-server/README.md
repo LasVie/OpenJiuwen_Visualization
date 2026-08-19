@@ -1,6 +1,6 @@
 # Local Repository Service
 
-该服务为 Visualization Web 提供本地仓库的只读边界、临时 Runtime Trace、可选 OpenRouter provider-only adapter，以及显式启动的 Agent Core 隔离执行器。主服务只使用 Python 标准库；Repository API 不导入目标仓模块、不执行仓库脚本，也不提供 Git 或文件写接口。Agent Core 仅通过固定 bridge 与单独 Python 环境运行，OpenRouter 仅在用户显式启动且服务端已配置密钥时访问外网。
+该服务为 Visualization Web 提供本地仓库的只读边界、临时 Runtime Trace、可选 OpenRouter provider-only adapter，以及显式启动的 Agent Core / JiuwenSwarm 隔离执行器。主服务只使用 Python 标准库；Repository API 不导入目标仓模块、不执行仓库脚本，也不提供 Git 或文件写接口。两个真实执行器仅通过各自固定 bridge 与单独 Python 环境运行，OpenRouter 仅在用户显式启动且服务端已配置密钥时访问外网。
 
 ## 启动
 
@@ -35,6 +35,9 @@ python -B services/local-server/scripts/run_server.py `
 | `GET` | `/api/v1/agent-core` | 探测 DeepAgent bridge、依赖、OpenRouter 与固定工具状态 |
 | `POST` | `/api/v1/agent-core/invocations` | 用 Trace authority 启动隔离的真实 DeepAgent |
 | `POST` | `/api/v1/agent-core/invocations/{id}/cancel` | 终止 bridge 进程并关闭 Trace |
+| `GET` | `/api/v1/jiuwenswarm` | 探测固定 Agent Team bridge、双仓依赖、OpenRouter 与角色工具策略 |
+| `POST` | `/api/v1/jiuwenswarm/invocations` | 用 Trace authority 启动隔离的真实两成员 Agent Team |
+| `POST` | `/api/v1/jiuwenswarm/invocations/{id}/cancel` | 终止 Team bridge 并关闭 Swarm Trace |
 
 扫描请求：
 
@@ -81,6 +84,9 @@ Tool 目录请求：
 - Repository API 没有任何写、命令执行或凭据接口；Provider 与 Agent 执行位于独立显式路由，不扩大 Repository 权限。
 - Agent Core endpoint 只运行仓库自带的固定 bridge，浏览器不能提交解释器、源码路径、命令或工具。bridge stdout 只接收固定前缀的有界 JSON event；其他运行日志被丢弃。
 - V1 Agent Core 只注册只读 `inspect_input` 工具，不开放文件、shell、Git、MCP、Subagent 或写操作。DeepAgent workspace 与日志限制在 `.agent-core-runtime/`。
+- JiuwenSwarm endpoint 只运行固定的两成员 `scheduled + inprocess` Agent Team，明确关闭 SwarmFlow、动态组队、外部 CLI、MCP、Skill 与 Subagent。浏览器不能覆盖 roster、team identity、workspace、工具、源码路径或命令。
+- Team harness 内部资源在最后一个 `before_model_call` Rail 被按角色收敛：Leader 只看到 `create_task / view_task / send_message`，Analyst 只看到 `view_task / send_message / member_complete_task`；`before_tool_call` 再执行一次 deny 检查。一次最多运行一个 Team bridge。
+- JiuwenSwarm 的 Team、Member、Task、Message、Rail、Model、Tool 与 Context 事件都进入同一 Trace；每个成员使用独立 Context owner，不把完整原文复制到日志或错误元数据。
 - Runtime Trace 使用高熵会话 ID 和独立写入令牌；数据有数量、请求体和过期限制，只保存在内存。
 - `agent-core` 会话只接受 Core 事件；`jiuwenswarm` 会话的非终止事件必须声明 `subject`，Context 还必须声明 `context.ownerId`，避免跨主体混合或无层级事件进入 UI。
 - `swarm.subagent` 必须声明结构化派发与隔离证据；服务会校验 subject/context owner 一致性，并阻止同一 invocation 中途改变 session、dispatcher 或隔离策略。完整原文仍只能进入所属 Context message。
@@ -90,7 +96,7 @@ Tool 目录请求：
 - GitHub PR API 只接受结构化 owner/repository/PR 编号，固定访问 `api.github.com` 且拒绝重定向；浏览器不接触凭据，本地 Git 与远端 PR 都不会被修改。公共仓默认无需 token；可选的 `OPENJIUWEN_GITHUB_TOKEN` 只从服务端进程环境读取。
 - Tool Catalog 仅解析候选文件 AST，不 import、执行或实例化 Tool；注册数据流无法静态解析时保留为 `dynamic`，返回始终声明 `writeOperations: false`。
 
-Trace、Provider、Agent 执行、源码、缓存、变更与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
+Trace、Provider、Agent 执行、源码、缓存、变更与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
 
 仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 
@@ -99,3 +105,5 @@ Trace、Provider、Agent 执行、源码、缓存、变更与 Tool 目录协议�
 ```powershell
 python -B services/local-server/scripts/run_tests.py
 ```
+
+不访问 OpenRouter 的 JiuwenSwarm 框架自检见 [`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md#环境配置)。

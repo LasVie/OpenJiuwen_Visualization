@@ -8,6 +8,7 @@ import {
   Server,
 } from "lucide-react";
 import type { CreatedRuntimeTrace, RuntimeTraceSession } from "../../kernel";
+import type { ReactNode } from "react";
 import type { RuntimeTraceConnectionState } from "../runtime-trace";
 
 interface SwarmRuntimeSessionBarProps {
@@ -21,6 +22,8 @@ interface SwarmRuntimeSessionBarProps {
   recordingAvailable: boolean;
   recordingLoading: boolean;
   recordingError: string | null;
+  providerAction?: ReactNode;
+  providerBusy?: boolean;
 }
 
 const connectionLabel: Record<RuntimeTraceConnectionState, string> = {
@@ -43,6 +46,8 @@ export function SwarmRuntimeSessionBar({
   recordingAvailable,
   recordingLoading,
   recordingError,
+  providerAction,
+  providerBusy = false,
 }: SwarmRuntimeSessionBarProps) {
   return (
     <section className="swarm-runtime-session" aria-label="Swarm Runtime Trace 会话">
@@ -68,7 +73,7 @@ export function SwarmRuntimeSessionBar({
           <code>{trace.id}</code>
         </div>
       ) : (
-        <p>{error ?? "只接收事件，不执行团队、Agent、工具或模型。"}</p>
+        <p>{error ?? "Trace 监听本身不执行团队或模型；真实团队需从 Agent Team 面板显式启动。"}</p>
       )}
 
       {created ? (
@@ -87,21 +92,23 @@ export function SwarmRuntimeSessionBar({
         type="button"
         className="swarm-runtime-session__recording"
         onClick={onLoadRecording}
-        disabled={!recordingAvailable || connection === "creating" || recordingLoading}
+        disabled={!recordingAvailable || connection === "creating" || recordingLoading || providerBusy}
         title={recordingLabel}
       >
         <PlayCircle size={14} strokeWidth={2} aria-hidden="true" />
         {recordingLoading ? "载入中" : recordingAvailable ? "Subagent 演示" : "Subagent 模块已关闭"}
       </button>
 
+      {providerAction}
+
       <button
         type="button"
         className="swarm-runtime-session__create"
         onClick={onCreate}
-        disabled={connection === "creating"}
+        disabled={connection === "creating" || providerBusy}
       >
         <Plus size={14} strokeWidth={2} aria-hidden="true" />
-        新会话
+        {trace ? "新建 Trace" : "创建监听"}
       </button>
       {recordingError ? (
         <p className="swarm-runtime-session__error" role="alert">{recordingError}</p>

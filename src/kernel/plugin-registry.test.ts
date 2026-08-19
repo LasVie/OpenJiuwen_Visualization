@@ -101,6 +101,7 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.openrouter-provider", "enabled"],
         ["openjiuwen.agent-core-executor", "enabled"],
         ["openjiuwen.jiuwenswarm", "enabled"],
+        ["openjiuwen.jiuwenswarm-executor", "enabled"],
         ["openjiuwen.integration", "enabled"],
         ["openjiuwen.deterministic-replay", "enabled"],
         ["openjiuwen.local-repository", "enabled"],
@@ -142,6 +143,9 @@ describe("visualization plugin registry", () => {
     expect(defaultWorkbench.capabilities["runtime.agent-core.execute.v1"]).toEqual([
       "openjiuwen.agent-core-executor",
     ]);
+    expect(defaultWorkbench.capabilities["runtime.jiuwenswarm.execute.v1"]).toEqual([
+      "openjiuwen.jiuwenswarm-executor",
+    ]);
     expect(defaultWorkbench.capabilities["graph.change.impact.v1"]).toEqual([
       "openjiuwen.git-change",
     ]);
@@ -172,6 +176,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.openrouter-provider": "blocked",
       "openjiuwen.agent-core-executor": "blocked",
       "openjiuwen.jiuwenswarm": "enabled",
+      "openjiuwen.jiuwenswarm-executor": "blocked",
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",
       "openjiuwen.local-repository": "enabled",
@@ -195,6 +200,10 @@ describe("visualization plugin registry", () => {
     expect(coreOnly.runtimeRecordings).toEqual([]);
     expect(
       coreOnly.plugins.find((item) => item.id === "openjiuwen.integration")
+        ?.state,
+    ).toBe("blocked");
+    expect(
+      coreOnly.plugins.find((item) => item.id === "openjiuwen.jiuwenswarm-executor")
         ?.state,
     ).toBe("blocked");
 

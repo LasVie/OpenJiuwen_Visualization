@@ -1,0 +1,38 @@
+.jiuwenswarm-launcher__trigger {
+  color: #5a408d;
+  background: #f0eafa;
+  box-shadow: inset 0 0 0 1px rgb(107 86 166 / 0.25);
+}
+
+.jiuwenswarm-launcher__trigger:hover {
+  background: #e8def6;
+  box-shadow: inset 0 0 0 1px rgb(107 86 166 / 0.42);
+}
+
+.jiuwenswarm-dialog {
+  --provider-accent: var(--swarm);
+}
+
+.jiuwenswarm-dialog__mark {
+  color: white;
+  background: var(--swarm);
+}
+
+.jiuwenswarm-form__notice {
+  color: var(--swarm-ink);
+  background: var(--swarm-surface);
+  box-shadow: inset 0 0 0 1px rgb(107 86 166 / 0.2);
+}
+
+.jiuwenswarm-form__profile {
+  color: var(--swarm-ink);
+  background: #f7f3fc;
+}
+
+.jiuwenswarm-form__run {
+  background: var(--swarm);
+}
+
+.jiuwenswarm-form__run:hover:not(:disabled) {
+  background: #59458a;
+}

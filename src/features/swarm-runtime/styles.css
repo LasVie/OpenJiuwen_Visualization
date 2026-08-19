@@ -6,7 +6,7 @@
   position: relative;
   z-index: 14;
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto minmax(180px, auto) auto auto auto;
+  grid-template-columns: minmax(210px, 1fr) auto minmax(180px, auto) auto auto auto auto;
   align-items: center;
   min-width: 0;
   gap: 12px;

@@ -58,6 +58,8 @@ localStorage["openjiuwen.visualization.plugin-states.v1"]
 - Tool 注册表：至少存在一个 `toolCatalogSource`；
 - Model 录制与面板：存在 Model Provider contribution；
 - OpenRouter 调用入口：存在 `runtime.model.openrouter.v1` capability；
+- Agent Core 真实执行入口：存在 `runtime.agent-core.execute.v1` capability；
+- JiuwenSwarm Agent Team 真实执行入口：存在 `runtime.jiuwenswarm.execute.v1` capability；
 - Subagent 深入画布：存在 `runtime.subagent.execution.v1` capability；
 - Rail 深入画布：存在 `graph.rail` capability。
 
@@ -67,12 +69,13 @@ Definition/Trace 图使用当前快照重新投影，不继续读取启动时的
 
 ## V1 依赖图
 
+下图箭头表示“依赖 → 下游模块”：
+
 ```text
 openjiuwen.agent-core ──→ openjiuwen.model-provider ──→ openjiuwen.openrouter-provider
-          │
-          └─────────────→ openjiuwen.integration ←── openjiuwen.jiuwenswarm
-                                      │
-                                      └──→ openjiuwen.deterministic-replay
+(openjiuwen.agent-core + openjiuwen.openrouter-provider) ──→ openjiuwen.agent-core-executor
+(openjiuwen.jiuwenswarm + openjiuwen.openrouter-provider) ──→ openjiuwen.jiuwenswarm-executor
+(openjiuwen.agent-core + openjiuwen.jiuwenswarm) ──→ openjiuwen.integration ──→ openjiuwen.deterministic-replay
 
 openjiuwen.local-repository ──→ openjiuwen.tool-catalog
                  │

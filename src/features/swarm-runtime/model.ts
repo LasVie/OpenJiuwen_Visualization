@@ -392,7 +392,7 @@ export function emptySwarmRuntimeProjection(
       name: trace?.label ?? "Swarm Runtime",
       shortName: "Swarm trace",
       description: trace
-        ? "采集器已就绪，等待 jiuwenswarm 事件；服务不会执行团队、Agent、工具或模型。"
+        ? "Trace 已就绪，可接收外部事件，也可由 Agent Team 执行模块启动受控的真实 JiuwenSwarm 团队。"
         : "创建本机内存 Trace 会话后，Swarm 层级与各主体 Context 会实时投影。",
       defaultInput: "",
       railNodeIds: [],

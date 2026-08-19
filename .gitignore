@@ -11,6 +11,8 @@ __pycache__/
 .venv/
 .venv-agent-core/
 .agent-core-runtime/
+.jiuwenswarm-runtime/
+.jiuwenswarm-runtime-self-test/
 .uv-cache-agent-core/
 .pip-cache-agent-core/
 .runtime-temp/
