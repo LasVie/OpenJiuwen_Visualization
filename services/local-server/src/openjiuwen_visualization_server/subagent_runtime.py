@@ -28,6 +28,7 @@ from .openrouter_provider import (
     OpenRouterProviderConfig,
 )
 from .trace_store import RuntimeTraceStore, TraceStoreError
+from .runtime_source_identity import runtime_source_revisions
 
 
 SUBAGENT_RUNTIME_API_VERSION = "1.0.0"
@@ -529,6 +530,9 @@ class SubagentRuntimeAdapter:
             "maxIterations": self.config.max_iterations,
             "traceMaxTokens": int(trace["maxTokens"]),
             "workspace": str(self.config.workspace / segment),
+            "sourceRevisions": runtime_source_revisions(
+                (("agent-core", self.config.agent_core_root),)
+            ),
         }
         threading.Thread(
             target=self._run_job,

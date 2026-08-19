@@ -29,7 +29,7 @@ V1 只控制浏览器内的 Workbench 解析，不安装、卸载插件，不启
 
 - `agent-core`：Core 执行内核、Rail 与 Model 观测；
 - `jiuwenswarm`：Swarm 编排、主体层级与 Subagent；
-- `integration`：跨仓因果边与确定性回放；
+- `integration`：跨仓因果边、确定性回放，以及不要求 Core/Swarm 同时开启的 Source Convergence；
 - `workspace`：本地仓、Tool Catalog、本地 Git 与 GitHub PR 数据面。
 
 Group 是产品语义，不是任意颜色值。UI 将 Core 映射为青色、Swarm 映射为紫色，并同时显示文字标签，不能只靠颜色区分来源。
@@ -63,7 +63,8 @@ localStorage["openjiuwen.visualization.plugin-states.v1"]
 - Agent Core SwarmFlow 真实执行入口：存在 `runtime.swarmflow.execute.v1` capability；
 - Agent Core Subagent 真实执行入口：存在 `runtime.subagent.execute.v1` capability；
 - Subagent 深入画布：存在 `runtime.subagent.execution.v1` capability；
-- Rail 深入画布：存在 `graph.rail` capability。
+- Rail 深入画布：存在 `graph.rail` capability；
+- Runtime ↔ Definition ↔ Change 源码往返：存在 `graph.cross-plane.source.v1` capability。
 
 关闭当前 Runtime source 后，页面选择第一个仍可用来源；一个数据平面完全不可用时，其顶层导航进入 disabled 状态。启动时若持久化配置使默认页不可用，页面转到始终可访问的模块控制中心。
 
@@ -82,6 +83,8 @@ openjiuwen.agent-core ──→ openjiuwen.model-provider ──→ openjiuwen.o
 (openjiuwen.agent-core + openjiuwen.jiuwenswarm) ──→ openjiuwen.integration ──→ openjiuwen.deterministic-replay
 
 openjiuwen.local-repository ──→ openjiuwen.tool-catalog
+                 │
+                 ├────────────→ openjiuwen.source-convergence ──→ graph.cross-plane.source.v1
                  │
                  ├────────────→ openjiuwen.git-change
                  │

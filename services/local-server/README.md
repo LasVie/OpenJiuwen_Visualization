@@ -59,7 +59,7 @@ python -B services/local-server/scripts/run_server.py `
 }
 ```
 
-响应包含 repository identity、Graph Kernel V1 snapshot、扫描统计和非致命 warnings。节点 ID 组合 Git revision、仓库相对路径与符号限定名；工作树存在修改时，evidence 会明确标记其超出引用 revision。`statistics.cache.status` 区分 `hit / miss / bypass`：命中前仍会校验有界源码清单，缓存只保存在当前服务进程内。
+响应包含 repository identity、Graph Kernel V1 snapshot、扫描统计和非致命 warnings。节点 ID 组合 Git revision、仓库相对路径与符号限定名；`includeFunctions: true` 还会把 class method 建成 `QualifiedClass.method` 独立节点。工作树存在修改时，evidence 会明确标记其超出引用 revision。`statistics.cache.status` 区分 `hit / miss / bypass`：命中前仍会校验有界源码清单，缓存只保存在当前服务进程内。
 
 Tool 目录请求：
 
@@ -98,6 +98,7 @@ Tool 目录请求：
 - SwarmFlow 的 Workflow/Phase/Agent 状态来自 Agent Core `WorkflowProgressEvent` 经 JiuwenSwarm `WorkflowMonitorHandler` 的结构化聚合；两个 Worker 使用独立 Context owner，取消终止完整固定进程并保留已接收证据。
 - JiuwenSwarm 的 Team、Member、Task、Message、Rail、Model、Tool 与 Context 事件都进入同一 Trace；每个成员使用独立 Context owner，不把完整原文复制到日志或错误元数据。
 - Runtime Trace 使用高熵会话 ID 和独立写入令牌；数据有数量、请求体和过期限制，只保存在内存。
+- 四个真实执行器启动 bridge 前只读解析已验证 source repository 的 HEAD，并把 server-owned revision 映射附加到已知 Runtime definition；失败时省略 revision，不接受浏览器覆盖，也不伪造对齐。
 - `agent-core` 会话只接受 Core 事件；`jiuwenswarm` 会话的非终止事件必须声明 `subject`，Context 还必须声明 `context.ownerId`，避免跨主体混合或无层级事件进入 UI。
 - `swarm.subagent` 必须声明结构化派发与隔离证据；服务会校验 subject/context owner 一致性，并阻止同一 invocation 中途改变 session、dispatcher 或隔离策略。完整原文仍只能进入所属 Context message。
 - Model Provider 事件会校验 invocation 身份、录制帧单调性、Token/费用预算和取消原因；完整输出不写日志或磁盘。
@@ -106,7 +107,7 @@ Tool 目录请求：
 - GitHub PR API 只接受结构化 owner/repository/PR 编号，固定访问 `api.github.com` 且拒绝重定向；浏览器不接触凭据，本地 Git 与远端 PR 都不会被修改。公共仓默认无需 token；可选的 `OPENJIUWEN_GITHUB_TOKEN` 只从服务端进程环境读取。
 - Tool Catalog 仅解析候选文件 AST，不 import、执行或实例化 Tool；注册数据流无法静态解析时保留为 `dynamic`，返回始终声明 `writeOperations: false`。
 
-Trace、Provider、Agent 执行、源码、缓存、变更与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md)、[`docs/swarmflow-execution-v1.md`](../../docs/swarmflow-execution-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/subagent-execution-v1.md`](../../docs/subagent-execution-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
+Trace、Provider、Agent 执行、源码、缓存、变更、跨平面收敛与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md)、[`docs/swarmflow-execution-v1.md`](../../docs/swarmflow-execution-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/subagent-execution-v1.md`](../../docs/subagent-execution-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/runtime-definition-change-convergence-v1.md`](../../docs/runtime-definition-change-convergence-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
 
 仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 

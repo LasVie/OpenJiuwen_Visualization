@@ -42,6 +42,13 @@ describe("plugin control model", () => {
       ?.dependants).toEqual(["openjiuwen.deterministic-replay"]);
     expect(modules.find((plugin) => plugin.id === "openjiuwen.model-provider")
       ?.dependants).toEqual(["openjiuwen.openrouter-provider"]);
+    expect(modules.find((plugin) => plugin.id === "openjiuwen.local-repository")
+      ?.dependants).toEqual([
+        "openjiuwen.source-convergence",
+        "openjiuwen.tool-catalog",
+        "openjiuwen.git-change",
+        "openjiuwen.github-pull-request",
+      ]);
   });
 
   it("derives visible workbench surfaces from enabled contributions", () => {
@@ -59,6 +66,7 @@ describe("plugin control model", () => {
       subagentExecution: true,
       subagentRuntime: true,
       railReview: true,
+      sourceConvergence: true,
       runtimeSources: { fixture: true, core: true, swarm: true },
     });
 
@@ -81,6 +89,7 @@ describe("plugin control model", () => {
       subagentExecution: false,
       subagentRuntime: true,
       railReview: false,
+      sourceConvergence: false,
       runtimeSources: { fixture: false, core: false, swarm: true },
     });
 
@@ -97,5 +106,14 @@ describe("plugin control model", () => {
     });
     expect(withoutOpenRouter.modelProviders.map((provider) => provider.id))
       .toEqual(["openjiuwen.recording-replay"]);
+
+    const withoutSourceConvergence = registry.resolve({
+      pluginStates: { "openjiuwen.source-convergence": false },
+    });
+    expect(workbenchAvailability(withoutSourceConvergence)).toMatchObject({
+      definition: true,
+      change: true,
+      sourceConvergence: false,
+    });
   });
 });

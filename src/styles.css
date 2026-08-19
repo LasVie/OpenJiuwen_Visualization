@@ -2287,6 +2287,25 @@ kbd,
   white-space: nowrap;
 }
 
+.runtime-source-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  gap: 6px;
+  margin-top: 9px;
+  padding: 0 10px;
+  color: var(--signal-dark);
+  background: var(--signal-soft);
+  border: 1px solid rgb(15 123 130 / 0.14);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.runtime-source-link:hover { border-color: rgb(15 123 130 / 0.34); }
+
 .inspector__empty {
   color: #8a999d !important;
   font-size: 9px !important;

@@ -55,7 +55,7 @@ fixtures / future adapters
 repository@revision:path:symbol
 ```
 
-运行节点使用 `trace_id + span_id`，并通过 SourceReference 指向定义节点；PR 节点使用 base/head revision 与 diff hunk 证据。
+跨平面匹配先使用 `repository + normalized path + exact symbol` 确定唯一源码位置，再用 revision 判断 `exact / revision-unverified / revision-mismatch / worktree-dirty`；多候选为 `ambiguous`，无候选为 `unmatched`。运行节点继续使用 `trace_id + sequence/span_id` 作为顺序与调用身份，并通过 SourceReference 指向定义节点；PR 节点使用 base/head revision 与 diff hunk 证据。完整合同见 [`runtime-definition-change-convergence-v1.md`](runtime-definition-change-convergence-v1.md)。
 
 ## 插件合同
 
@@ -86,10 +86,13 @@ repository@revision:path:symbol
 | `openjiuwen.github-pull-request` | GitHub PR 只读文件变更、远端 head 对齐与节点影响映射 |
 | `openjiuwen.tool-catalog` | Tool 声明、静态注册路径与 `ability.register` 运行确认 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
+| `openjiuwen.source-convergence` | Runtime、Definition 与 Change 的稳定源码身份、运行聚合和往返导航 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务、静态定义图、有界源码证据与 Git Change 客户端，默认开启 |
 
 `openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。四个 Executor 只增加各自显式执行入口：独立 DeepAgent、Agent Team、固定 SwarmFlow 和 TaskTool Subagent 拥有不同 capability 与 bridge；它们依赖对应 Runtime source 与 OpenRouter 模块，组件不会读取 Python 对象或原始日志格式。
+
+`openjiuwen.source-convergence` 依赖 Local Repository，并用 `graph.cross-plane.source.v1` capability 控制 Runtime、Definition 与 Change 的源码证据往返；它不要求 Core 与 Swarm 同时启用。`features/source-convergence/` 只拥有 identity、匹配与聚合模型；各平面仍由自己的 feature 管理扫描、Trace 播放和 Git 投影，不能互相导入内部组件。
 
 后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
 
@@ -236,6 +239,6 @@ Model Provider 作为独立插件注册 adapter 与确定性 recording，不把�
 
 Git Change 插件把 `working-tree` 与本地 `base/head` 比较归一化为 change set。服务端只通过无 shell 参数调用读取 porcelain status、name-status、numstat、merge-base 和零上下文 patch；ref 先解析为 commit SHA，路径再规范化，所有响应均声明 `writeOperations: false`。
 
-前端并行取得 change set 与当前 Python AST Definition snapshot。hunk 与完整符号范围相交形成 direct impact，祖先形成 container impact，非 contains 关系形成 dependent impact。只有当前检出与比较 head 对齐时行号证据才是 exact；历史 ref、脏检出、删除、重命名和二进制会降级为 inferred。完整协议见 [`git-change-plane-v1.md`](git-change-plane-v1.md)。
+前端并行取得 change set 与当前 Python AST Definition snapshot。hunk 与完整符号范围相交形成 direct impact，祖先形成 container impact，非 contains 关系形成 dependent impact。只有当前检出与比较 head 对齐时行号证据才是 exact；历史 ref、脏检出、删除、重命名和二进制会降级为 inferred。Runtime 观察作为正交 `runtimeObserved` 维度叠加，不覆盖原 change impact kind；没有进入 diff 的目标源码不会被伪造成影响节点。完整协议见 [`git-change-plane-v1.md`](git-change-plane-v1.md) 与 [`runtime-definition-change-convergence-v1.md`](runtime-definition-change-convergence-v1.md)。
 
 `openjiuwen.github-pull-request` 通过独立 adapter 把 GitHub PR metadata 与 files endpoint 归一化到同一个 change set，不让 React 组件理解 GitHub 原始响应。浏览器只提交结构化 PR 引用；loopback 服务固定访问 `api.github.com`，不会接受任意 URL，也不会为了对齐代码自动 fetch。PR head SHA 与当前干净检出一致时才能产生 exact 行号证据。完整协议见 [`github-pull-request-v1.md`](github-pull-request-v1.md)。

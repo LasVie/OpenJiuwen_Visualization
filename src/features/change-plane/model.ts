@@ -4,12 +4,18 @@ import type {
   NodeChangeImpact,
   RegisteredGraphEdge,
   RegisteredGraphNode,
+  RuntimeTraceEvent,
 } from "../../kernel";
 import type {
   LocalGitChangeResult,
   LocalRepositoryScanResult,
 } from "../../adapters/local-repository";
 import type { GitHubPullRequestResult } from "../../adapters/github-pull-request";
+import {
+  projectRuntimeDefinitions,
+  type DefinitionRuntimeSummary,
+  type RuntimeDefinitionProjection,
+} from "../source-convergence";
 
 export type RepositoryChangeResult =
   | LocalGitChangeResult
@@ -21,6 +27,7 @@ export interface FileImpactProjection {
   containers: readonly NodeChangeImpact[];
   dependents: readonly NodeChangeImpact[];
   fileLevel: readonly NodeChangeImpact[];
+  runtimeObserved: readonly DefinitionRuntimeSummary[];
 }
 
 export interface ChangeImpactProjection {
@@ -32,6 +39,7 @@ export interface ChangeImpactProjection {
   nodesById: ReadonlyMap<string, RegisteredGraphNode>;
   edgesById: ReadonlyMap<string, RegisteredGraphEdge>;
   headAligned: boolean;
+  runtime: RuntimeDefinitionProjection;
 }
 
 const statusOrder = new Map([
@@ -97,10 +105,14 @@ function isHeadAligned(
 export function projectChangeImpacts(
   scan: LocalRepositoryScanResult,
   changes: RepositoryChangeResult,
+  runtimeEvents: readonly RuntimeTraceEvent[] = [],
 ): ChangeImpactProjection {
   const nodesById = new Map(scan.graph.nodes.map((node) => [node.id, node]));
   const edgesById = new Map(scan.graph.edges.map((edge) => [edge.id, edge]));
   const headAligned = isHeadAligned(scan, changes);
+  const runtime = projectRuntimeDefinitions(scan.graph, runtimeEvents, {
+    repositoryDirty: scan.repository.dirty,
+  });
   const files = [...changes.files].sort(
     (left, right) =>
       (statusOrder.get(left.status) ?? 99) - (statusOrder.get(right.status) ?? 99) ||
@@ -188,12 +200,15 @@ export function projectChangeImpacts(
 
     local.forEach((impact) => pushUnique(globalImpacts, impact));
     const values = [...local.values()];
+    const impactedNodeIds = new Set(values.map((impact) => impact.nodeId));
     return {
       file,
       direct: values.filter((impact) => impact.kind === "direct"),
       containers: values.filter((impact) => impact.kind === "container"),
       dependents: values.filter((impact) => impact.kind === "dependent"),
       fileLevel: values.filter((impact) => impact.kind === "file"),
+      runtimeObserved: [...runtime.summariesByNode.values()].filter((summary) =>
+        impactedNodeIds.has(summary.nodeId)),
     };
   });
 
@@ -206,5 +221,32 @@ export function projectChangeImpacts(
     nodesById,
     edgesById,
     headAligned,
+    runtime,
+  };
+}
+
+export function refreshRuntimeCoverage(
+  projection: ChangeImpactProjection,
+  runtimeEvents: readonly RuntimeTraceEvent[],
+): ChangeImpactProjection {
+  const runtime = projectRuntimeDefinitions(projection.graph, runtimeEvents, {
+    repositoryDirty: projection.changes.repository.dirty,
+  });
+  return {
+    ...projection,
+    runtime,
+    files: projection.files.map((file) => {
+      const impactedNodeIds = new Set([
+        ...file.direct,
+        ...file.containers,
+        ...file.dependents,
+        ...file.fileLevel,
+      ].map((impact) => impact.nodeId));
+      return {
+        ...file,
+        runtimeObserved: [...runtime.summariesByNode.values()].filter((summary) =>
+          impactedNodeIds.has(summary.nodeId)),
+      };
+    }),
   };
 }

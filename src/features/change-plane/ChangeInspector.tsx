@@ -1,13 +1,19 @@
 import {
+  Activity,
   AlertTriangle,
   Binary,
   Box,
   FileCode2,
   GitCommitHorizontal,
   Link2,
+  RotateCcw,
 } from "lucide-react";
 import { useMemo } from "react";
-import type { NodeChangeImpact } from "../../kernel";
+import type {
+  GraphSourceReference,
+  NodeChangeImpact,
+  RuntimeTraceEvent,
+} from "../../kernel";
 import { createDefinitionGraphIndex } from "../repository-browser";
 import { RelationExplorer } from "../relation-explorer";
 import { SourceViewer } from "../source-viewer";
@@ -21,6 +27,8 @@ interface ChangeInspectorProps {
   magnetStrength: number;
   onToggleMagnet: () => void;
   onMagnetStrengthChange: (strength: number) => void;
+  onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
+  onOpenDefinition?: (source: GraphSourceReference) => void;
 }
 
 const impactLabel: Record<NodeChangeImpact["kind"], string> = {
@@ -38,6 +46,8 @@ export function ChangeInspector({
   magnetStrength,
   onToggleMagnet,
   onMagnetStrengthChange,
+  onOpenRuntimeEvent,
+  onOpenDefinition,
 }: ChangeInspectorProps) {
   const relationIndex = useMemo(
     () => createDefinitionGraphIndex(projection.graph),
@@ -61,6 +71,9 @@ export function ChangeInspector({
     : undefined;
   const node = impact ? projection.nodesById.get(impact.nodeId) : undefined;
   const source = node?.evidence.find((evidence) => evidence.source)?.source;
+  const runtimeSummary = node
+    ? projection.runtime.summariesByNode.get(node.id)
+    : undefined;
 
   return (
     <aside className="change-inspector">
@@ -117,6 +130,15 @@ export function ChangeInspector({
                   repositoryPath={projection.changes.repository.path}
                   source={source}
                 />
+                {onOpenDefinition ? (
+                  <button
+                    type="button"
+                    className="change-open-definition"
+                    onClick={() => onOpenDefinition?.(source)}
+                  >
+                    <FileCode2 size={12} />在定义图中定位
+                  </button>
+                ) : null}
               </div>
             ) : null}
             <RelationExplorer
@@ -141,6 +163,40 @@ export function ChangeInspector({
             </div>
           </section>
         )}
+
+        {runtimeSummary ? (
+          <section className="change-runtime-evidence">
+            <div className="change-inspector__section-title">
+              <Activity size={13} />Runtime 实际经过
+            </div>
+            <div className="change-runtime-evidence__metrics">
+              <span><b>{runtimeSummary.spanCount}</b><small>spans</small></span>
+              <span><b>{runtimeSummary.eventCount}</b><small>events</small></span>
+              <span><b>{runtimeSummary.tokenCount}</b><small>tokens</small></span>
+            </div>
+            <p>{runtimeSummary.observations.at(-1)?.reason}</p>
+            <div className="change-runtime-evidence__events">
+              {runtimeSummary.observations.slice(-6).reverse().map((observation) => (
+                <button
+                  type="button"
+                  key={observation.event.eventId}
+                  onClick={() => onOpenRuntimeEvent(observation.event)}
+                >
+                  <code>#{observation.event.sequence}</code>
+                  <span>{observation.event.title ?? observation.event.kind}</span>
+                  <em>{observation.event.phase}</em>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="change-runtime-return"
+              onClick={() => onOpenRuntimeEvent(runtimeSummary.lastEvent)}
+            >
+              <RotateCcw size={12} />回到最后运行步骤
+            </button>
+          </section>
+        ) : null}
 
         <section className="change-inspector__hunks">
           <div className="change-inspector__section-title"><GitCommitHorizontal size={13} />行范围</div>

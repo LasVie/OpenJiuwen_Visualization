@@ -1,6 +1,24 @@
-import { ArrowUp, ChevronRight, Code2, GitFork, Layers3 } from "lucide-react";
-import type { JsonValue, RegisteredGraphNode } from "../../kernel";
+import {
+  Activity,
+  ArrowUp,
+  ChevronRight,
+  Code2,
+  GitCompareArrows,
+  GitFork,
+  Layers3,
+  RotateCcw,
+} from "lucide-react";
+import type {
+  GraphSourceReference,
+  JsonValue,
+  RegisteredGraphNode,
+  RuntimeTraceEvent,
+} from "../../kernel";
 import { RelationExplorer } from "../relation-explorer";
+import type {
+  DefinitionRuntimeSummary,
+  RuntimeSourceMatch,
+} from "../source-convergence";
 import { SourceViewer } from "../source-viewer";
 import type { DefinitionGraphIndex } from "./model";
 
@@ -30,6 +48,10 @@ interface DefinitionInspectorProps {
   onToggleMagnet: () => void;
   onMagnetStrengthChange: (strength: number) => void;
   onNavigate: (nodeId: string) => void;
+  runtimeSummary?: DefinitionRuntimeSummary;
+  sourceNavigationMatch: RuntimeSourceMatch | null;
+  onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
+  onOpenChange?: (source: GraphSourceReference) => void;
 }
 
 export function DefinitionInspector({
@@ -42,6 +64,10 @@ export function DefinitionInspector({
   onToggleMagnet,
   onMagnetStrengthChange,
   onNavigate,
+  runtimeSummary,
+  sourceNavigationMatch,
+  onOpenRuntimeEvent,
+  onOpenChange,
 }: DefinitionInspectorProps) {
   const source = node.evidence.find((evidence) => evidence.source)?.source;
   const children = index.childrenByParent.get(node.id) ?? [];
@@ -79,8 +105,65 @@ export function DefinitionInspector({
             </div>
             <div><dt>revision</dt><dd><code>{source?.revision?.slice(0, 12) ?? "—"}</code></dd></div>
           </dl>
-          {source ? (
+          {source && onOpenChange ? (
             <SourceViewer repositoryPath={repositoryPath} source={source} />
+          ) : null}
+        </section>
+
+        <section className="definition-inspector__section definition-runtime-evidence">
+          <h3><Activity size={14} />Runtime 观测</h3>
+          {sourceNavigationMatch?.node?.id === node.id ? (
+            <p className={`definition-runtime-alignment definition-runtime-alignment--${sourceNavigationMatch.status}`}>
+              <strong>{sourceNavigationMatch.status}</strong>
+              {sourceNavigationMatch.reason}
+            </p>
+          ) : null}
+          {runtimeSummary ? (
+            <>
+              <div className="definition-inspector__metrics">
+                <span><strong>{runtimeSummary.spanCount}</strong><small>调用 span</small></span>
+                <span><strong>{runtimeSummary.eventCount}</strong><small>事件</small></span>
+                <span><strong>{runtimeSummary.tokenCount}</strong><small>观测 Token</small></span>
+              </div>
+              <p className="definition-runtime-last">
+                <span>LAST STATUS</span>
+                <strong>{runtimeSummary.lastEvent.phase}</strong>
+                <code>step #{runtimeSummary.lastEvent.sequence}</code>
+              </p>
+              <div className="definition-runtime-events">
+                {runtimeSummary.observations.slice(-8).reverse().map((observation) => (
+                  <button
+                    type="button"
+                    key={observation.event.eventId}
+                    onClick={() => onOpenRuntimeEvent(observation.event)}
+                  >
+                    <code>#{observation.event.sequence}</code>
+                    <span>{observation.event.title ?? observation.event.kind}</span>
+                    <em>{observation.event.phase}</em>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="definition-runtime-return"
+                onClick={() => onOpenRuntimeEvent(runtimeSummary.lastEvent)}
+              >
+                <RotateCcw size={13} />回到最后运行步骤
+              </button>
+            </>
+          ) : (
+            <p className="definition-inspector__empty">
+              当前 Trace 没有可精确关联到该定义的结构化源码事件。
+            </p>
+          )}
+          {source ? (
+            <button
+              type="button"
+              className="definition-open-change"
+              onClick={() => onOpenChange?.(source)}
+            >
+              <GitCompareArrows size={13} />在变更图中定位
+            </button>
           ) : null}
         </section>
 

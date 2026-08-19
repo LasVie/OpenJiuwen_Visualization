@@ -19,6 +19,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from runtime_source_identity import attach_source_revision, source_revisions
+
 from agent_core_bridge import (
     _chunks,
     _estimated_tokens,
@@ -212,6 +214,7 @@ class SubagentTraceEmitter:
         self.provider_id = request.get("providerId", "openrouter")
         self.provider_label = "OpenRouter" if self.provider_id == "openrouter" else "Deterministic model"
         self.trace_max_tokens = request["traceMaxTokens"]
+        self.source_revisions = source_revisions(request.get("sourceRevisions"))
         self.started_at = request.setdefault("_startedAt", time.monotonic())
         self.event_number = 0
         self.model_call_number = 0
@@ -231,6 +234,7 @@ class SubagentTraceEmitter:
 
     def event(self, kind: str, phase: str, **values: Any) -> None:
         self.event_number += 1
+        attach_source_revision(values, self.source_revisions)
         if kind != "trace.status":
             values.setdefault("subject", self.subject)
         context = values.get("context")
@@ -787,6 +791,7 @@ def _read_request() -> dict[str, Any]:
         "maxOutputTokens": value.get("maxOutputTokens"),
         "maxIterations": value.get("maxIterations"),
         "traceMaxTokens": value.get("traceMaxTokens"),
+        "sourceRevisions": source_revisions(value.get("sourceRevisions")),
     })
     if request["systemPrompt"] is not None and (
         not isinstance(request["systemPrompt"], str)

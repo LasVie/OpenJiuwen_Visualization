@@ -1,11 +1,18 @@
 import { Braces, Database } from "lucide-react";
-import { useState } from "react";
-import type { RuntimeTraceEvent } from "../../kernel";
+import { useEffect, useState } from "react";
+import type {
+  GraphSourceReference,
+  RuntimeTraceEvent,
+} from "../../kernel";
 import { RepositoryWorkspace } from "../repository-browser";
+import type { SourceNavigationRequest } from "../source-convergence";
 import { ToolCatalogWorkspace } from "../tool-catalog";
 
 interface DefinitionWorkspaceProps {
   runtimeEvents: readonly RuntimeTraceEvent[];
+  sourceNavigation: SourceNavigationRequest | null;
+  onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
+  onOpenChange?: (source: GraphSourceReference) => void;
   toolsEnabled: boolean;
   magnetEnabled: boolean;
   magnetStrength: number;
@@ -15,6 +22,9 @@ interface DefinitionWorkspaceProps {
 
 export function DefinitionWorkspace(props: DefinitionWorkspaceProps) {
   const [view, setView] = useState<"architecture" | "tools">("architecture");
+  useEffect(() => {
+    if (props.sourceNavigation) setView("architecture");
+  }, [props.sourceNavigation]);
   return (
     <section className="definition-workbench">
       <nav className="definition-workbench__tabs" aria-label="定义图模块">
@@ -28,6 +38,10 @@ export function DefinitionWorkspace(props: DefinitionWorkspaceProps) {
       </nav>
       {view === "architecture" ? (
         <RepositoryWorkspace
+          runtimeEvents={props.runtimeEvents}
+          sourceNavigation={props.sourceNavigation}
+          onOpenRuntimeEvent={props.onOpenRuntimeEvent}
+          onOpenChange={props.onOpenChange}
           magnetEnabled={props.magnetEnabled}
           magnetStrength={props.magnetStrength}
           onToggleMagnet={props.onToggleMagnet}

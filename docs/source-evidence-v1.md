@@ -8,7 +8,8 @@ Source Evidence Viewer V1 把 Definition、Change 和 Tool 节点已有的源码
 
 - Definition 节点的 `GraphSourceReference`；
 - Change 节点影响的源码证据；
-- Tool 声明与静态注册点的 `ToolCatalogSourceReference`。
+- Tool 声明与静态注册点的 `ToolCatalogSourceReference`；
+- Runtime 事件通过结构化 source identity 定位后的 Definition/Change 节点。
 
 Package/目录节点不会显示源码按钮。窗口只在用户点击“查看源码”后请求内容；切换节点、关闭窗口或卸载组件会中止未完成请求。
 
@@ -66,6 +67,8 @@ API 不提供目录枚举、任意绝对路径读取、保存、编辑或执行�
 - V1 不自动 checkout 或调用 `git show` 获取历史内容。
 
 这与 Change Plane 的 exact/inferred 规则保持一致，避免把当前文件正文伪装成历史 commit 或远端 PR head 的原文。
+
+真实执行器会在本地服务边界读取已验证仓库的 HEAD，并为已知 Runtime definition 附加 revision。该值只证明启动时观察到的 commit；仓库 dirty 时仍必须显示 warning。确定性录制或外部 producer 未提供 revision 时，跨平面匹配显示 `revision-unverified`，不会把缺失值当作对齐。
 
 ## UI 行为
 

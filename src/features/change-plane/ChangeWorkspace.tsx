@@ -11,7 +11,14 @@ import {
   Server,
   ShieldCheck,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   DEFAULT_LOCAL_REPOSITORY_SERVER,
   LocalRepositoryClient,
@@ -24,13 +31,26 @@ import {
   parseGitHubPullRequestReference,
 } from "../../adapters/github-pull-request";
 import type {
+  GraphSourceReference,
   GitChangeMode,
   RegisteredGitChangeSource,
+  RuntimeTraceEvent,
 } from "../../kernel";
+import { canonicalSourceIdentity } from "../../kernel";
+import {
+  matchSourceToDefinition,
+  repositoryMatchesSource,
+  type RuntimeSourceMatch,
+  type SourceNavigationRequest,
+} from "../source-convergence";
 import { MagnetControls } from "../trace-graph";
 import { ChangeGraphCanvas } from "./ChangeGraphCanvas";
 import { ChangeInspector } from "./ChangeInspector";
-import { projectChangeImpacts, type ChangeImpactProjection } from "./model";
+import {
+  projectChangeImpacts,
+  refreshRuntimeCoverage,
+  type ChangeImpactProjection,
+} from "./model";
 
 type ConnectionState =
   | { status: "connecting" }
@@ -59,6 +79,10 @@ function ownerLabel(owner: string) {
 
 interface ChangeWorkspaceProps {
   changeSources: readonly RegisteredGitChangeSource[];
+  runtimeEvents: readonly RuntimeTraceEvent[];
+  sourceNavigation: SourceNavigationRequest | null;
+  onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
+  onOpenDefinition?: (source: GraphSourceReference) => void;
   magnetEnabled: boolean;
   magnetStrength: number;
   onToggleMagnet: () => void;
@@ -67,6 +91,10 @@ interface ChangeWorkspaceProps {
 
 export function ChangeWorkspace({
   changeSources,
+  runtimeEvents,
+  sourceNavigation,
+  onOpenRuntimeEvent,
+  onOpenDefinition,
   magnetEnabled,
   magnetStrength,
   onToggleMagnet,
@@ -92,6 +120,12 @@ export function ChangeWorkspace({
   const [activeFileId, setActiveFileId] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [visibleFileCount, setVisibleFileCount] = useState(FILE_LIST_PAGE_SIZE);
+  const [sourceNavigationMatch, setSourceNavigationMatch] =
+    useState<RuntimeSourceMatch | null>(null);
+  const [sourceNavigationMessage, setSourceNavigationMessage] = useState("");
+  const [activeSourceNavigation, setActiveSourceNavigation] =
+    useState<SourceNavigationRequest | null>(null);
+  const handledSourceNavigationId = useRef<number | null>(null);
 
   useEffect(() => {
     if (availableModes.has(mode)) return;
@@ -121,6 +155,12 @@ export function ChangeWorkspace({
     };
   }, [client, connectionRevision]);
 
+  useEffect(() => {
+    setProjection((current) => current
+      ? refreshRuntimeCoverage(current, runtimeEvents)
+      : current);
+  }, [runtimeEvents]);
+
   function selectRepository(path: string) {
     setRepositoryPath(path);
     setProjection(null);
@@ -129,27 +169,42 @@ export function ChangeWorkspace({
     setAnalysisStatus("idle");
     setAnalysisError("");
     setVisibleFileCount(FILE_LIST_PAGE_SIZE);
+    setSourceNavigationMatch(null);
+    setSourceNavigationMessage("");
+    setActiveSourceNavigation(null);
   }
 
-  async function analyze(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!repositoryPath.trim() || connection.status !== "ready") return;
+  const runAnalysis = useCallback(async (
+    selection: {
+      repositoryPath: string;
+      mode: GitChangeMode;
+      base: string;
+      head: string;
+      pullRequestInput: string;
+      includeUntracked: boolean;
+    },
+    navigation?: SourceNavigationRequest,
+  ) => {
     setAnalysisStatus("loading");
     setAnalysisError("");
     setSelectedNodeId(null);
+    setSourceNavigationMessage("");
+    if (!navigation) setSourceNavigationMatch(null);
     try {
-      const githubReference = mode === "github-pr"
-        ? parseGitHubPullRequestReference(pullRequestInput)
+      const githubReference = selection.mode === "github-pr"
+        ? parseGitHubPullRequestReference(selection.pullRequestInput)
         : null;
-      const changeRequest = mode === "github-pr"
-        ? githubClient.inspect(repositoryPath, githubReference!, { maxFiles: 500 })
-        : client.changes(repositoryPath, {
-            mode,
-            ...(mode === "compare" ? { base, head } : {}),
-            options: { includeUntracked, maxFiles: 500 },
+      const changeRequest = selection.mode === "github-pr"
+        ? githubClient.inspect(selection.repositoryPath, githubReference!, { maxFiles: 500 })
+        : client.changes(selection.repositoryPath, {
+            mode: selection.mode,
+            ...(selection.mode === "compare"
+              ? { base: selection.base, head: selection.head }
+              : {}),
+            options: { includeUntracked: selection.includeUntracked, maxFiles: 500 },
           });
       const [scan, changes] = await Promise.all([
-        client.scan(repositoryPath, {
+        client.scan(selection.repositoryPath, {
           includeTests: false,
           includeFunctions: true,
           maxFiles: 5_000,
@@ -157,9 +212,47 @@ export function ChangeWorkspace({
         }),
         changeRequest,
       ]);
-      const next = projectChangeImpacts(scan, changes);
+      const next = projectChangeImpacts(scan, changes, runtimeEvents);
+      const match = navigation
+        ? matchSourceToDefinition(next.graph, navigation.source, {
+            repositoryDirty: scan.repository.dirty,
+          })
+        : null;
+      const sourcePath = navigation
+        ? canonicalSourceIdentity(navigation.source).path
+        : "";
+      const targetFile = navigation
+        ? next.files.find((item) =>
+            canonicalSourceIdentity({
+              repository: navigation.source.repository,
+              path: item.file.path,
+            }).path === sourcePath ||
+            Boolean(item.file.previousPath && canonicalSourceIdentity({
+              repository: navigation.source.repository,
+              path: item.file.previousPath,
+            }).path === sourcePath))
+        : undefined;
+      const targetImpacts = targetFile
+        ? [
+            ...targetFile.direct,
+            ...targetFile.fileLevel,
+            ...targetFile.containers,
+            ...targetFile.dependents,
+          ]
+        : [];
+      const targetNodeId = match?.node?.id;
+      const targetObserved = targetNodeId
+        ? targetImpacts.some((impact) => impact.nodeId === targetNodeId)
+        : false;
       setProjection(next);
-      setActiveFileId(next.files[0]?.file.id ?? "");
+      setSourceNavigationMatch(match);
+      setActiveFileId(targetFile?.file.id ?? next.files[0]?.file.id ?? "");
+      setSelectedNodeId(targetObserved ? targetNodeId! : null);
+      if (navigation && !targetFile) {
+        setSourceNavigationMessage("目标源码不在当前变更范围；未创建推断影响节点。");
+      } else if (navigation && targetNodeId && !targetObserved) {
+        setSourceNavigationMessage("目标文件有变更，但该 Definition 未被 hunk 或关系证据命中。");
+      }
       setVisibleFileCount(FILE_LIST_PAGE_SIZE);
       setAnalysisStatus("ready");
     } catch (error: unknown) {
@@ -168,6 +261,58 @@ export function ChangeWorkspace({
       setAnalysisStatus("error");
       setAnalysisError(errorMessage(error));
     }
+  }, [client, githubClient, runtimeEvents]);
+
+  useEffect(() => {
+    if (
+      !sourceNavigation ||
+      connection.status !== "ready" ||
+      handledSourceNavigationId.current === sourceNavigation.id
+    ) {
+      return;
+    }
+    handledSourceNavigationId.current = sourceNavigation.id;
+    setActiveSourceNavigation(sourceNavigation);
+    const repository = connection.catalog.repositories.find((candidate) =>
+      repositoryMatchesSource(candidate, sourceNavigation.source));
+    if (!repository) {
+      setSourceNavigationMatch(null);
+      setSourceNavigationMessage(
+        `允许目录中没有与 ${sourceNavigation.source.repository} 身份一致的仓库。`,
+      );
+      return;
+    }
+    setRepositoryPath(repository.path);
+    setMode("working-tree");
+    void runAnalysis({
+      repositoryPath: repository.path,
+      mode: "working-tree",
+      base,
+      head,
+      pullRequestInput,
+      includeUntracked,
+    }, sourceNavigation);
+  }, [
+    base,
+    connection,
+    head,
+    includeUntracked,
+    pullRequestInput,
+    runAnalysis,
+    sourceNavigation,
+  ]);
+
+  async function analyze(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!repositoryPath.trim() || connection.status !== "ready") return;
+    await runAnalysis({
+      repositoryPath,
+      mode,
+      base,
+      head,
+      pullRequestInput,
+      includeUntracked,
+    }, activeSourceNavigation ?? undefined);
   }
 
   const activeFile = projection?.files.find((item) => item.file.id === activeFileId)
@@ -259,6 +404,17 @@ export function ChangeWorkspace({
                 </button>
                 {analysisStatus === "error" ? <p className="change-form__error"><AlertTriangle size={12} />{analysisError}</p> : null}
               </form>
+              {sourceNavigationMatch || sourceNavigationMessage ? (
+                <section className={`change-source-navigation change-source-navigation--${sourceNavigationMatch?.status ?? "error"}`}>
+                  {sourceNavigationMatch?.status === "exact"
+                    ? <CheckCircle2 size={12} />
+                    : <AlertTriangle size={12} />}
+                  <span>
+                    <strong>{sourceNavigationMatch?.status ?? "unavailable"}</strong>
+                    {sourceNavigationMessage || sourceNavigationMatch?.reason}
+                  </span>
+                </section>
+              ) : null}
             </>
           ) : null}
 
@@ -284,13 +440,19 @@ export function ChangeWorkspace({
                 <span><b>{projection.changes.statistics.files}</b><small>files</small></span>
                 <span className="change-stat--add"><b>+{projection.changes.statistics.additions}</b><small>lines</small></span>
                 <span className="change-stat--delete"><b>−{projection.changes.statistics.deletions}</b><small>lines</small></span>
+                <span className="change-stat--runtime"><b>{projection.runtime.summariesByNode.size}</b><small>runtime</small></span>
               </div>
               <div className="change-file-list">
                 {projection.files.slice(0, visibleFileCount).map((item) => (
                   <button
                     type="button"
                     key={item.file.id}
-                    className={item.file.id === activeFile?.file.id ? `change-file change-file--active change-file--${item.file.status}` : `change-file change-file--${item.file.status}`}
+                    className={[
+                      "change-file",
+                      `change-file--${item.file.status}`,
+                      item.file.id === activeFile?.file.id ? "change-file--active" : "",
+                      item.runtimeObserved.length ? "change-file--runtime" : "",
+                    ].filter(Boolean).join(" ")}
                     onClick={() => {
                       setActiveFileId(item.file.id);
                       setSelectedNodeId(null);
@@ -333,6 +495,9 @@ export function ChangeWorkspace({
                 {projection.headAligned ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
                 {projection.headAligned ? "行号已对齐" : "行号推断"}
               </span>
+              <span className="change-runtime-count">
+                Runtime {activeFile.runtimeObserved.length}
+              </span>
               <MagnetControls enabled={magnetEnabled} strength={magnetStrength} onToggle={onToggleMagnet} onStrengthChange={onMagnetStrengthChange} />
             </header>
             <ChangeGraphCanvas
@@ -346,7 +511,7 @@ export function ChangeWorkspace({
             />
           </>
         ) : projection ? (
-          <div className="change-empty"><CheckCircle2 size={30} /><small>CLEAN COMPARISON</small><h2>没有文件变更</h2><p>选择另一个工作树、commit range 或 GitHub PR 继续分析。</p></div>
+          <div className="change-empty"><CheckCircle2 size={30} /><small>CLEAN COMPARISON</small><h2>没有文件变更</h2><p>{sourceNavigationMessage || "选择另一个工作树、commit range 或 GitHub PR 继续分析。"}</p></div>
         ) : (
           <div className="change-empty"><GitCompareArrows size={30} /><small>CHANGE PLANE</small><h2>把 Git diff 映射到代码节点</h2><p>选择本地变更或 GitHub PR。远程 PR 只读取元数据与 patch，本地仓始终不会 fetch、checkout、merge 或执行目标代码。</p></div>
         )}
@@ -361,6 +526,8 @@ export function ChangeWorkspace({
           magnetStrength={magnetStrength}
           onToggleMagnet={onToggleMagnet}
           onMagnetStrengthChange={onMagnetStrengthChange}
+          onOpenRuntimeEvent={onOpenRuntimeEvent}
+          onOpenDefinition={onOpenDefinition}
         />
       ) : (
         <aside className="change-inspector change-inspector--empty"><ShieldCheck size={22} /><strong>变更详情</strong><p>生成变更图后，点击文件或节点查看 hunk、源码范围和影响置信度。</p></aside>

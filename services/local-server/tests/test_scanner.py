@@ -52,6 +52,16 @@ class PythonRepositoryScannerTests(unittest.TestCase):
         self.assertEqual(helper["kind"], "function")
         self.assertEqual(helper["attributes"]["parameterCount"], 0)
 
+        method = next(
+            node
+            for node in result["graph"]["nodes"]
+            if node["evidence"][0].get("source", {}).get("symbol")
+            == "WeatherTool.invoke"
+        )
+        self.assertEqual(method["kind"], "function")
+        self.assertTrue(method["attributes"]["method"])
+        self.assertEqual(method["attributes"]["parameterCount"], 2)
+
     def test_applies_the_edge_limit_to_package_hierarchy(self) -> None:
         result = PythonRepositoryScanner().scan(
             self.identity,

@@ -107,6 +107,7 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.integration", "enabled"],
         ["openjiuwen.deterministic-replay", "enabled"],
         ["openjiuwen.local-repository", "enabled"],
+        ["openjiuwen.source-convergence", "enabled"],
         ["openjiuwen.tool-catalog", "enabled"],
         ["openjiuwen.git-change", "enabled"],
         ["openjiuwen.github-pull-request", "enabled"],
@@ -130,6 +131,9 @@ describe("visualization plugin registry", () => {
     ]);
     expect(defaultWorkbench.capabilities["graph.definition.relation-explorer.v1"])
       .toEqual(["openjiuwen.local-repository"]);
+    expect(defaultWorkbench.capabilities["graph.cross-plane.source.v1"]).toEqual([
+      "openjiuwen.source-convergence",
+    ]);
     expect(defaultWorkbench.capabilities["trace.context.ownership"]).toEqual([
       "openjiuwen.jiuwenswarm",
     ]);
@@ -190,6 +194,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",
       "openjiuwen.local-repository": "enabled",
+      "openjiuwen.source-convergence": "enabled",
       "openjiuwen.tool-catalog": "enabled",
       "openjiuwen.git-change": "enabled",
       "openjiuwen.github-pull-request": "enabled",
@@ -234,6 +239,10 @@ describe("visualization plugin registry", () => {
     ).toBe("blocked");
     expect(
       withoutLocalGit.plugins.find((item) => item.id === "openjiuwen.github-pull-request")
+        ?.state,
+    ).toBe("blocked");
+    expect(
+      withoutLocalGit.plugins.find((item) => item.id === "openjiuwen.source-convergence")
         ?.state,
     ).toBe("blocked");
     expect(withoutLocalGit.changeSources).toEqual([]);

@@ -494,6 +494,71 @@ class PythonRepositoryScanner:
                 class_bases.append((class_id, bases, class_evidence))
                 symbol_count += 1
 
+                if options.include_functions:
+                    for method_node in class_node.body:
+                        if not isinstance(
+                            method_node,
+                            (ast.FunctionDef, ast.AsyncFunctionDef),
+                        ):
+                            continue
+                        method_symbol = f"{qualified_name}.{method_node.name}"
+                        method_id = _stable_id(identity, source_path, method_symbol)
+                        method_evidence = _evidence(
+                            identity,
+                            source_path,
+                            symbol=method_symbol,
+                            start_line=method_node.lineno,
+                            end_line=getattr(
+                                method_node,
+                                "end_lineno",
+                                method_node.lineno,
+                            ),
+                        )
+                        method_decorators = [
+                            name
+                            for decorator in method_node.decorator_list
+                            if (name := _dotted_name(decorator))
+                        ]
+                        nodes.append(
+                            _node(
+                                node_id=method_id,
+                                kind="function",
+                                level=min(5, module_level + 2),
+                                owner=identity.owner,
+                                label=method_node.name,
+                                summary=_summary(
+                                    ast.get_docstring(method_node),
+                                    "Python method.",
+                                ),
+                                parent_id=class_id,
+                                expandable=False,
+                                attributes={
+                                    "qualifiedName": method_symbol,
+                                    "method": True,
+                                    "async": isinstance(
+                                        method_node,
+                                        ast.AsyncFunctionDef,
+                                    ),
+                                    "decorators": method_decorators,
+                                    "parameterCount": len(method_node.args.args),
+                                },
+                                evidence=method_evidence,
+                            )
+                        )
+                        self._append_edge(
+                            edges,
+                            edge_ids,
+                            _edge(
+                                kind="contains",
+                                source=class_id,
+                                target=method_id,
+                                evidence=method_evidence,
+                            ),
+                            options,
+                            warnings,
+                        )
+                        symbol_count += 1
+
             if options.include_functions:
                 for function_node in module_functions:
                     function_id = _stable_id(identity, source_path, function_node.name)

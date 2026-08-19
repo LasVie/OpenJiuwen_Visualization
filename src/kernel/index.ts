@@ -6,3 +6,4 @@ export * from "./contracts/model-provider";
 export * from "./contracts/runtime";
 export * from "./contracts/trace";
 export * from "./plugin-registry";
+export * from "./source-identity";

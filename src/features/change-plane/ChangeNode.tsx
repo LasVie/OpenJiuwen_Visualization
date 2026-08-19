@@ -10,6 +10,7 @@ import type {
   NodeChangeImpact,
   RegisteredGraphNode,
 } from "../../kernel";
+import type { DefinitionRuntimeSummary } from "../source-convergence";
 
 export type ChangeNodeData = {
   variant: "root" | "file" | "impact";
@@ -21,6 +22,8 @@ export type ChangeNodeData = {
   additions?: number;
   deletions?: number;
   fileCount?: number;
+  runtimeSummary?: DefinitionRuntimeSummary;
+  runtimeObservedCount?: number;
 } & Record<string, unknown>;
 
 export type ChangeFlowNode = Node<ChangeNodeData, "change">;
@@ -48,6 +51,7 @@ export function ChangeNode({ data, selected }: NodeProps<ChangeFlowNode>) {
       className={`change-node change-node--${data.variant} ${
         data.impact ? `change-node--${data.impact.kind}` : ""
       } ${selected ? "change-node--selected" : ""}`}
+      data-runtime-observed={Boolean(data.runtimeSummary || data.runtimeObservedCount)}
     >
       {data.variant !== "root" ? (
         <Handle type="target" position={Position.Left} id="target-left" />
@@ -78,6 +82,9 @@ export function ChangeNode({ data, selected }: NodeProps<ChangeFlowNode>) {
             {data.impact.confidence === "exact" ? "EXACT" : "INFERRED"}
           </em>
         ) : null}
+        {data.runtimeSummary ? (
+          <em className="change-node__runtime">RUN ×{data.runtimeSummary.spanCount}</em>
+        ) : null}
       </header>
       <strong>{data.label}</strong>
       <p>{data.subtitle}</p>
@@ -86,17 +93,20 @@ export function ChangeNode({ data, selected }: NodeProps<ChangeFlowNode>) {
           <span>{data.fileCount ?? 0} files</span>
           <span className="change-stat--add">+{data.additions ?? 0}</span>
           <span className="change-stat--delete">−{data.deletions ?? 0}</span>
+          <span>run {data.runtimeObservedCount ?? 0}</span>
         </footer>
       ) : data.file ? (
         <footer>
           <span>{data.file.hunks.length} hunks</span>
           <span className="change-stat--add">+{data.file.additions ?? "—"}</span>
           <span className="change-stat--delete">−{data.file.deletions ?? "—"}</span>
+          <span>run {data.runtimeObservedCount ?? 0}</span>
         </footer>
       ) : data.graphNode ? (
         <footer>
           <span>{data.graphNode.kind}</span>
           <span>{data.impact?.hunkIndexes.length ?? 0} hunk refs</span>
+          {data.runtimeSummary ? <span>{data.runtimeSummary.eventCount} events</span> : null}
         </footer>
       ) : null}
       <Handle type="source" position={Position.Right} id="source-right" />

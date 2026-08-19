@@ -13,11 +13,17 @@ import {
   Server,
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
+import type {
+  GraphSourceReference,
+  RuntimeTraceEvent,
+} from "../../kernel";
 import {
   DEFAULT_LOCAL_REPOSITORY_SERVER,
   LocalRepositoryClient,
@@ -27,6 +33,13 @@ import {
   type RepositoryScanOptions,
 } from "../../adapters/local-repository";
 import { MagnetControls } from "../trace-graph";
+import {
+  matchSourceToDefinition,
+  projectRuntimeDefinitions,
+  repositoryMatchesSource,
+  type RuntimeSourceMatch,
+  type SourceNavigationRequest,
+} from "../source-convergence";
 import { DefinitionGraphCanvas } from "./DefinitionGraphCanvas";
 import { DefinitionInspector } from "./DefinitionInspector";
 import {
@@ -61,6 +74,10 @@ function repositoryOwnerLabel(owner: string) {
 }
 
 interface RepositoryWorkspaceProps {
+  runtimeEvents: readonly RuntimeTraceEvent[];
+  sourceNavigation: SourceNavigationRequest | null;
+  onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
+  onOpenChange?: (source: GraphSourceReference) => void;
   magnetEnabled: boolean;
   magnetStrength: number;
   onToggleMagnet: () => void;
@@ -68,6 +85,10 @@ interface RepositoryWorkspaceProps {
 }
 
 export function RepositoryWorkspace({
+  runtimeEvents,
+  sourceNavigation,
+  onOpenRuntimeEvent,
+  onOpenChange,
   magnetEnabled,
   magnetStrength,
   onToggleMagnet,
@@ -93,6 +114,10 @@ export function RepositoryWorkspace({
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [page, setPage] = useState(0);
+  const [sourceNavigationMatch, setSourceNavigationMatch] =
+    useState<RuntimeSourceMatch | null>(null);
+  const [sourceNavigationError, setSourceNavigationError] = useState("");
+  const handledSourceNavigationId = useRef<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -120,6 +145,14 @@ export function RepositoryWorkspace({
   const index = useMemo(
     () => (scanResult ? createDefinitionGraphIndex(scanResult.graph) : null),
     [scanResult],
+  );
+  const runtimeProjection = useMemo(
+    () => scanResult
+      ? projectRuntimeDefinitions(scanResult.graph, runtimeEvents, {
+          repositoryDirty: scanResult.repository.dirty,
+        })
+      : null,
+    [runtimeEvents, scanResult],
   );
   const resolvedFocusId =
     index && focusId && index.nodesById.has(focusId)
@@ -155,17 +188,28 @@ export function RepositoryWorkspace({
     setQuery("");
   }
 
-  async function submitScan(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!repositoryPath.trim() || connection.status !== "ready") return;
+  const runScan = useCallback(async (
+    path: string,
+    options: RepositoryScanOptions,
+    navigation?: SourceNavigationRequest,
+  ) => {
     setScanStatus("scanning");
     setScanError("");
+    setSourceNavigationError("");
+    if (!navigation) setSourceNavigationMatch(null);
     try {
-      const result = await client.scan(repositoryPath, scanOptions);
+      const result = await client.scan(path, options);
       const root = result.graph.nodes.find((node) => !node.parentId);
+      const match = navigation
+        ? matchSourceToDefinition(result.graph, navigation.source, {
+            repositoryDirty: result.repository.dirty,
+          })
+        : null;
+      const targetId = match?.node?.id ?? root?.id ?? null;
       setScanResult(result);
-      setFocusId(root?.id ?? null);
-      setSelectedNodeId(root?.id ?? null);
+      setFocusId(targetId);
+      setSelectedNodeId(targetId);
+      setSourceNavigationMatch(match);
       setKind("all");
       setPage(0);
       setQuery("");
@@ -174,6 +218,36 @@ export function RepositoryWorkspace({
       setScanStatus("error");
       setScanError(errorMessage(error));
     }
+  }, [client]);
+
+  useEffect(() => {
+    if (
+      !sourceNavigation ||
+      connection.status !== "ready" ||
+      handledSourceNavigationId.current === sourceNavigation.id
+    ) {
+      return;
+    }
+    handledSourceNavigationId.current = sourceNavigation.id;
+    const repository = connection.catalog.repositories.find((candidate) =>
+      repositoryMatchesSource(candidate, sourceNavigation.source));
+    if (!repository) {
+      setSourceNavigationMatch(null);
+      setSourceNavigationError(
+        `允许目录中没有与 ${sourceNavigation.source.repository} 身份一致的仓库。`,
+      );
+      return;
+    }
+    const options = { ...scanOptions, includeFunctions: true };
+    setRepositoryPath(repository.path);
+    setScanOptions(options);
+    void runScan(repository.path, options, sourceNavigation);
+  }, [connection, runScan, scanOptions, sourceNavigation]);
+
+  async function submitScan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!repositoryPath.trim() || connection.status !== "ready") return;
+    await runScan(repositoryPath, scanOptions);
   }
 
   return (
@@ -354,6 +428,18 @@ export function RepositoryWorkspace({
         {index && viewport && resolvedFocusId ? (
           <>
             <header className="definition-toolbar">
+              {sourceNavigationError ? (
+                <p className="definition-source-navigation definition-source-navigation--error">
+                  <AlertTriangle size={12} />{sourceNavigationError}
+                </p>
+              ) : sourceNavigationMatch ? (
+                <p className={`definition-source-navigation definition-source-navigation--${sourceNavigationMatch.status}`}>
+                  {sourceNavigationMatch.status === "exact"
+                    ? <CheckCircle2 size={12} />
+                    : <AlertTriangle size={12} />}
+                  <span><strong>{sourceNavigationMatch.status}</strong>{sourceNavigationMatch.reason}</span>
+                </p>
+              ) : null}
               <nav className="definition-breadcrumb" aria-label="定义图层级路径">
                 {breadcrumb.map((node, indexInPath) => (
                   <span key={node.id}>
@@ -458,6 +544,10 @@ export function RepositoryWorkspace({
           onToggleMagnet={onToggleMagnet}
           onMagnetStrengthChange={onMagnetStrengthChange}
           onNavigate={navigate}
+          runtimeSummary={runtimeProjection?.summariesByNode.get(selectedNode.id)}
+          sourceNavigationMatch={sourceNavigationMatch}
+          onOpenRuntimeEvent={onOpenRuntimeEvent}
+          onOpenChange={onOpenChange}
         />
       ) : (
         <aside className="definition-inspector definition-inspector--empty">

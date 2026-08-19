@@ -26,6 +26,7 @@ export interface WorkbenchAvailability {
   subagentExecution: boolean;
   subagentRuntime: boolean;
   railReview: boolean;
+  sourceConvergence: boolean;
   runtimeSources: {
     fixture: boolean;
     core: boolean;
@@ -108,6 +109,10 @@ export function workbenchAvailability(
       workbench.capabilities["runtime.subagent.execution.v1"],
     ),
     railReview: Boolean(workbench.capabilities["graph.rail"]),
+    sourceConvergence: Boolean(
+      workbench.capabilities["graph.cross-plane.source.v1"] &&
+      workbench.capabilities["repository.local.read"],
+    ),
     runtimeSources: { fixture, core, swarm },
   };
 }

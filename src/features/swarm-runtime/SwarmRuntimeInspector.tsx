@@ -8,7 +8,7 @@ import {
   Timer,
 } from "lucide-react";
 import { RuntimeBadge } from "../../shared/ui/RuntimeBadge";
-import type { TraceStep } from "../../kernel";
+import type { RuntimeTraceEvent, TraceStep } from "../../kernel";
 import {
   swarmContextScopeAt,
   swarmSubjectStatusAt,
@@ -22,6 +22,8 @@ interface SwarmRuntimeInspectorProps {
   selectedNodeId: string | null;
   open: boolean;
   onToggle: () => void;
+  onOpenDefinition: (event: RuntimeTraceEvent) => void;
+  sourceNavigationEnabled: boolean;
 }
 
 function payloadEntries(payload: Readonly<Record<string, unknown>> | undefined) {
@@ -39,6 +41,8 @@ export function SwarmRuntimeInspector({
   selectedNodeId,
   open,
   onToggle,
+  onOpenDefinition,
+  sourceNavigationEnabled,
 }: SwarmRuntimeInspectorProps) {
   const event = projection.events[stepIndex];
   const subject = projection.subjects.find((candidate) => candidate.id === selectedNodeId);
@@ -115,6 +119,15 @@ export function SwarmRuntimeInspector({
               </div>
             ))}
           </dl>
+          {sourceNavigationEnabled && event?.definition ? (
+            <button
+              type="button"
+              className="runtime-source-link"
+              onClick={() => onOpenDefinition(event)}
+            >
+              <Code2 size={13} />定位源码定义
+            </button>
+          ) : null}
         </article>
 
         <article>
@@ -170,9 +183,11 @@ export function SwarmRuntimeInspector({
                 ))}
               </div>
               {subject.sourceLocation ? (
-                <code className="inspector__source">
-                  {subject.sourceLocation} · {subject.sourceConfidence}
-                </code>
+                <>
+                  <code className="inspector__source">
+                    {subject.sourceLocation} · {subject.sourceConfidence}
+                  </code>
+                </>
               ) : (
                 <p className="inspector__empty">事件未提供源码证据，且没有安全的静态映射。</p>
               )}

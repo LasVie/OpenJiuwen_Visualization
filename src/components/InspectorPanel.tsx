@@ -6,6 +6,7 @@ import {
   CornerDownRight,
   Timer,
 } from "lucide-react";
+import type { RuntimeTraceEvent } from "../kernel";
 import { RailReviewPanel } from "../features/rail-review";
 import { RuntimeBadge } from "../shared/ui/RuntimeBadge";
 import type { TraceNodeDefinition, TraceStep } from "../types/trace";
@@ -17,6 +18,9 @@ interface InspectorPanelProps {
   runInput: string;
   open: boolean;
   onToggle: () => void;
+  runtimeEvent?: RuntimeTraceEvent;
+  onOpenDefinition: (event: RuntimeTraceEvent) => void;
+  sourceNavigationEnabled: boolean;
 }
 
 export function InspectorPanel({
@@ -26,6 +30,9 @@ export function InspectorPanel({
   runInput,
   open,
   onToggle,
+  runtimeEvent,
+  onOpenDefinition,
+  sourceNavigationEnabled,
 }: InspectorPanelProps) {
   const selectedNode = graphNodes.find((node) => node.id === selectedNodeId);
   const selectedRail = selectedNode?.type === "rail" ? selectedNode : null;
@@ -100,6 +107,15 @@ export function InspectorPanel({
                 </div>
               ))}
             </dl>
+          ) : null}
+          {sourceNavigationEnabled && runtimeEvent?.definition ? (
+            <button
+              type="button"
+              className="runtime-source-link"
+              onClick={() => onOpenDefinition(runtimeEvent)}
+            >
+              <Code2 size={13} />定位源码定义
+            </button>
           ) : null}
         </article>
 

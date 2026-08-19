@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、工作树/commit range/GitHub PR 的节点影响图，以及带依赖解析的模块开关。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、工作树/commit range/GitHub PR 的节点影响图、Runtime ↔ Definition ↔ Change 证据往返，以及带依赖解析的模块开关。
 
 已交付能力、阶段记录和后续路线见 [`docs/project-roadmap.md`](docs/project-roadmap.md)。
 
@@ -41,6 +41,7 @@ python -B services/local-server/scripts/scan_repository.py `
 - Agent、Rail、Tool、Context、Workflow、Model、Team 语义分类；
 - 全局符号/源码路径搜索、类型过滤和大层级分页；
 - `contains`、`imports`、`inherits` 关系与源码行证据；
+- class method 独立定义节点，以及 Runtime path + symbol + revision 的精确或显式降级定位；
 - 节点详情、拖拽、实时防重叠、磁性调节、缩放和缩略图。
 - 在 Definition、Change 与 Tool 详情中按需打开统一源码证据窗口，查看聚焦行、当前工作树状态、revision 对齐和内容哈希。
 - 从任意 Definition 或 Change 影响节点进入独立关系画布，按 `contains / imports / inherits`、上下游方向逐节点展开；每次扩展都有明确上限和未显示计数。
@@ -98,6 +99,10 @@ OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback ada
 ### Git Change Plane
 
 顶部“变更图”通过本地服务只读比较 `HEAD ↔ 工作树`、`merge-base ↔ head`，或读取公共 GitHub PR，再把文件 hunk 映射到 AST 符号、上层容器和 imports/inherits 等关系节点。PR head 与当前干净检出一致时才使用 exact 行号，否则明确降级为 inferred；工具不会 fetch、checkout 或修改本地/远端状态。完整合同见 [`docs/git-change-plane-v1.md`](docs/git-change-plane-v1.md) 与 [`docs/github-pull-request-v1.md`](docs/github-pull-request-v1.md)。
+
+### Runtime、Definition 与 Change 收敛
+
+带结构化 `definition` 的 Core/Swarm 事件可以从步骤 inspector 定位到精确 AST 方法或类；Definition inspector 汇总本次 Trace 的 span、事件、Token、最后状态与最近步骤，并可返回原运行 sequence。继续进入 Change 平面后，实际经过的源码会作为 `runtimeObserved` 证据叠加在 direct/container/dependent 影响之上；目标不在当前 diff 时只显示明确空结果，不制造节点。匹配严格使用 repository、规范 path、exact symbol 与 revision，缺失、脏工作树或不一致会显式降级。完整合同见 [`docs/runtime-definition-change-convergence-v1.md`](docs/runtime-definition-change-convergence-v1.md)。
 
 ### 模块控制中心
 

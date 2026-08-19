@@ -24,6 +24,7 @@ from .openrouter_provider import (
     OpenRouterProviderConfig,
 )
 from .trace_store import RuntimeTraceStore, TraceStoreError
+from .runtime_source_identity import runtime_source_revisions
 
 
 SWARMFLOW_RUNTIME_API_VERSION = "1.0.0"
@@ -594,6 +595,13 @@ class SwarmFlowRuntimeAdapter:
             "traceMaxTokens": int(trace["maxTokens"]),
             "workspace": str(self.config.workspace / segment),
             "workflowScript": str(self.config.workflow_script),
+            "sourceRevisions": runtime_source_revisions(
+                (
+                    ("agent-core", self.config.agent_core_root),
+                    ("jiuwenswarm", self.config.source_root),
+                    ("visualization-web", self.config.bridge_script.parents[3]),
+                )
+            ),
         }
         threading.Thread(
             target=self._run_job,

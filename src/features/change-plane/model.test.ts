@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LocalGitChangeResult, LocalRepositoryScanResult } from "../../adapters/local-repository";
 import type { GitHubPullRequestResult } from "../../adapters/github-pull-request";
+import type { RuntimeTraceEvent } from "../../kernel";
 import { projectChangeImpacts } from "./model";
 
 const repository = {
@@ -22,7 +23,7 @@ const scan: LocalRepositoryScanResult = {
     nodes: [
       { id: "root", kind: "repository", plane: "definition", level: 0, owner: "sample", label: "sample", summary: "root", evidence: [], contributedBy: "scan" },
       { id: "module", kind: "module", plane: "definition", level: 2, owner: "sample", label: "main.py", summary: "module", parentId: "root", evidence: [{ provenance: "static", confidence: "exact", source: { repository: "sample", path: "src/main.py", revision: repository.revision, startLine: 1 } }], contributedBy: "scan" },
-      { id: "agent", kind: "agent", plane: "definition", level: 3, owner: "sample", label: "Agent", summary: "agent", parentId: "module", evidence: [{ provenance: "static", confidence: "exact", source: { repository: "sample", path: "src/main.py", revision: repository.revision, startLine: 10, endLine: 30 } }], contributedBy: "scan" },
+      { id: "agent", kind: "agent", plane: "definition", level: 3, owner: "sample", label: "Agent", summary: "agent", parentId: "module", evidence: [{ provenance: "static", confidence: "exact", source: { repository: "sample", path: "src/main.py", symbol: "Agent", revision: repository.revision, startLine: 10, endLine: 30 } }], contributedBy: "scan" },
       { id: "consumer", kind: "module", plane: "definition", level: 2, owner: "sample", label: "consumer.py", summary: "consumer", parentId: "root", evidence: [{ provenance: "static", confidence: "exact", source: { repository: "sample", path: "src/consumer.py", revision: repository.revision, startLine: 1 } }], contributedBy: "scan" },
     ],
     edges: [
@@ -105,6 +106,23 @@ function githubChanges(head = repository.revision): GitHubPullRequestResult {
   };
 }
 
+const runtimeEvent: RuntimeTraceEvent = {
+  traceId: "trace-runtime",
+  eventId: "runtime-agent",
+  sequence: 4,
+  receivedAt: "2026-08-19T00:00:00Z",
+  kind: "agent.invoke",
+  phase: "start",
+  timestampMs: 15,
+  spanId: "agent-span",
+  definition: {
+    repository: "sample",
+    revision: repository.revision,
+    path: "src/main.py",
+    symbol: "Agent",
+  },
+};
+
 describe("change impact projection", () => {
   it("maps line hunks to symbols, containers and relation dependants", () => {
     const projection = projectChangeImpacts(scan, changes());
@@ -134,5 +152,15 @@ describe("change impact projection", () => {
     expect(exact.files[0].direct[0].confidence).toBe("exact");
     expect(inferred.headAligned).toBe(false);
     expect(inferred.files[0].direct[0].reason).toMatch(/head/);
+  });
+
+  it("overlays runtime-observed evidence without replacing change impact kinds", () => {
+    const projection = projectChangeImpacts(scan, changes(), [runtimeEvent]);
+
+    expect(projection.files[0].direct[0].kind).toBe("direct");
+    expect(projection.files[0].runtimeObserved).toEqual([
+      expect.objectContaining({ nodeId: "agent", eventCount: 1, spanCount: 1 }),
+    ]);
+    expect(projection.runtime.exactCount).toBe(1);
   });
 });

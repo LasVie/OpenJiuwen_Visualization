@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from runtime_source_identity import attach_source_revision, source_revisions
+
 
 RECORD_PREFIX = "OPENJIUWEN_VISUALIZATION\t"
 MAX_TEXT = 1_000_000
@@ -255,6 +257,7 @@ class RuntimeTraceEmitter:
         self.provider_id = request.get("providerId", "openrouter")
         self.provider_label = "OpenRouter" if self.provider_id == "openrouter" else "Deterministic model"
         self.trace_max_tokens = request["traceMaxTokens"]
+        self.source_revisions = source_revisions(request.get("sourceRevisions"))
         self.started_at = time.monotonic()
         self.event_number = 0
         self.model_call_number = 0
@@ -267,6 +270,72 @@ class RuntimeTraceEmitter:
 
     def event(self, kind: str, phase: str, **values: Any) -> None:
         self.event_number += 1
+        if "definition" not in values:
+            definition = {
+                "agent.invoke": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/harness/deep_agent.py",
+                    "symbol": "DeepAgent",
+                },
+                "agent.task_iteration": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/harness/deep_agent.py",
+                    "symbol": "DeepAgent",
+                },
+                "agent.react_iteration": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/single_agent/agents/react_agent.py",
+                    "symbol": "ReActAgent",
+                },
+                "model.call": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/foundation/llm/model.py",
+                    "symbol": "Model",
+                },
+                "model.stream": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/foundation/llm/model.py",
+                    "symbol": "Model",
+                },
+                "model.usage": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/foundation/llm/model.py",
+                    "symbol": "Model",
+                },
+                "rail.chain": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/single_agent/rail/base.py",
+                    "symbol": "AgentRail",
+                },
+                "rail.hook": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/single_agent/rail/base.py",
+                    "symbol": "AgentRail",
+                },
+                "context.snapshot": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/context_engine/base.py",
+                    "symbol": "ModelContext",
+                },
+                "context.delta": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/context_engine/base.py",
+                    "symbol": "ModelContext",
+                },
+                "tool.call": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/single_agent/ability_manager.py",
+                    "symbol": "AbilityManager",
+                },
+                "ability.register": {
+                    "repository": "agent-core",
+                    "path": "openjiuwen/core/single_agent/ability_manager.py",
+                    "symbol": "AbilityManager",
+                },
+            }.get(kind)
+            if definition:
+                values["definition"] = definition
+        attach_source_revision(values, self.source_revisions)
         event = {
             "eventId": f"{self.invocation_id}:bridge:{self.event_number}",
             "kind": kind,
@@ -725,6 +794,7 @@ def _read_request() -> dict[str, Any]:
         "maxIterations": value.get("maxIterations"),
         "traceMaxTokens": value.get("traceMaxTokens"),
         "workspace": _required_request(value.get("workspace"), "workspace", 2_000),
+        "sourceRevisions": source_revisions(value.get("sourceRevisions")),
     }
     if request["systemPrompt"] is not None and (
         not isinstance(request["systemPrompt"], str)

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Activity,
   Box,
@@ -58,6 +58,8 @@ import {
   SwarmRuntimeSessionBar,
   useSwarmRuntimeSession,
 } from "./features/swarm-runtime";
+import type { SourceNavigationRequest } from "./features/source-convergence";
+import type { GraphSourceReference, RuntimeTraceEvent } from "./kernel";
 import { RuntimeBadge } from "./shared/ui/RuntimeBadge";
 import { useReplayStore } from "./state/replay-store";
 import { defaultWorkbench } from "./workbench/default-workbench";
@@ -88,6 +90,11 @@ export default function App() {
   const [swarmRecordingLoading, setSwarmRecordingLoading] = useState(false);
   const [swarmRecordingError, setSwarmRecordingError] = useState<string | null>(null);
   const [subagentCanvasSubjectId, setSubagentCanvasSubjectId] = useState<string | null>(null);
+  const [definitionNavigation, setDefinitionNavigation] =
+    useState<SourceNavigationRequest | null>(null);
+  const [changeNavigation, setChangeNavigation] =
+    useState<SourceNavigationRequest | null>(null);
+  const sourceNavigationId = useRef(0);
   const pluginWorkbench = usePluginWorkbench();
   const { workbench } = pluginWorkbench;
   const availability = useMemo(
@@ -259,6 +266,55 @@ export default function App() {
   const railCanvasDefinition = traceGraph.nodes.find(
     (node) => node.id === railCanvasRailId && node.type === "rail",
   );
+
+  function nextSourceNavigation(
+    source: GraphSourceReference,
+    origin?: SourceNavigationRequest["origin"],
+  ): SourceNavigationRequest {
+    sourceNavigationId.current += 1;
+    return { id: sourceNavigationId.current, source, ...(origin ? { origin } : {}) };
+  }
+
+  function openDefinitionForRuntimeEvent(event: RuntimeTraceEvent) {
+    if (!event.definition) return;
+    setDefinitionNavigation(nextSourceNavigation(event.definition, {
+      traceId: event.traceId,
+      sequence: event.sequence,
+    }));
+    setWorkbenchMode("definition");
+  }
+
+  function openDefinitionForSource(source: GraphSourceReference) {
+    setDefinitionNavigation(nextSourceNavigation(source));
+    setWorkbenchMode("definition");
+  }
+
+  function openChangeForSource(source: GraphSourceReference) {
+    setChangeNavigation(nextSourceNavigation(source));
+    setWorkbenchMode("change");
+  }
+
+  function openRuntimeEvent(event: RuntimeTraceEvent) {
+    const coreIndex = coreRuntime.events.findIndex(
+      (candidate) => candidate.traceId === event.traceId && candidate.sequence === event.sequence,
+    );
+    const swarmIndex = swarmRuntime.events.findIndex(
+      (candidate) => candidate.traceId === event.traceId && candidate.sequence === event.sequence,
+    );
+    if (coreIndex >= 0) {
+      setRuntimeSource("core-runtime");
+      setLiveStepIndex(coreIndex);
+    } else if (swarmIndex >= 0) {
+      setRuntimeSource("swarm-runtime");
+      setLiveStepIndex(swarmIndex);
+    } else {
+      return;
+    }
+    setFollowLive(false);
+    setWorkbenchMode("runtime");
+    selectNode(event.subject?.id ?? event.activeNodeIds?.[0] ?? null);
+    if (!inspectorOpen) toggleInspector();
+  }
 
   useEffect(() => {
     if (runtimeSourceAvailability[runtimeSource]) return;
@@ -758,6 +814,8 @@ export default function App() {
                 selectedNodeId={selectedNodeId}
                 open={inspectorOpen}
                 onToggle={toggleInspector}
+                onOpenDefinition={openDefinitionForRuntimeEvent}
+                sourceNavigationEnabled={availability.sourceConvergence}
               />
             </Suspense>
           ) : (
@@ -768,6 +826,9 @@ export default function App() {
               runInput={activeRunInput}
               open={inspectorOpen}
               onToggle={toggleInspector}
+              runtimeEvent={activeRuntimeEvents[stepIndex]}
+              onOpenDefinition={openDefinitionForRuntimeEvent}
+              sourceNavigationEnabled={availability.sourceConvergence}
             />
           )}
           <TimelineControls
@@ -795,7 +856,12 @@ export default function App() {
         />
       </div> : workbenchMode === "definition" ? (
         <DefinitionWorkspace
-          runtimeEvents={activeRuntimeEvents}
+          runtimeEvents={availability.sourceConvergence ? activeRuntimeEvents : []}
+          sourceNavigation={availability.sourceConvergence ? definitionNavigation : null}
+          onOpenRuntimeEvent={openRuntimeEvent}
+          onOpenChange={availability.sourceConvergence && availability.change
+            ? openChangeForSource
+            : undefined}
           toolsEnabled={availability.tools}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
@@ -805,6 +871,12 @@ export default function App() {
       ) : workbenchMode === "change" ? (
         <ChangeWorkspace
           changeSources={workbench.changeSources}
+          runtimeEvents={availability.sourceConvergence ? activeRuntimeEvents : []}
+          sourceNavigation={availability.sourceConvergence ? changeNavigation : null}
+          onOpenRuntimeEvent={openRuntimeEvent}
+          onOpenDefinition={availability.sourceConvergence
+            ? openDefinitionForSource
+            : undefined}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
           onToggleMagnet={toggleMagnet}

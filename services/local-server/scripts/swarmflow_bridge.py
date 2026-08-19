@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from runtime_source_identity import attach_source_revision, source_revisions
+
 from jiuwenswarm_bridge import (
     _chunks,
     _context_messages,
@@ -198,6 +200,7 @@ class SwarmFlowTraceEmitter:
             "OpenRouter" if self.provider_id == "openrouter" else "Deterministic model"
         )
         self.trace_max_tokens = request["traceMaxTokens"]
+        self.source_revisions = source_revisions(request.get("sourceRevisions"))
         self.started_at = time.monotonic()
         self.event_number = 0
         self.agents: dict[str, WorkerRuntimeState] = {}
@@ -391,6 +394,7 @@ class SwarmFlowTraceEmitter:
 
     def event(self, kind: str, phase: str, **values: Any) -> None:
         self.event_number += 1
+        attach_source_revision(values, self.source_revisions)
         event = {
             "eventId": f"{self.invocation_id}:bridge:{self.event_number}",
             "kind": kind,
@@ -1048,6 +1052,7 @@ def _read_request() -> dict[str, Any]:
             raise ValueError(f"Invalid {name}")
     value["modelMode"] = "live"
     value["providerId"] = "openrouter"
+    value["sourceRevisions"] = source_revisions(value.get("sourceRevisions"))
     return value
 
 

@@ -14,6 +14,7 @@ import { modelProviderPlugin } from "../plugins/model-provider";
 import { openRouterProviderPlugin } from "../plugins/openrouter-provider";
 import { toolCatalogPlugin } from "../plugins/tool-catalog";
 import { openJiuwenIntegrationPlugin } from "../plugins/openjiuwen-integration";
+import { sourceConvergencePlugin } from "../plugins/source-convergence";
 
 export function createDefaultPluginRegistry() {
   return new VisualizationPluginRegistry([
@@ -28,6 +29,7 @@ export function createDefaultPluginRegistry() {
     openJiuwenIntegrationPlugin,
     deterministicReplayPlugin,
     localRepositoryPlugin,
+    sourceConvergencePlugin,
     toolCatalogPlugin,
     gitChangePlugin,
     githubPullRequestPlugin,

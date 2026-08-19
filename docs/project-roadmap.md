@@ -30,6 +30,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | JiuwenSwarm Agent Team 真实执行 | 已完成 | 固定双成员 Team、真实 Team Runner/TeamMonitor、角色 Tool 边界、成员独立 Context |
 | Agent Core Subagent 真实执行 | 已完成 | 父 DeepAgent → TaskTool → child DeepAgent、父子 session/Context、双重 Tool 边界、取消与自检 |
 | Agent Core SwarmFlow 真实执行 | 已完成 | 固定两阶段 Workflow、真实 TeamWorkerBackend、结构化 WorkflowMonitor、Worker Rail/ReAct 与独立 Context |
+| Runtime ↔ Definition ↔ Change 收敛 | 已完成 | 稳定 source identity、方法级定位、revision 降级、Runtime 聚合、Change 运行证据叠加与精确往返 |
 
 ## 当前已支持功能
 
@@ -54,6 +55,8 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 绑定允许根目录内的本地 Git 仓库，渐进浏览 repository/package/module/class/function；
 - 识别 Agent、Rail、Tool、Context、Workflow、Model、Team 等语义节点；
 - 统一源码证据窗口、聚焦行、revision/工作树对齐与内容哈希；
+- Runtime 事件按 repository/path/exact symbol/revision 定位到方法或类，缺失、脏工作树、冲突与歧义显式降级；
+- Definition inspector 展示本次 Trace 的 span、事件、Token、最后状态和可返回的最近步骤；
 - 从节点逐层展开 `contains / imports / inherits` 上下游关系；
 - Registered Tools Catalog 区分声明、静态注册路径和本次 Runtime 的 `ability.register` 观察。
 
@@ -72,6 +75,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 
 - 工作树和本地 commit range 的节点级影响图；
 - 公共或服务端 token 授权的 GitHub PR 只读变更图；
+- Change 节点叠加 `runtimeObserved` 证据，并支持 Runtime → Definition → Change → 原运行步骤往返；
 - 插件按 dependency/capability 开关，关闭后相关入口和 contribution 一起收敛；
 - Core、Swarm、Provider、Repository、Change、Tool、深入画布与执行器均按 feature/plugin/adapter 分层。
 
@@ -86,20 +90,20 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
 - 还没有持久化运行归档、跨运行比较、协作权限或远端部署控制面。
 
-## 下一阶段：Runtime ↔ Definition ↔ Change 收敛 V1
+## 下一阶段：运行归档与对比 V1（待产品决策）
 
-下一阶段把已经稳定的真实 Runtime 证据连接到 Definition 与 Change 平面。目标不是新增第四套节点，而是让一次 Agent/Team/SwarmFlow/Subagent 运行可以跳转到其精确源码定义，并让工作树或 PR 影响图明确标出“被修改且在本次运行中实际经过”的节点。
+当前 Trace 仍是本地服务内存态。下一阶段计划在不改变实时采集协议的前提下增加可选本地归档，让用户选择两次运行，对比实际链路、节点状态、Context 增长、Token、费用与 Rail 决策；Definition/Change 的 source identity 继续作为跨运行对齐键。
 
-计划交付：
+候选交付：
 
-1. 定义跨平面的稳定 source identity，统一 repository、revision、path、symbol 与 runtime subject/span；
-2. 从带 `definition` 的 Runtime event 精确关联 AST Definition node，缺失或 revision 不一致时显式降级而不靠名称猜测；
-3. 在 Definition inspector 中显示本次 Trace 的调用次数、最后状态、Token 与可跳转步骤；
-4. 在 Change 图叠加实际运行覆盖，区分 direct change、关系影响与 runtime-observed 三种证据；
-5. 提供 `运行节点 → 源码定义 → 变更影响 → 原运行步骤` 的往返导航，并保持当前 Trace/revision 上下文；
-6. 增加 identity、脏工作树/PR revision 降级、前端投影和真实浏览器验收。
+1. 独立 `trace-archive` adapter 与 capability，默认关闭，实时 Trace 不依赖持久化；
+2. 保存经过版本迁移的 Trace 元数据、事件、Context 与 Provider usage，并保持 owner 隔离；
+3. 运行列表、筛选、标签、删除与单次导出，所有生命周期操作显式可见；
+4. 两次运行的节点增删、步骤状态、Token/费用、Context delta 与 Rail 决策对比；
+5. 用 source identity 对齐 Definition/Change，revision 不同或缺失时继续显式降级；
+6. 存储上限、过期清理、脱敏策略、故障恢复和迁移测试。
 
-默认只做只读关联，不自动 fetch、checkout、编辑、生成补丁或提交；若同一源码定义在多仓/多 revision 下无法保持唯一 identity，再请求数据模型决策。
+进入实现前需要确定：本地数据库类型、是否允许保存完整 Context/模型原文、默认保留周期与空间上限。未决之前不创建隐式磁盘存储，也不把当前内存 Trace 宣称为可恢复归档。
 
 ## 后续路线
 
@@ -107,8 +111,8 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 |---:|---|---|---|
 | 已完成 | 真实 Subagent Executor | 父子 session/Context/Tool/结果的真实链路 | 固定单 child profile 已落地 |
 | 已完成 | SwarmFlow Executor | Workflow/Phase/Agent 的真实流程运行和控制 | 固定两阶段 profile 已落地，身份独立于 Agent Team/Subagent |
-| P1 | Runtime ↔ Definition ↔ Change 收敛 | 运行节点跳转源码，PR 标出受影响且实际运行的链路 | 稳定 source identity 与 revision 对齐策略 |
-| P3 | 运行归档与对比 | 可选持久化、跨运行 diff、Token/费用/决策比较 | 本地数据库、脱敏和保留周期 |
+| 已完成 | Runtime ↔ Definition ↔ Change 收敛 | 运行节点跳转源码，Change 标出受影响且实际运行的链路 | 结构化 identity 与显式 revision 降级已落地 |
+| P2 | 运行归档与对比 | 可选持久化、跨运行 diff、Token/费用/决策比较 | 本地数据库、脱敏和保留周期 |
 | P4 | Provider 与插件 Host | 更多模型 Provider、注册工具插件、权限声明 | 插件签名、密钥隔离和 capability 审批 |
 | P5 | 辅助开发闭环 | 从受影响节点生成测试/修改建议并回写受控分支 | 任何写操作都需要独立权限和可审计审批 |
 

@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from runtime_source_identity import attach_source_revision, source_revisions
+
 
 RECORD_PREFIX = "OPENJIUWEN_VISUALIZATION\t"
 TRACE_RAIL_TYPE = "visualization.swarm.trace"
@@ -326,6 +328,7 @@ class SwarmTraceEmitter:
         self.provider_id = request.get("providerId", "openrouter")
         self.provider_label = "OpenRouter" if self.provider_id == "openrouter" else "Deterministic model"
         self.trace_max_tokens = request["traceMaxTokens"]
+        self.source_revisions = source_revisions(request.get("sourceRevisions"))
         self.started_at = time.monotonic()
         self.event_number = 0
         self.members: dict[str, MemberRuntimeState] = {}
@@ -369,6 +372,7 @@ class SwarmTraceEmitter:
 
     def event(self, kind: str, phase: str, **values: Any) -> None:
         self.event_number += 1
+        attach_source_revision(values, self.source_revisions)
         event = {
             "eventId": f"{self.invocation_id}:bridge:{self.event_number}",
             "kind": kind,
@@ -839,6 +843,7 @@ def _read_request() -> dict[str, Any]:
         "workspace": _required_request(value.get("workspace"), "workspace", 2_000),
         "providerId": value.get("providerId", "openrouter"),
         "modelMode": value.get("modelMode", "live"),
+        "sourceRevisions": source_revisions(value.get("sourceRevisions")),
     }
     if request["systemPrompt"] is not None and (
         not isinstance(request["systemPrompt"], str) or len(request["systemPrompt"]) > 32_000

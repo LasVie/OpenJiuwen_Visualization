@@ -80,6 +80,7 @@ function buildFlow(
         fileCount: projection.changes.statistics.files,
         additions: projection.changes.statistics.additions,
         deletions: projection.changes.statistics.deletions,
+        runtimeObservedCount: projection.runtime.summariesByNode.size,
       },
     },
     {
@@ -91,6 +92,7 @@ function buildFlow(
         label: fileProjection.file.path.split("/").at(-1) ?? fileProjection.file.path,
         subtitle: fileProjection.file.path,
         file: fileProjection.file,
+        runtimeObservedCount: fileProjection.runtimeObserved.length,
       },
     },
     ...primary.map((impact, index) => {
@@ -106,6 +108,7 @@ function buildFlow(
             ?? graphNode.summary,
           impact,
           graphNode,
+          runtimeSummary: projection.runtime.summariesByNode.get(graphNode.id),
         },
       };
     }),
@@ -122,6 +125,7 @@ function buildFlow(
             ?? graphNode.summary,
           impact,
           graphNode,
+          runtimeSummary: projection.runtime.summariesByNode.get(graphNode.id),
         },
       };
     }),
@@ -303,6 +307,7 @@ export function ChangeGraphCanvas({
           <span><i className="change-legend--direct" />直接命中</span>
           <span><i className="change-legend--container" />上层容器</span>
           <span><i className="change-legend--dependent" />关系影响</span>
+          <span><i className="change-legend--runtime" />Runtime 实际经过</span>
         </Panel>
       </ReactFlow>
     </div>
