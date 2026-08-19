@@ -77,6 +77,7 @@ repository@revision:path:symbol
 | `openjiuwen.agent-core` | DeepAgent、ReAct、Context、Model、Tool、Rail |
 | `openjiuwen.jiuwenswarm` | Swarm 请求/响应定义与 Team/Workflow/Subagent Runtime |
 | `openjiuwen.model-provider` | Provider 流、用量、取消与确定性录制回放 |
+| `openjiuwen.openrouter-provider` | 服务端 OpenRouter 调用、模型白名单、流式 Trace 与取消 |
 | `openjiuwen.git-change` | 工作树、commit refs 与节点级影响映射 |
 | `openjiuwen.github-pull-request` | GitHub PR 只读文件变更、远端 head 对齐与节点影响映射 |
 | `openjiuwen.tool-catalog` | Tool 声明、静态注册路径与 `ability.register` 运行确认 |
@@ -217,7 +218,9 @@ Subagent 是 Swarm 主体层级下的独立执行边界，不等同于 Team Memb
 
 Model Provider 作为独立插件注册 adapter 与确定性 recording，不把厂商 SDK 或凭据带入 React。Runtime 协议在 `model.call` 基础上增加 `model.stream`、`model.usage` 和 `model.cancel`，并用稳定 `invocationId` 把输出 delta、Token/费用、预算、结束原因和取消原因归并到同一次调用。
 
-`features/model-runtime/` 按当前 Trace sequence 重建调用，因此上一步不会看到未来 delta。输出默认脱敏，完整输出需要显式展开；费用以整数微单位保存，页面不推断价格。默认 recording 通过同一个 loopback 内存 Trace endpoint 加载，验证整条 Provider 观测链但不执行真实模型请求。实时 Provider、密钥来源与取消实现必须留在本地服务 adapter，完整合同见 [`model-provider-v1.md`](model-provider-v1.md)。
+`features/model-runtime/` 按当前 Trace sequence 重建调用，因此上一步不会看到未来 delta。输出默认脱敏，完整输出需要显式展开；费用以整数微单位保存，页面不推断价格。默认 recording 通过同一个 loopback 内存 Trace endpoint 加载，验证整条 Provider 观测链但不执行真实模型请求。
+
+`openjiuwen.openrouter-provider` 是首个实时实现。`features/openrouter-runtime/` 只读取无凭据注册表、采集模拟输入并控制调用；本地服务固定 OpenRouter 域名、持有 key、解析 SSE、执行取消，再写回同一 Trace。完整合同见 [`model-provider-v1.md`](model-provider-v1.md) 与 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)。
 
 ## Git Change Plane V1
 

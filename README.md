@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、Model Provider 录制回放、工作树/commit range/GitHub PR 的节点影响图，以及带依赖解析的模块开关。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、Model Provider 录制回放与 OpenRouter 实时调用、工作树/commit range/GitHub PR 的节点影响图，以及带依赖解析的模块开关。
 
 ## 本地运行
 
@@ -77,6 +77,10 @@ Context 事件必须携带 `context.ownerId`。Team/Member/Agent/Subagent 可以
 
 Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，不访问任何模型 API。`model.stream`、`model.usage` 与 `model.cancel` 会被投影成流式输出、Token/费用预算、完成或取消状态，并与主时间轴同步回放。输出默认脱敏，显式点击后才展示完整原文；录制帧、Provider、模型和 invocation 身份都由服务端校验。完整合同见 [`docs/model-provider-v1.md`](docs/model-provider-v1.md)。
 
+### OpenRouter 实时调用
+
+切换到 Core Trace 后点击“OpenRouter”，可从本地服务注册的模型白名单中选择模型、输入文字、设置可选 system prompt 与输出上限。页面会创建独立内存 Trace；输入 Context、流式输出、最终 usage/费用、完成或取消会进入同一时间轴，并继续支持上一步/下一步与 Context 原文查看。API key 仅在本地服务环境变量中，默认模型白名单只有 `openrouter/free`。配置与安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
+
 ### Git Change Plane
 
 顶部“变更图”通过本地服务只读比较 `HEAD ↔ 工作树`、`merge-base ↔ head`，或读取公共 GitHub PR，再把文件 hunk 映射到 AST 符号、上层容器和 imports/inherits 等关系节点。PR head 与当前干净检出一致时才使用 exact 行号，否则明确降级为 inferred；工具不会 fetch、checkout 或修改本地/远端状态。完整合同见 [`docs/git-change-plane-v1.md`](docs/git-change-plane-v1.md) 与 [`docs/github-pull-request-v1.md`](docs/github-pull-request-v1.md)。
@@ -117,6 +121,7 @@ src/
 │  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
+│  ├─ openrouter-runtime/      # OpenRouter 注册状态、调用表单与取消控制
 │  ├─ rail-review/             # Rail 调用帧、决策画布和证据面板
 │  ├─ relation-explorer/       # Definition/Change 共享节点关系深入画布
 │  ├─ runtime-trace/           # 通用内存 Trace/SSE 会话生命周期

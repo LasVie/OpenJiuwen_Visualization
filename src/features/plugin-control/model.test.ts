@@ -34,6 +34,8 @@ describe("plugin control model", () => {
       });
     expect(modules.find((plugin) => plugin.id === "openjiuwen.integration")
       ?.dependants).toEqual(["openjiuwen.deterministic-replay"]);
+    expect(modules.find((plugin) => plugin.id === "openjiuwen.model-provider")
+      ?.dependants).toEqual(["openjiuwen.openrouter-provider"]);
   });
 
   it("derives visible workbench surfaces from enabled contributions", () => {
@@ -44,6 +46,7 @@ describe("plugin control model", () => {
       change: true,
       tools: true,
       modelRuntime: true,
+      openRouter: true,
       subagentRuntime: true,
       railReview: true,
       runtimeSources: { fixture: true, core: true, swarm: true },
@@ -61,9 +64,20 @@ describe("plugin control model", () => {
       change: false,
       tools: false,
       modelRuntime: false,
+      openRouter: false,
       subagentRuntime: true,
       railReview: false,
       runtimeSources: { fixture: false, core: false, swarm: true },
     });
+
+    const withoutOpenRouter = registry.resolve({
+      pluginStates: { "openjiuwen.openrouter-provider": false },
+    });
+    expect(workbenchAvailability(withoutOpenRouter)).toMatchObject({
+      modelRuntime: true,
+      openRouter: false,
+    });
+    expect(withoutOpenRouter.modelProviders.map((provider) => provider.id))
+      .toEqual(["openjiuwen.recording-replay"]);
   });
 });

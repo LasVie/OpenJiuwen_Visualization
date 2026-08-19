@@ -1,0 +1,381 @@
+.openrouter-launcher__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  gap: 6px;
+  padding: 0 11px;
+  color: #4f3c7d;
+  background: #f1edfb;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgb(79 60 125 / 0.14);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.openrouter-launcher__trigger > span {
+  width: 6px;
+  height: 6px;
+  background: #9d8dbd;
+  border-radius: 50%;
+}
+
+.openrouter-launcher__trigger--active > span {
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgb(67 121 101 / 0.12);
+}
+
+.openrouter-launcher__trigger:active,
+.openrouter-dialog button:active {
+  scale: 0.96;
+}
+
+.openrouter-dialog-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgb(18 42 47 / 0.34);
+  backdrop-filter: blur(5px);
+}
+
+.openrouter-dialog {
+  display: grid;
+  width: min(680px, calc(100vw - 56px));
+  max-height: calc(100vh - 56px);
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 0 0 1px rgb(18 42 47 / 0.1),
+    0 24px 70px rgb(18 42 47 / 0.24);
+}
+
+.openrouter-dialog__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 40px;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 12px 16px 12px 18px;
+  background: linear-gradient(135deg, #f5f2fc, #fbfaf7);
+  border-bottom: 1px solid #e2dcec;
+}
+
+.openrouter-dialog__header > div,
+.openrouter-dialog__header > div > span:last-child {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.openrouter-dialog__header > div {
+  gap: 11px;
+}
+
+.openrouter-dialog__header > div > span:last-child {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.openrouter-dialog__mark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  color: #5d478e;
+  background: white;
+  border-radius: 11px;
+  box-shadow: var(--shadow-border);
+}
+
+.openrouter-dialog__header small {
+  color: #735f99;
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.openrouter-dialog__header h2 {
+  margin: 3px 0 0;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.openrouter-dialog__phase {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  gap: 5px;
+  padding: 0 9px;
+  color: var(--muted);
+  background: rgb(255 255 255 / 0.74);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px rgb(79 60 125 / 0.11);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.openrouter-dialog__phase--running,
+.openrouter-dialog__phase--completed { color: var(--success); }
+.openrouter-dialog__phase--starting,
+.openrouter-dialog__phase--cancelling { color: var(--amber); }
+.openrouter-dialog__phase--failed { color: var(--fault); }
+
+.openrouter-dialog__close {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.openrouter-dialog__close:hover { background: rgb(79 60 125 / 0.08); }
+
+.openrouter-dialog__state {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  margin: 18px;
+  padding: 18px;
+  color: var(--core-ink);
+  background: var(--core-surface);
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgb(22 116 123 / 0.12);
+}
+
+.openrouter-dialog__state--error {
+  color: #7e3636;
+  background: var(--fault-soft);
+  box-shadow: inset 0 0 0 1px rgb(183 74 74 / 0.14);
+}
+
+.openrouter-dialog__state--configure {
+  color: #5b477f;
+  background: #f1edfb;
+  box-shadow: inset 0 0 0 1px rgb(79 60 125 / 0.13);
+}
+
+.openrouter-dialog__state strong { font-size: 13px; }
+.openrouter-dialog__state p {
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.openrouter-dialog__state code {
+  padding: 1px 4px;
+  color: #513c7e;
+  background: rgb(255 255 255 / 0.72);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.openrouter-dialog__state button,
+.openrouter-form__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  gap: 6px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.openrouter-dialog__state button {
+  color: #513c7e;
+  background: white;
+  box-shadow: var(--shadow-border);
+}
+
+.openrouter-form {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+.openrouter-form__notice {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 12px;
+  color: var(--core-ink);
+  background: var(--core-surface);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgb(22 116 123 / 0.11);
+}
+
+.openrouter-form__notice p {
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.openrouter-form__field {
+  display: grid;
+  gap: 6px;
+}
+
+.openrouter-form__field > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.openrouter-form__field > span small {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.openrouter-form select,
+.openrouter-form input,
+.openrouter-form textarea {
+  width: 100%;
+  color: var(--ink);
+  background: #fbfcfb;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  outline: none;
+}
+
+.openrouter-form select,
+.openrouter-form input {
+  height: 40px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+.openrouter-form textarea {
+  min-height: 116px;
+  padding: 10px 11px;
+  resize: vertical;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.openrouter-form select:focus,
+.openrouter-form input:focus,
+.openrouter-form textarea:focus {
+  border-color: #6b56a6;
+  box-shadow: 0 0 0 3px rgb(107 86 166 / 0.11);
+}
+
+.openrouter-form select:disabled,
+.openrouter-form input:disabled,
+.openrouter-form textarea:disabled { opacity: 0.62; }
+
+.openrouter-form__advanced {
+  background: var(--surface-muted);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgb(18 42 47 / 0.06);
+}
+
+.openrouter-form__advanced summary {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.openrouter-form__advanced > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: end;
+  gap: 12px;
+  padding: 0 10px 10px;
+}
+
+.openrouter-form__field--system textarea { min-height: 78px; }
+
+.openrouter-form__invocation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  color: #513c7e;
+  background: #f1edfb;
+  border-radius: 9px;
+  font-size: 9px;
+}
+
+.openrouter-form__invocation code {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openrouter-form__invocation strong { font-size: 9px; }
+
+.openrouter-form__error {
+  padding: 9px 11px;
+  color: #873a3a;
+  background: var(--fault-soft);
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.openrouter-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  min-height: 42px;
+}
+
+.openrouter-form__actions > span {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.openrouter-form__run {
+  color: white;
+  background: #5d478e;
+}
+
+.openrouter-form__cancel {
+  color: #873a3a;
+  background: var(--fault-soft);
+  box-shadow: inset 0 0 0 1px rgb(183 74 74 / 0.15);
+}
+
+.openrouter-form__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+@media (max-height: 720px) {
+  .openrouter-form { gap: 10px; padding: 14px 18px; }
+  .openrouter-form__field--prompt textarea { min-height: 82px; }
+}

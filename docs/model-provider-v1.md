@@ -1,6 +1,6 @@
 # Model Provider V1
 
-Model Provider V1 是 Provider 厂商无关的观测与录制回放层。它把模型调用归一化为 Runtime Trace 事件，让同一套时间轴能够查看流式输出、用量、预算与取消，但当前不会向任何模型 API 发起请求，也不会在浏览器读取或保存 Provider 凭据。
+Model Provider V1 是 Provider 厂商无关的观测合同。它把模型调用归一化为 Runtime Trace 事件，让同一套时间轴能够查看流式输出、用量、预算与取消。确定性 recording 本身不访问模型 API；首个实时实现由独立的 `openjiuwen.openrouter-provider` 插件提供，浏览器仍不会读取或保存 Provider 凭据。
 
 ## 插件边界
 
@@ -9,7 +9,7 @@ Model Provider V1 是 Provider 厂商无关的观测与录制回放层。它把�
 - `modelProviders`：声明 adapter 协议、运行模式、凭据策略和能力；
 - `modelRecordings`：声明可确定性加载的归一化事件录制。
 
-默认 adapter 为 `openjiuwen.recording-replay`，模式是 `recording-replay`，凭据策略是 `none`。未来实际 Provider adapter 必须使用 `local-service` 模式与 `local-service-only` 凭据策略，React 组件不得直接持有 API key。
+默认 recording adapter 为 `openjiuwen.recording-replay`，模式是 `recording-replay`，凭据策略是 `none`。OpenRouter adapter 的模式是 `local-service`、凭据策略是 `local-service-only`；React 组件只读取无凭据注册表并使用 Trace authority 发起调用。
 
 ## 结构化事件
 
@@ -65,6 +65,6 @@ Prompt 或消息正文不放入 `model`，仍由 Context 事件保存。这样 P
 
 “Core Trace → 模型录制”会创建一个新的内存 Trace，并载入 `plugins/model-provider/recordings/stream-and-cancel.ts`。示例包含一段完成调用和一段取消调用，用于验证流、预算、费用、隐私与时间旅行；它不访问外部网络，也不执行 Agent、Tool 或模型。
 
-## 后续实时接入
+## 实时 OpenRouter 接入
 
-实时 Provider adapter 应在本地服务完成鉴权、请求、取消和响应归一化，然后只向现有 Trace endpoint 写入结构化事件。选择首个真实 Provider、API 形态、密钥来源与费用策略属于后续产品决策，不在 V1 中预设。
+实时 Provider adapter 在本地服务完成鉴权、固定域名请求、取消和响应归一化，然后只向现有 Trace 写入结构化事件。模型由服务端 allowlist 注册，费用只采用上游 usage，不在页面推断。完整接口、安全上限和配置见 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)。

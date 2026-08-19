@@ -877,6 +877,37 @@ class RuntimeTraceStore:
                 self._condition.notify_all()
             return session.metadata(), accepted
 
+    def authorize_writer(
+        self,
+        trace_id: str,
+        write_token: str | None,
+        *,
+        owner: str | None = None,
+    ) -> dict[str, Any]:
+        """Validate write authority without appending a synthetic event."""
+
+        with self._condition:
+            session = self._session_locked(trace_id)
+            if not write_token or not secrets.compare_digest(write_token, session.write_token):
+                raise TraceStoreError(
+                    "invalid_trace_token",
+                    "Trace write token is missing or invalid.",
+                    status=403,
+                )
+            if owner is not None and session.owner != owner:
+                raise TraceStoreError(
+                    "invalid_trace_owner",
+                    f"Trace owner must be {owner}.",
+                    status=409,
+                )
+            if session.status != "open":
+                raise TraceStoreError(
+                    "trace_closed",
+                    "This trace session no longer accepts events.",
+                    status=409,
+                )
+            return session.metadata()
+
     def snapshot(self, trace_id: str, *, after: int = 0) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         if after < 0:
             raise TraceStoreError("invalid_cursor", "after must be >= 0.")

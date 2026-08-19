@@ -20,6 +20,11 @@ from .github_pull_requests import (
     GitHubPullRequestOptions,
     GitHubPullRequestReference,
 )
+from .openrouter_provider import (
+    OpenRouterProviderConfig,
+    OpenRouterProviderError,
+    OpenRouterRuntimeAdapter,
+)
 from .repository import RepositoryResolutionError, RepositoryResolver
 from .scan_cache import DefinitionScanCache
 from .source_reader import SourceReadError, SourceReadOptions, SourceReader
@@ -37,6 +42,9 @@ LOGGER = logging.getLogger(__name__)
 TRACE_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)$")
 TRACE_EVENTS_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)/events$")
 TRACE_STREAM_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)/stream$")
+OPENROUTER_CANCEL_ROUTE = re.compile(
+    r"^/api/v1/model-providers/openrouter/invocations/([^/]+)/cancel$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +88,7 @@ class LocalRepositoryApi:
         change_inspector: GitChangeInspector | None = None,
         github_pull_request_inspector: GitHubPullRequestInspector | None = None,
         source_reader: SourceReader | None = None,
+        openrouter_adapter: OpenRouterRuntimeAdapter | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -93,6 +102,10 @@ class LocalRepositoryApi:
             github_pull_request_inspector or GitHubPullRequestInspector()
         )
         self._source_reader = source_reader or SourceReader()
+        self.openrouter_adapter = openrouter_adapter or OpenRouterRuntimeAdapter(
+            OpenRouterProviderConfig.from_environment(),
+            self.trace_store,
+        )
 
     def dispatch(
         self,
@@ -109,6 +122,7 @@ class LocalRepositoryApi:
         split_path = urlsplit(path)
         route = split_path.path.rstrip("/") or "/"
         if method == "GET" and route == "/api/v1/health":
+            openrouter_ready = self.openrouter_adapter.config.configured
             return ApiResponse(
                 HTTPStatus.OK,
                 {
@@ -123,10 +137,14 @@ class LocalRepositoryApi:
                         "git.change.read",
                         "github.pull-request.read",
                         "trace.ephemeral",
+                        "model.provider.openrouter.registry",
+                        *(["model.provider.openrouter.invoke"] if openrouter_ready else []),
                     ],
                     "traceStorage": "memory-only",
                 },
             )
+        if method == "GET" and route == "/api/v1/model-providers/openrouter":
+            return ApiResponse(HTTPStatus.OK, self.openrouter_adapter.descriptor())
         if method == "GET" and route == "/api/v1/repositories":
             return ApiResponse(
                 HTTPStatus.OK,
@@ -151,6 +169,11 @@ class LocalRepositoryApi:
             return self._github_pull_request(body or {})
         if method == "POST" and route == "/api/v1/traces":
             return self._create_trace(body or {})
+        if method == "POST" and route == "/api/v1/model-providers/openrouter/invocations":
+            return self._start_openrouter(body or {}, trace_token)
+        openrouter_cancel_match = OPENROUTER_CANCEL_ROUTE.fullmatch(route)
+        if method == "POST" and openrouter_cancel_match:
+            return self._cancel_openrouter(openrouter_cancel_match.group(1), trace_token)
         trace_match = TRACE_ROUTE.fullmatch(route)
         if method == "GET" and trace_match:
             return self._trace_snapshot(trace_match.group(1), split_path.query)
@@ -158,6 +181,28 @@ class LocalRepositoryApi:
         if method == "POST" and events_match:
             return self._append_trace(events_match.group(1), trace_token, body or {})
         return _error(HTTPStatus.NOT_FOUND, "not_found", "API route was not found.")
+
+    def _start_openrouter(
+        self,
+        body: dict[str, Any],
+        trace_token: str | None,
+    ) -> ApiResponse:
+        try:
+            result = self.openrouter_adapter.start(body, trace_token)
+        except OpenRouterProviderError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.ACCEPTED, result)
+
+    def _cancel_openrouter(
+        self,
+        invocation_id: str,
+        trace_token: str | None,
+    ) -> ApiResponse:
+        try:
+            result = self.openrouter_adapter.cancel(invocation_id, trace_token)
+        except OpenRouterProviderError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.ACCEPTED, result)
 
     def _create_trace(self, body: dict[str, Any]) -> ApiResponse:
         try:

@@ -8,6 +8,7 @@ import {
   Server,
 } from "lucide-react";
 import type { CreatedRuntimeTrace, RuntimeTraceSession } from "../../kernel";
+import type { ReactNode } from "react";
 import type { CoreRuntimeConnectionState } from "./use-core-runtime-session";
 
 interface CoreRuntimeSessionBarProps {
@@ -21,6 +22,8 @@ interface CoreRuntimeSessionBarProps {
   recordingAvailable: boolean;
   recordingLoading: boolean;
   recordingError: string | null;
+  providerAction?: ReactNode;
+  providerBusy?: boolean;
 }
 
 const connectionLabel: Record<CoreRuntimeConnectionState, string> = {
@@ -43,6 +46,8 @@ export function CoreRuntimeSessionBar({
   recordingAvailable,
   recordingLoading,
   recordingError,
+  providerAction,
+  providerBusy = false,
 }: CoreRuntimeSessionBarProps) {
   return (
     <section className="core-runtime-session" aria-label="Core Runtime Trace 会话">
@@ -68,7 +73,7 @@ export function CoreRuntimeSessionBar({
           <code>{trace.id}</code>
         </div>
       ) : (
-        <p>{error ?? "只接收事件，不执行 agent-core、工具或模型。"}</p>
+        <p>{error ?? "Trace 监听不执行 agent-core 或工具；模型需从 OpenRouter 显式启动。"}</p>
       )}
 
       {created ? (
@@ -87,18 +92,20 @@ export function CoreRuntimeSessionBar({
         type="button"
         className="core-runtime-session__replay"
         onClick={onLoadRecording}
-        disabled={!recordingAvailable || connection === "creating" || recordingLoading}
+        disabled={!recordingAvailable || connection === "creating" || recordingLoading || providerBusy}
         title={recordingError ?? `载入：${recordingLabel}`}
       >
         <RotateCcw size={14} strokeWidth={2} aria-hidden="true" />
         {recordingLoading ? "载入中" : recordingAvailable ? "模型录制" : "模型模块已关闭"}
       </button>
 
+      {providerAction}
+
       <button
         type="button"
         className="core-runtime-session__create"
         onClick={onCreate}
-        disabled={connection === "creating"}
+        disabled={connection === "creating" || providerBusy}
       >
         <Plus size={15} strokeWidth={2} aria-hidden="true" />
         {trace ? "新建 Trace" : "创建监听"}

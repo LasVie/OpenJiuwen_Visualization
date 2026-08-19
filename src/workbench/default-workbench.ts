@@ -7,6 +7,7 @@ import { localRepositoryPlugin } from "../plugins/local-repository";
 import { gitChangePlugin } from "../plugins/git-change";
 import { githubPullRequestPlugin } from "../plugins/github-pull-request";
 import { modelProviderPlugin } from "../plugins/model-provider";
+import { openRouterProviderPlugin } from "../plugins/openrouter-provider";
 import { toolCatalogPlugin } from "../plugins/tool-catalog";
 import { openJiuwenIntegrationPlugin } from "../plugins/openjiuwen-integration";
 
@@ -14,6 +15,7 @@ export function createDefaultPluginRegistry() {
   return new VisualizationPluginRegistry([
     agentCorePlugin,
     modelProviderPlugin,
+    openRouterProviderPlugin,
     jiuwenSwarmPlugin,
     openJiuwenIntegrationPlugin,
     deterministicReplayPlugin,

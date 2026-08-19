@@ -2,7 +2,7 @@
   position: relative;
   z-index: 14;
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) auto minmax(150px, auto) auto auto auto;
+  grid-template-columns: minmax(190px, 1fr) auto minmax(150px, auto) auto auto auto auto;
   align-items: center;
   min-width: 0;
   gap: 12px;
@@ -236,7 +236,7 @@
 
 @media (max-width: 1240px) {
   .core-runtime-session {
-    grid-template-columns: minmax(180px, 1fr) auto auto auto;
+    grid-template-columns: minmax(180px, 1fr) auto auto auto auto auto;
   }
 
   .core-runtime-session__metrics {

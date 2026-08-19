@@ -128,4 +128,4 @@ X-Trace-Token: {writeToken}
 | `GET` | `/api/v1/traces/{id}?after=N` | 获取 N 之后的快照 |
 | `GET` | `/api/v1/traces/{id}/stream?after=N` | SSE 增量流；支持 `Last-Event-ID` 重连 |
 
-服务仍只允许 loopback host。Repository API 保持严格只读；Trace 写入只修改进程内存，不提供文件、Git、命令执行、模型调用或凭据持久化能力。
+服务仍只允许 loopback host。Repository API 保持严格只读；Trace endpoint 本身只修改进程内存，不提供文件、Git、命令执行或凭据持久化能力。真实模型调用位于独立、显式授权的 OpenRouter Provider 路由，复用 Trace 作为唯一观测输出，见 [`openrouter-provider-v1.md`](openrouter-provider-v1.md)。

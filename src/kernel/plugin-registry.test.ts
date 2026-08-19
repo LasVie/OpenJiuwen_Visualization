@@ -59,6 +59,12 @@ describe("visualization plugin registry", () => {
         credentialPolicy: "none",
         contributedBy: "openjiuwen.model-provider",
       }),
+      expect.objectContaining({
+        id: "openrouter",
+        mode: "local-service",
+        credentialPolicy: "local-service-only",
+        contributedBy: "openjiuwen.openrouter-provider",
+      }),
     ]);
     expect(defaultWorkbench.modelRecordings).toEqual([
       expect.objectContaining({
@@ -92,6 +98,7 @@ describe("visualization plugin registry", () => {
       .toEqual([
         ["openjiuwen.agent-core", "enabled"],
         ["openjiuwen.model-provider", "enabled"],
+        ["openjiuwen.openrouter-provider", "enabled"],
         ["openjiuwen.jiuwenswarm", "enabled"],
         ["openjiuwen.integration", "enabled"],
         ["openjiuwen.deterministic-replay", "enabled"],
@@ -128,6 +135,9 @@ describe("visualization plugin registry", () => {
     expect(defaultWorkbench.capabilities["runtime.model.recording.v1"]).toEqual([
       "openjiuwen.model-provider",
     ]);
+    expect(defaultWorkbench.capabilities["runtime.model.openrouter.v1"]).toEqual([
+      "openjiuwen.openrouter-provider",
+    ]);
     expect(defaultWorkbench.capabilities["graph.change.impact.v1"]).toEqual([
       "openjiuwen.git-change",
     ]);
@@ -155,6 +165,7 @@ describe("visualization plugin registry", () => {
     expect(status).toEqual({
       "openjiuwen.agent-core": "disabled",
       "openjiuwen.model-provider": "blocked",
+      "openjiuwen.openrouter-provider": "blocked",
       "openjiuwen.jiuwenswarm": "enabled",
       "openjiuwen.integration": "blocked",
       "openjiuwen.deterministic-replay": "blocked",

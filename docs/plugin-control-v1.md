@@ -57,6 +57,7 @@ localStorage["openjiuwen.visualization.plugin-states.v1"]
 - Change：至少存在一个 `changeSource`；
 - Tool 注册表：至少存在一个 `toolCatalogSource`；
 - Model 录制与面板：存在 Model Provider contribution；
+- OpenRouter 调用入口：存在 `runtime.model.openrouter.v1` capability；
 - Subagent 深入画布：存在 `runtime.subagent.execution.v1` capability；
 - Rail 深入画布：存在 `graph.rail` capability。
 
@@ -67,7 +68,7 @@ Definition/Trace 图使用当前快照重新投影，不继续读取启动时的
 ## V1 依赖图
 
 ```text
-openjiuwen.agent-core ──→ openjiuwen.model-provider
+openjiuwen.agent-core ──→ openjiuwen.model-provider ──→ openjiuwen.openrouter-provider
           │
           └─────────────→ openjiuwen.integration ←── openjiuwen.jiuwenswarm
                                       │

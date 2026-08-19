@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Activity,
   Box,
@@ -32,6 +32,10 @@ import {
 } from "./features/core-runtime";
 import { MagnetControls } from "./features/trace-graph";
 import { ModelRuntimePanel, projectModelRuntime } from "./features/model-runtime";
+import {
+  OpenRouterRuntimeLauncher,
+  useOpenRouterRuntime,
+} from "./features/openrouter-runtime";
 import {
   PluginControlWorkspace,
   usePluginWorkbench,
@@ -118,6 +122,27 @@ export default function App() {
     toggleMagnet,
     setMagnetStrength,
   } = useReplayStore();
+  const createOpenRouterTrace = useCallback(async (label: string) => {
+    setLiveStepIndex(0);
+    setFollowLive(true);
+    selectNode(null);
+    if (inspectorOpen) toggleInspector();
+    closeRailCanvas();
+    setCoreTraceLabel(label);
+    return coreRuntime.startSession(label);
+  }, [
+    closeRailCanvas,
+    coreRuntime.startSession,
+    inspectorOpen,
+    selectNode,
+    toggleInspector,
+  ]);
+  const openRouterRuntime = useOpenRouterRuntime({
+    enabled: availability.openRouter,
+    createTrace: createOpenRouterTrace,
+    trace: coreRuntime.trace,
+    traceClient: coreRuntime.client,
+  });
   const runtimeSourceAvailability = useMemo<
     Readonly<Record<RuntimeSourceMode, boolean>>
   >(() => ({
@@ -257,6 +282,7 @@ export default function App() {
   }, [runtimeSource, scenario, stepIndex, liveLastStep, workbenchMode]);
 
   async function createCoreTrace() {
+    if (openRouterRuntime.active) return;
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -266,7 +292,7 @@ export default function App() {
   }
 
   async function loadModelRecording() {
-    if (!defaultModelRecording) return;
+    if (!defaultModelRecording || openRouterRuntime.active) return;
     setLiveStepIndex(0);
     setFollowLive(true);
     selectNode(null);
@@ -432,7 +458,9 @@ export default function App() {
                   : setDraftInput(event.target.value)}
               placeholder={runtimeSource === "fixture"
                 ? "输入一段文字，按确定性轨迹模拟运行"
-                : "填写 Trace 标签；采集器不会执行 Agent 或模型"}
+                : runtimeSource === "core-runtime"
+                  ? "填写 Trace 标签；模型只从 OpenRouter 面板显式启动"
+                  : "填写 Trace 标签；采集器不会执行 Swarm 或模型"}
               autoComplete="off"
             />
             <button
@@ -441,6 +469,7 @@ export default function App() {
               disabled={
                 runtimeSource === "core-runtime"
                   ? coreRuntime.connection === "creating"
+                    || openRouterRuntime.active
                   : runtimeSource === "swarm-runtime"
                     ? swarmRuntime.connection === "creating"
                     : false
@@ -507,6 +536,10 @@ export default function App() {
               recordingAvailable={Boolean(defaultModelRecording)}
               recordingLoading={recordingLoading}
               recordingError={recordingError}
+              providerBusy={openRouterRuntime.active}
+              providerAction={availability.openRouter ? (
+                <OpenRouterRuntimeLauncher controller={openRouterRuntime} />
+              ) : null}
             />
           ) : (
             <SwarmRuntimeSessionBar
