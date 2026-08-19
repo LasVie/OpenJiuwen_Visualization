@@ -71,4 +71,4 @@ OpenRouter 与 Tool Catalog 的浏览器模块映射到 Host。任一侧请求�
 - 不提供通用本机 vault/系统凭据录入 UI；OpenRouter 仍由服务进程环境配置；
 - 不实现通用写操作审批 UI；所有未来写动作必须逐次确认并进入独立审计；
 - 不声称内置 manifest integrity 等同第三方签名；后续签名链和发布者信任必须另行设计；
-- 不把 Tool 静态声明自动视为 Runtime 已注册或已调用；这部分由下一阶段的 Tool Registry 证据收敛负责。
+- 不把 Tool 静态声明或 `catalog-read-only` 授权自动视为 Runtime 已注册或已调用；Tool Registry 四层证据已分别消费 `ability.register` 与 `tool.call`。

@@ -974,6 +974,10 @@ async def _run(request: dict[str, Any]) -> None:
             {"label": "tool", "value": "inspect_input"},
             {"label": "policy", "value": "read-only-allowlist"},
         ],
+        payload={
+            "tools": ["inspect_input"],
+            "policy": "read-only-allowlist",
+        },
         activeNodeIds=["tool"],
     )
     emitter.hook(

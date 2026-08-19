@@ -54,7 +54,7 @@ python -B services/local-server/scripts/scan_repository.py `
 
 ### Registered Tools Catalog
 
-“定义图 → Tool 注册表”会只读识别 `@tool`、Tool 子类、顶层 `ToolCard` 与 Ability/Resource 注册调用，并把信息拆成“声明 → 静态注册路径 → 当前 Trace 运行确认”三层。Core 与 Swarm 使用不同卡片色，同时保留文字来源与状态；点击任一 Tool 或注册点可查看 card metadata、目标表达式、置信度和源码行。静态已关联不等于运行时已注册，只有显式 `ability.register` 事件会显示为本次运行已观察。
+“定义图 → Tool 注册表”会只读识别 `@tool`、Tool 子类、顶层 `ToolCard` 与 Ability/Resource 注册调用，并把同一 Tool 收敛成“代码发现 → Host 目录读取授权 → Runtime 注册 → 实际调用”四层证据。独立画布保留静态注册路径和未发生阶段的空缺节点；点击节点可查看稳定 identity、owner/context owner、参数/结果、耗时、错误、源码和原运行步骤。参数/结果默认脱敏，只有显式展开才显示本机原文；同名但跨仓库、跨 revision 或缺 identity 的事件不会自动合并。
 
 完整扫描合同、API、证据等级和限制见 [`docs/tool-catalog-v1.md`](docs/tool-catalog-v1.md)。
 

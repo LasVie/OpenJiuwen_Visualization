@@ -925,6 +925,8 @@ export default function App() {
       ) : workbenchMode === "definition" ? (
         <DefinitionWorkspace
           runtimeEvents={availability.sourceConvergence ? activeRuntimeEvents : []}
+          pluginHostSnapshot={pluginHost.snapshot}
+          pluginHostConnection={pluginHost.connection}
           sourceNavigation={availability.sourceConvergence ? definitionNavigation : null}
           onOpenRuntimeEvent={openRuntimeEvent}
           onOpenChange={availability.sourceConvergence && availability.change

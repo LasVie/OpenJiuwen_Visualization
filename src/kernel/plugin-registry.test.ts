@@ -167,6 +167,10 @@ describe("visualization plugin registry", () => {
     ]);
     expect(defaultWorkbench.capabilities["graph.definition.tool-registry.v1"])
       .toEqual(["openjiuwen.tool-catalog"]);
+    expect(defaultWorkbench.capabilities["graph.tool-evidence.v1"])
+      .toEqual(["openjiuwen.tool-catalog"]);
+    expect(defaultWorkbench.capabilities["runtime.tool.call.observe"])
+      .toEqual(["openjiuwen.tool-catalog"]);
     expect(defaultWorkbench.capabilities["trace.archive.local.v1"])
       .toEqual(["openjiuwen.trace-archive"]);
     expect(defaultWorkbench.graph.nodes.find((node) => node.id === "model"))

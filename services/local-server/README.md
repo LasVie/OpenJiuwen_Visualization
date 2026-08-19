@@ -99,7 +99,7 @@ Tool 目录请求：
 }
 ```
 
-响应区分 Tool 声明、静态注册点和 `exact / inferred / dynamic` 置信度，不将静态路径表述为运行时已注册。运行确认来自 Trace 中独立的 `ability.register` 事件。
+响应区分 Tool 声明、静态注册点和 `exact / inferred / dynamic` 置信度，不将静态路径表述为运行时已注册。前端 Tool Registry 再独立消费 Trace 的 `ability.register` 与 `tool.call`，并从 Local Plugin Host 核验 `catalog-read-only` 授权。
 
 ## 安全约束
 

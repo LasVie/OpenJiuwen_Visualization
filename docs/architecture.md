@@ -104,7 +104,7 @@ Local Plugin Host ── lifecycle + grants + secret handles + audit
 | `openjiuwen.swarmflow-executor` | 隔离执行固定两阶段 SwarmFlow，并写入 Workflow、Phase、临时 Worker、Rail 与独立 Context |
 | `openjiuwen.git-change` | 工作树、commit refs 与节点级影响映射 |
 | `openjiuwen.github-pull-request` | GitHub PR 只读文件变更、远端 head 对齐与节点影响映射 |
-| `openjiuwen.tool-catalog` | Tool 声明、静态注册路径与 `ability.register` 运行确认 |
+| `openjiuwen.tool-catalog` | Tool 发现、目录授权、`ability.register` 与 `tool.call` 四层证据 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.source-convergence` | Runtime、Definition 与 Change 的稳定源码身份、运行聚合和往返导航 |
 | `openjiuwen.trace-archive` | 本机 SQLite/WAL Session 管理、按需原文、完整导出、删除和跨运行对比 |
@@ -209,9 +209,9 @@ OpenJiuwen 的 Agent、Rail、Tool、Context、Workflow、Model 与 Team 目前�
 
 ## Registered Tools Catalog V1
 
-Tool Catalog 是 Definition 平面的独立插件和子工作台。`services/local-server/` 通过 AST 识别 `@tool`、Tool 子类、顶层 `ToolCard` 以及 Ability/Resource 注册调用；前端 `features/tool-catalog/` 再把结果与当前 Trace 的 `ability.register` 事件投影到同一条证据链。
+Tool Catalog 是 Definition 平面的独立插件和子工作台。`services/local-server/` 通过 AST 识别 `@tool`、Tool 子类、顶层 `ToolCard` 以及 Ability/Resource 注册调用；前端 `features/tool-catalog/` 再把结果、Local Plugin Host 目录读取授权、当前 Trace 的 `ability.register` 与配对后的 `tool.call` 投影到同一条四层证据链。
 
-目录严格区分 declaration、static registration 与 runtime observation。注册点只有在参数或唯一名称能关联声明时才连到 Tool；无法静态求值的工厂、循环与反射路径保留为 `dynamic`，不能借助命名猜成运行事实。静态 linked 状态也不能替代 Runtime 事件。
+identity 绑定 repository、revision、path、symbol 和 runtime name。运行证据优先按源码对齐，仅在事件已声明相同 repository 且名称唯一时降级；跨仓库、跨 revision、歧义或缺 repository 的证据保留为 unmatched。静态路径继续使用 `exact / inferred / dynamic`，不能替代运行注册；Host 的 `catalog-read-only` 授权也不能替代逐 Tool 执行权限。
 
 `openjiuwen.tool-catalog` 依赖 `openjiuwen.local-repository`，贡献只读、`python-ast`、不导入目标代码的 source contract。Definition 顶层编排只负责在代码定义与 Tool 注册表之间切换，Tool 搜索、过滤、画布和 inspector 均封装在 feature 内。完整合同见 [`tool-catalog-v1.md`](tool-catalog-v1.md)。
 

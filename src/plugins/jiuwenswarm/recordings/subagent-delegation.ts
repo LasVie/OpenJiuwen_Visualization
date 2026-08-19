@@ -88,6 +88,27 @@ export const subagentDelegationRecording: RuntimeTraceRecording = {
       token: { used: 20, delta: 20, budget: 8192 },
     },
     {
+      eventId: "subagent-demo-parent-tools",
+      kind: "ability.register",
+      phase: "instant",
+      timestampMs: 34,
+      spanId: "span:parent-tool-registry",
+      parentSpanId: "span:member",
+      title: "Parent tool schema registered",
+      summary: "The parent model can see the fixed task_tool schema.",
+      subject: parentSubject,
+      details: [
+        { label: "tool", value: "task_tool" },
+        { label: "policy", value: "fixed-parent-profile" },
+      ],
+      payload: { tools: ["task_tool"], policy: "fixed-parent-profile" },
+      definition: {
+        repository: "agent-core",
+        path: "openjiuwen/core/agent/ability_manager.py",
+        symbol: "AbilityManager",
+      },
+    },
+    {
       eventId: "subagent-demo-dispatch-start",
       kind: "tool.call",
       phase: "start",
@@ -101,6 +122,10 @@ export const subagentDelegationRecording: RuntimeTraceRecording = {
         toolName: "task_tool",
         subagentType: "explore_agent",
         background: false,
+        arguments: {
+          subagent_type: "explore_agent",
+          task_description: "Find the authentication branches changed by the current work and report their call path.",
+        },
       },
       definition: {
         repository: "agent-core",
@@ -161,6 +186,27 @@ export const subagentDelegationRecording: RuntimeTraceRecording = {
         ],
       },
       token: { used: 40, delta: 40, budget: 4096 },
+    },
+    {
+      eventId: "subagent-demo-child-tools",
+      kind: "ability.register",
+      phase: "instant",
+      timestampMs: 84,
+      spanId: "span:subagent-tool-registry",
+      parentSpanId: "span:subagent",
+      title: "Child read-only tools registered",
+      summary: "Only the configured GrepTool schema enters the child model call.",
+      subject: subagentSubject,
+      details: [
+        { label: "tool", value: "GrepTool" },
+        { label: "policy", value: "fixed-subagent-profile" },
+      ],
+      payload: { tools: ["GrepTool"], policy: "fixed-subagent-profile" },
+      definition: {
+        repository: "agent-core",
+        path: "openjiuwen/core/agent/ability_manager.py",
+        symbol: "AbilityManager",
+      },
     },
     {
       eventId: "subagent-demo-agent-start",
@@ -269,7 +315,16 @@ export const subagentDelegationRecording: RuntimeTraceRecording = {
       title: "Subagent calls GrepTool",
       summary: "Read-only search runs inside the Subagent tool policy.",
       subject: subagentSubject,
-      payload: { toolName: "GrepTool", query: "authenticate|authorization" },
+      payload: {
+        toolName: "GrepTool",
+        query: "authenticate|authorization",
+        arguments: { query: "authenticate|authorization", path: "openjiuwen" },
+      },
+      definition: {
+        repository: "agent-core",
+        path: "openjiuwen/harness/tools/filesystem.py",
+        symbol: "GrepTool.invoke",
+      },
     },
     {
       eventId: "subagent-demo-tool-end",
@@ -282,7 +337,19 @@ export const subagentDelegationRecording: RuntimeTraceRecording = {
       title: "GrepTool returns evidence",
       summary: "Three authentication symbols are returned to the child Agent.",
       subject: subagentSubject,
-      payload: { toolName: "GrepTool", resultCount: 3, status: "completed" },
+      payload: {
+        toolName: "GrepTool",
+        resultCount: 3,
+        status: "completed",
+        result: {
+          symbols: [
+            "auth_router.authenticate",
+            "token_guard.authorize",
+            "session_policy.validate",
+          ],
+          resultCount: 3,
+        },
+      },
     },
     {
       eventId: "subagent-demo-observation",
@@ -348,7 +415,15 @@ export const subagentDelegationRecording: RuntimeTraceRecording = {
       title: "task_tool returns",
       summary: "Only the final Subagent output is returned to the parent.",
       subject: parentSubject,
-      payload: { toolName: "task_tool", status: "completed" },
+      payload: {
+        toolName: "task_tool",
+        status: "completed",
+        result: {
+          subagentType: "explore_agent",
+          evidenceCount: 3,
+          summary: "Returned three authentication symbols and their caller paths.",
+        },
+      },
     },
     {
       eventId: "subagent-demo-parent-result",

@@ -61,7 +61,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - Runtime 事件按 repository/path/exact symbol/revision 定位到方法或类，缺失、脏工作树、冲突与歧义显式降级；
 - Definition inspector 展示本次 Trace 的 span、事件、Token、最后状态和可返回的最近步骤；
 - 从节点逐层展开 `contains / imports / inherits` 上下游关系；
-- Registered Tools Catalog 区分声明、静态注册路径和本次 Runtime 的 `ability.register` 观察。
+- Tool Registry 以稳定 identity 对齐代码发现、Host 目录读取授权、本次 Runtime 的 `ability.register` 与配对后的 `tool.call`，并提供独立深入画布和运行步骤往返。
 
 ### Runtime 与真实执行
 
@@ -110,14 +110,14 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
 - Host V1 不提供页面安装/卸载/升级、第三方签名链、动态插件代码执行、进程沙箱或崩溃监督；内置 integrity 只是本地发布摘要；
 - OpenRouter 凭据仍由服务进程环境配置，尚无通用本机 vault/系统凭据录入 UI；
-- Tool Catalog 目前区分静态声明/注册路径与 `ability.register` 观察，但尚未统一“已安装 / 已授权 / Runtime 已注册 / 已调用”四态及逐 Tool 权限；
+- Tool Registry 已统一代码发现、Host 目录读取授权、Runtime 注册与调用证据；逐 Tool 执行授权和写 Tool 仍未开放；
 - 还没有协作权限或远端部署控制面。
 
-## 下一阶段：Tool Registry 运行证据收敛 V1
+## 已完成：Tool Registry 运行证据收敛 V1
 
-Local Plugin Host 已建立服务端生命周期与权限边界，下一步把 Tool 从“静态目录 + 零散 Runtime 事件”收敛为可用于理解和开发的稳定证据对象。目标不是把静态推断冒充运行事实，而是让同一个 Tool node 清晰显示它在哪定义、由谁托管、当前是否授权、在哪次运行完成注册和调用。
+Tool 已从“静态目录 + 零散 Runtime 事件”收敛为稳定证据对象。同一个 Tool node 可以核验定义、Host 目录读取授权、当前运行注册和实际调用；静态推断、Host scope 与运行事实保持独立。
 
-计划交付：
+已交付：
 
 1. 定义稳定 Tool identity，把 Definition 声明、Host plugin/capability、Runtime `ability.register` 与 `tool.call` 对齐；
 2. 统一展示“已发现 / 已授权 / 本次运行已注册 / 已调用”四层证据，并明确 exact、inferred、unobserved；
@@ -126,7 +126,11 @@ Local Plugin Host 已建立服务端生命周期与权限边界，下一步把 T
 5. 为未来写 Tool 预留逐次审批事件与本机审计合同，但 V1 继续只接入只读工具；
 6. 为 Subagent 独立 Tool registry/context 和后续 Provider adapter 扩展准备版本化 contribution 合同。
 
-这一阶段可直接按现有安全基线开始；只有真正引入写 Tool 时，才需要确定逐次审批的交互、超时和撤销语义。
+V1 继续只读，不把 Host 目录读取授权表述成执行权限；真正引入写 Tool 前仍需确定逐次审批、超时和撤销语义。
+
+## 下一阶段：辅助开发闭环 V1（待决策）
+
+下一步将从“理解代码”进入“提出或执行开发动作”。在开始实现前，需要先确定 V1 的写入边界：仅生成可复制的修改/测试建议，还是允许在受控分支创建补丁；如果允许写入，还必须同步确定逐操作审批、允许路径、失败回滚和本机审计合同。
 
 ## 后续路线
 
@@ -137,7 +141,7 @@ Local Plugin Host 已建立服务端生命周期与权限边界，下一步把 T
 | 已完成 | Runtime ↔ Definition ↔ Change 收敛 | 运行节点跳转源码，Change 标出受影响且实际运行的链路 | 结构化 identity 与显式 revision 降级已落地 |
 | 已完成 | 运行归档与对比 | SQLite/WAL 持久化、Session 管理、原文受控读取、跨运行结构化 diff | SQLite、默认完整本机原文、30 天 / 2 GiB 已落地 |
 | 已完成 | Provider 与插件 Host V1 | OpenRouter/Tool 生命周期、权限、opaque secret handle、最终 gate 与审计 | bundled trust、path-scoped dev、Host-owned secret、风险分级授权已落地 |
-| P5 | Tool Registry 运行证据收敛 | Tool 四态证据、节点深入画布、Definition/Host/Runtime 往返 | V1 只读；写 Tool 仍不开放 |
+| 已完成 | Tool Registry 运行证据收敛 | Tool 四层证据、节点深入画布、Definition/Host/Runtime 往返 | V1 只读；写 Tool 仍不开放 |
 | P6 | 辅助开发闭环 | 从受影响节点生成测试/修改建议并回写受控分支 | 任何写操作都需要独立权限和可审计逐次审批 |
 
 ## 阶段管理规则

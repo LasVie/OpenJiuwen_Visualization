@@ -6,14 +6,16 @@ export const toolCatalogPlugin: VisualizationPlugin = {
     name: "Registered Tools Catalog",
     version: "0.1.0",
     apiVersion: PLUGIN_API_VERSION,
-    description: "提供 Tool 声明、静态注册路径与 ability.register 运行确认视图。",
+    description: "提供 Tool 发现、Host 目录授权、运行注册与实际调用的四层证据视图。",
     group: "workspace",
     defaultEnabled: true,
     dependencies: ["openjiuwen.local-repository"],
     capabilities: [
       "repository.tools.static.read",
       "runtime.ability.register.observe",
+      "runtime.tool.call.observe",
       "graph.definition.tool-registry.v1",
+      "graph.tool-evidence.v1",
     ],
   },
   contribute: () => ({

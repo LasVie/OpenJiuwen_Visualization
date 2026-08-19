@@ -4,6 +4,8 @@ import type {
   GraphSourceReference,
   RuntimeTraceEvent,
 } from "../../kernel";
+import type { PluginHostSnapshot } from "../../adapters/plugin-host";
+import type { PluginHostConnection } from "../plugin-host";
 import { RepositoryWorkspace } from "../repository-browser";
 import type { SourceNavigationRequest } from "../source-convergence";
 import { ToolCatalogWorkspace } from "../tool-catalog";
@@ -13,6 +15,8 @@ interface DefinitionWorkspaceProps {
   sourceNavigation: SourceNavigationRequest | null;
   onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
   onOpenChange?: (source: GraphSourceReference) => void;
+  pluginHostSnapshot: PluginHostSnapshot | null;
+  pluginHostConnection: PluginHostConnection;
   toolsEnabled: boolean;
   magnetEnabled: boolean;
   magnetStrength: number;
@@ -34,7 +38,7 @@ export function DefinitionWorkspace(props: DefinitionWorkspaceProps) {
         <button type="button" className={view === "tools" ? "active" : ""} aria-pressed={view === "tools"} onClick={() => setView("tools")} disabled={!props.toolsEnabled}>
           <Braces size={14} /><span><strong>Tool 注册表</strong><small>{props.toolsEnabled ? "REGISTRY" : "MODULE OFF"}</small></span>
         </button>
-        <p>{view === "architecture" ? "仓库 → Package → Module → Symbol" : "声明 → 静态注册路径 → 运行确认"}</p>
+        <p>{view === "architecture" ? "仓库 → Package → Module → Symbol" : "发现 → 目录授权 → 运行注册 → 实际调用"}</p>
       </nav>
       {view === "architecture" ? (
         <RepositoryWorkspace
