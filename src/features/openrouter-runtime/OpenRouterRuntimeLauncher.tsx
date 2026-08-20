@@ -176,8 +176,8 @@ export function OpenRouterRuntimeLauncher({
               <div className="openrouter-dialog__state openrouter-dialog__state--configure" role="status">
                 <KeyRound size={20} strokeWidth={2} aria-hidden="true" />
                 <div>
-                  <strong>在本地服务配置密钥后即可运行</strong>
-                  <p>设置 <code>OPENJIUWEN_OPENROUTER_API_KEY</code>（也兼容 <code>OPENROUTER_API_KEY</code>），重启服务后点击重试。</p>
+                  <strong>在“连接”中配置 API key 后即可运行</strong>
+                  <p>凭据保存到本机系统凭据库并立即生效；页面不会回读 key 原文。</p>
                   <p>模型白名单由 <code>OPENJIUWEN_OPENROUTER_MODELS</code> 注册；未设置时只开放 <code>openrouter/free</code>。</p>
                 </div>
                 <button type="button" onClick={() => void controller.refresh()}>

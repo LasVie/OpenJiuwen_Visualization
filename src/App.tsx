@@ -4,6 +4,7 @@ import {
   Archive,
   Box,
   Braces,
+  Cable,
   Database,
   FileSearch,
   GitCompareArrows,
@@ -88,8 +89,20 @@ const SwarmRuntimeInspector = lazy(() =>
     default: module.SwarmRuntimeInspector,
   })),
 );
+const ConnectionSettingsWorkspace = lazy(() =>
+  import("./features/connection-settings").then((module) => ({
+    default: module.ConnectionSettingsWorkspace,
+  })),
+);
 
-type WorkbenchMode = "runtime" | "archive" | "definition" | "change" | "development" | "modules";
+type WorkbenchMode =
+  | "runtime"
+  | "archive"
+  | "definition"
+  | "change"
+  | "development"
+  | "connections"
+  | "modules";
 
 export default function App() {
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>("runtime");
@@ -395,6 +408,7 @@ export default function App() {
   useEffect(() => {
     const currentModeAvailable =
       workbenchMode === "modules" ||
+      workbenchMode === "connections" ||
       (workbenchMode === "runtime" && availability.runtime) ||
       (workbenchMode === "archive" && availability.archive) ||
       (workbenchMode === "definition" && availability.definition) ||
@@ -643,6 +657,15 @@ export default function App() {
           </button>
           <button
             type="button"
+            className={workbenchMode === "connections" ? "workbench-mode--active" : ""}
+            onClick={() => setWorkbenchMode("connections")}
+            aria-pressed={workbenchMode === "connections"}
+          >
+            <Cable size={15} />
+            <span><strong>连接</strong><small>CONNECT</small></span>
+          </button>
+          <button
+            type="button"
             className={workbenchMode === "modules" ? "workbench-mode--active" : ""}
             onClick={() => setWorkbenchMode("modules")}
             aria-pressed={workbenchMode === "modules"}
@@ -736,6 +759,14 @@ export default function App() {
                   : "确定性源码证据 · OpenRouter 模块关闭 · 补丁结构草案"}</small>
             </span>
           </div>
+        ) : workbenchMode === "connections" ? (
+          <div className="definition-header-summary connection-header-summary">
+            <Cable size={17} />
+            <span>
+              <strong>Local Connection Plane</strong>
+              <small>Provider 凭据 · Core / Swarm 来源 · 本地与 GitHub</small>
+            </span>
+          </div>
         ) : (
           <div className="definition-header-summary module-header-summary">
             <Box size={17} />
@@ -759,6 +790,11 @@ export default function App() {
               : developmentOpenRouterEnabled
                 ? "基础链路无模型 · 外发逐次确认 · 无仓库写入"
                 : "基础链路无模型 · 无仓库写入"}</small></span>
+          </div>
+        ) : workbenchMode === "connections" ? (
+          <div className="runtime-key connection-header-assurance" aria-label="连接设置安全边界">
+            <ShieldCheck size={15} aria-hidden="true" />
+            <span><strong>LOCAL WRITE ONLY</strong><small>敏感值不回读、不进入 Git</small></span>
           </div>
         ) : (
           <div className="runtime-key" aria-label="节点来源颜色图例">
@@ -1042,6 +1078,10 @@ export default function App() {
           onToggleMagnet={toggleMagnet}
           onMagnetStrengthChange={setMagnetStrength}
         />
+      ) : workbenchMode === "connections" ? (
+        <Suspense fallback={<div className="connection-workspace-loading">加载本地连接设置…</div>}>
+          <ConnectionSettingsWorkspace onCredentialChanged={pluginHost.refresh} />
+        </Suspense>
       ) : (
         <PluginManagementWorkspace
           plugins={workbench.plugins}

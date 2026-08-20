@@ -260,6 +260,24 @@ kbd,
   background: #e5efea;
 }
 
+.connection-header-summary {
+  color: var(--context);
+}
+
+.connection-header-assurance {
+  color: #525990;
+  background: var(--context-soft);
+}
+
+.connection-workspace-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted);
+  background: var(--paper);
+  font-size: 11px;
+}
+
 .brand {
   display: flex;
   align-items: center;

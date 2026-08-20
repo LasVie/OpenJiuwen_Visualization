@@ -34,7 +34,7 @@ function providerMessage(controller: DevelopmentEnhancementController) {
   if (controller.providerError) return controller.providerError;
   if (!controller.provider) return "OpenRouter Provider 未连接";
   if (controller.provider.status === "unconfigured") {
-    return "在本地服务设置 OPENJIUWEN_OPENROUTER_API_KEY 后重启服务。";
+    return "前往“连接”保存 OpenRouter API key；保存后无需重启。";
   }
   if (controller.provider.status === "blocked" || controller.provider.status === "disabled") {
     return controller.provider.host?.diagnostic.message ?? "OpenRouter 已被 Plugin Host 阻止。";
