@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -68,6 +69,7 @@ from .repository_connections import (
 from .secret_store import system_secret_store
 from .scan_cache import DefinitionScanCache
 from .source_reader import SourceReadError, SourceReadOptions, SourceReader
+from .static_web import StaticWebRoot
 from .subagent_runtime import (
     SubagentRuntimeAdapter,
     SubagentRuntimeConfig,
@@ -2103,9 +2105,16 @@ class LocalRepositoryApi:
 class LocalRepositoryHttpServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, server_address: tuple[str, int], api: LocalRepositoryApi):
+    def __init__(
+        self,
+        server_address: tuple[str, int],
+        api: LocalRepositoryApi,
+        *,
+        static_web: StaticWebRoot | None = None,
+    ):
         super().__init__(server_address, LocalRepositoryRequestHandler)
         self.api = api
+        self.static_web = static_web
 
 
 class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
@@ -2115,6 +2124,10 @@ class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
     @property
     def _api(self) -> LocalRepositoryApi:
         return self.server.api  # type: ignore[attr-defined, no-any-return]
+
+    @property
+    def _static_web(self) -> StaticWebRoot | None:
+        return self.server.static_web  # type: ignore[attr-defined, no-any-return]
 
     def do_OPTIONS(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         origin = self.headers.get("Origin")
@@ -2138,7 +2151,21 @@ class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
         if stream_match:
             self._stream_trace_events(stream_match.group(1), split_path.query, origin)
             return
+        if not split_path.path.startswith("/api/") and self._static_web is not None:
+            self._write_static_asset(split_path.path, include_body=True)
+            return
         self._write_response(self._api.dispatch("GET", self.path, origin=origin), origin)
+
+    def do_HEAD(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        split_path = urlsplit(self.path)
+        if not split_path.path.startswith("/api/") and self._static_web is not None:
+            self._write_static_asset(split_path.path, include_body=False)
+            return
+        self._write_response(
+            _error(HTTPStatus.METHOD_NOT_ALLOWED, "method_not_allowed", "Method not allowed."),
+            self.headers.get("Origin"),
+            include_body=False,
+        )
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         origin = self.headers.get("Origin")
@@ -2261,20 +2288,68 @@ class LocalRepositoryRequestHandler(BaseHTTPRequestHandler):
             raise ValueError("Request body must be a JSON object.")
         return value
 
-    def _write_response(self, response: ApiResponse, origin: str | None) -> None:
+    def _write_static_asset(self, request_path: str, *, include_body: bool) -> None:
+        asset = self._static_web.read(request_path) if self._static_web is not None else None
+        if asset is None:
+            self._write_response(
+                _error(HTTPStatus.NOT_FOUND, "static_asset_not_found", "Web asset not found."),
+                None,
+                include_body=include_body,
+            )
+            return
+        self.send_response(HTTPStatus.OK)
+        self._write_common_headers(None, cache_control=asset.cache_control)
+        self.send_header("Content-Type", asset.content_type)
+        self.send_header("Content-Length", str(len(asset.body)))
+        self.send_header("X-OpenJiuwen-Companion", "1")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; base-uri 'none'; connect-src 'self' "
+            "http://127.0.0.1:8765 http://localhost:8765; font-src 'self' data:; "
+            "form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; "
+            "object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+        )
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header(
+            "Permissions-Policy",
+            "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
+        )
+        self.end_headers()
+        if not include_body:
+            return
+        try:
+            self.wfile.write(asset.body)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            LOGGER.debug("Client disconnected before the static asset completed")
+
+    def _write_response(
+        self,
+        response: ApiResponse,
+        origin: str | None,
+        *,
+        include_body: bool = True,
+    ) -> None:
         payload = json.dumps(response.body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         self.send_response(response.status)
         self._write_common_headers(origin)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
+        if not include_body:
+            return
         try:
             self.wfile.write(payload)
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
             LOGGER.debug("Client disconnected before the response completed")
 
-    def _write_common_headers(self, origin: str | None) -> None:
-        self.send_header("Cache-Control", "no-store")
+    def _write_common_headers(
+        self,
+        origin: str | None,
+        *,
+        cache_control: str = "no-store",
+    ) -> None:
+        self.send_header("Cache-Control", cache_control)
         self.send_header("X-Content-Type-Options", "nosniff")
         if origin and self._api.config.is_origin_allowed(origin):
             self.send_header("Access-Control-Allow-Origin", origin)
@@ -2289,5 +2364,11 @@ def create_http_server(
     *,
     host: str = "127.0.0.1",
     port: int = 8765,
+    static_root: str | Path | None = None,
 ) -> LocalRepositoryHttpServer:
-    return LocalRepositoryHttpServer((host, port), LocalRepositoryApi(config))
+    static_web = StaticWebRoot(static_root) if static_root is not None else None
+    return LocalRepositoryHttpServer(
+        (host, port),
+        LocalRepositoryApi(config),
+        static_web=static_web,
+    )

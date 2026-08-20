@@ -26,7 +26,7 @@ export interface PluginHostSecretHandle {
   id: string;
   resolved: boolean;
   exposure: "opaque-handle-only";
-  storage: "host-environment";
+  storage: "host-local-authority";
 }
 
 export interface PluginHostPlugin {
@@ -137,7 +137,7 @@ function secretHandle(value: unknown): value is PluginHostSecretHandle {
     typeof value.id === "string" &&
     typeof value.resolved === "boolean" &&
     value.exposure === "opaque-handle-only" &&
-    value.storage === "host-environment"
+    value.storage === "host-local-authority"
   );
 }
 

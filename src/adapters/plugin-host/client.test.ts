@@ -55,7 +55,7 @@ const hostResponse = {
         id: "openrouter.default",
         resolved: true,
         exposure: "opaque-handle-only",
-        storage: "host-environment",
+        storage: "host-local-authority",
       }],
       trust: {
         level: "bundled-trusted",

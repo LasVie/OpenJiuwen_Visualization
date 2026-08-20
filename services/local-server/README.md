@@ -4,6 +4,10 @@
 
 ## 启动
 
+普通 Windows 使用无需 Terminal：双击仓库根目录的 `OpenJiuwen Visualization.pyw`。启动器会准备 `dist`、以同一 loopback origin 托管网页和 API，并自动打开浏览器。OpenRouter key、Agent Core 与 JiuwenSwarm 的本地路径或公开 GitHub 仓库都在网页顶部“连接”中配置。
+
+以下命令保留给服务开发和诊断：
+
 从仓库根目录运行：
 
 ```powershell
@@ -11,6 +15,8 @@ python -B services/local-server/scripts/run_server.py `
   --allow-root "C:\path\to\workspace" `
   --allow-origin "http://127.0.0.1:4173"
 ```
+
+如需用 CLI 验证同源静态托管，可额外传入 `--static-root dist`。
 
 默认只监听 `127.0.0.1:8765`。`--allow-root` 可重复；所有扫描路径及 Git 根都必须位于其中。非 loopback host 会被拒绝。
 
@@ -32,6 +38,10 @@ python -B services/local-server/scripts/run_server.py `
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/v1/health` | 返回 API 版本与 `read-only` 模式 |
+| `GET` | `/api/v1/settings` | 返回不含 secret 的 OpenRouter 与 Core/Swarm 连接设置 |
+| `POST/DELETE` | `/api/v1/settings/openrouter/credential` | 写入或删除 Windows Credential Manager 中的固定 OpenRouter key |
+| `POST/DELETE` | `/api/v1/settings/repositories/{slot}` | 绑定本地/公开 GitHub 仓库或恢复 slot 默认值 |
+| `POST` | `/api/v1/settings/repositories/{slot}/sync` | 手动同步受管公开 GitHub checkout |
 | `GET` | `/api/v1/repositories` | 返回允许根目录及根目录/一级子目录中发现的 Git 仓库 |
 | `POST` | `/api/v1/repositories/scan` | 解析一个允许范围内的 Git 仓库或子目录 |
 | `POST` | `/api/v1/repositories/source` | 按源码引用读取当前工作树的有界行范围 |

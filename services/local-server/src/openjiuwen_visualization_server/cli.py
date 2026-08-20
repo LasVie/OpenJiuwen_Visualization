@@ -13,6 +13,8 @@ from .config import LocalServiceConfig
 
 
 DEFAULT_ORIGINS = (
+    "http://127.0.0.1:8765",
+    "http://localhost:8765",
     "http://127.0.0.1:4173",
     "http://localhost:4173",
     "http://127.0.0.1:5173",
@@ -38,6 +40,10 @@ def _build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--allow-origin", action="append", default=[])
+    serve.add_argument(
+        "--static-root",
+        help="Optional prebuilt frontend directory to serve from the same loopback origin.",
+    )
     serve.add_argument(
         "--archive-path",
         help="SQLite archive path inside an allowed root.",
@@ -168,7 +174,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not _loopback_host(arguments.host):
             raise SystemExit("The local service only binds to a loopback host.")
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-        server = create_http_server(config, host=arguments.host, port=arguments.port)
+        server = create_http_server(
+            config,
+            host=arguments.host,
+            port=arguments.port,
+            static_root=arguments.static_root,
+        )
         print(
             f"OpenJiuwen local companion service listening on "
             f"http://{arguments.host}:{arguments.port}",

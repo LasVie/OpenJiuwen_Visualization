@@ -828,7 +828,7 @@ class PluginHost:
                             "id": permission.secret_handle_id,
                             "resolved": self._secret_resolved(permission.secret_handle_id),
                             "exposure": "opaque-handle-only",
-                            "storage": "host-environment",
+                            "storage": "host-local-authority",
                         }
                     )
             plugins.append(

@@ -6,6 +6,12 @@
 
 ## 本地运行
 
+Windows 下直接双击仓库根目录的 [`OpenJiuwen Visualization.pyw`](OpenJiuwen%20Visualization.pyw)。Companion 会在后台完成必要的网页构建、只监听 `127.0.0.1:8765`，并自动打开浏览器；日常使用不需要通过 Terminal 启动前端或本地服务。再次双击时会复用已经运行的 Companion。
+
+首次从源码运行仍需本机具备 Python 3.11+ 与 Node.js；缺少 `node_modules` 或 `dist` 时，启动器会在隐藏窗口中安装锁定依赖并构建网页，失败信息通过 Windows 对话框显示。
+
+开发模式仍可使用：
+
 ```powershell
 npm install
 npm run dev
@@ -17,9 +23,20 @@ npm run dev
 npm run check
 ```
 
-## 绑定本地仓库
+## 连接 OpenRouter、Core 与 Swarm
 
-本地仓读取通过独立的只读服务完成。启动时必须明确给出允许访问的目录；Repository API 不导入或执行目标仓代码。真实 Agent Core、JiuwenSwarm Agent Team、SwarmFlow 与 Subagent 执行位于显式、可选且彼此独立的隔离子进程边界：
+进入页面顶部“连接”即可完成以下配置，无需重启 Companion：
+
+- OpenRouter API key：经 loopback 请求写入 Windows Credential Manager；保存后输入框和页面状态立即清空，SQLite、日志、Git 与后续 API 响应都不会保存或回读 key。
+- Agent Core / JiuwenSwarm 本地仓库：粘贴工作区白名单内的绝对目录，框架标记校验成功后热切换所有相关执行器。
+- Agent Core / JiuwenSwarm GitHub 仓库：填写公开 HTTPS 仓库 URL，可选 branch/tag/ref；Companion 在管理目录中创建隔离 checkout，支持网页手动同步。
+- 恢复默认：逐个连接二次确认后恢复工作区默认仓库；不会顺带删除其他连接或 Session。
+
+当前 GitHub 连接为匿名只读公开仓库，不接受 URL 内 token，也尚未开放私有仓库授权。完整启动与连接边界见 [`docs/local-companion-v1.md`](docs/local-companion-v1.md)。
+
+## 本地服务开发入口
+
+以下命令仅用于本地服务开发与调试。普通使用请采用上面的双击 Companion；Repository API 不导入或执行目标仓代码。真实 Agent Core、JiuwenSwarm Agent Team、SwarmFlow 与 Subagent 执行位于显式、可选且彼此独立的隔离子进程边界：
 
 ```powershell
 python -B services/local-server/scripts/run_server.py `
@@ -130,7 +147,7 @@ Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，
 
 ### OpenRouter 实时调用
 
-OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback adapter。真实 DeepAgent、JiuwenSwarm Agent Team、SwarmFlow Worker 与 TaskTool Subagent 分别通过自己的 Executor 使用框架 OpenRouter client，避免把普通模型调用误画成 Agent、Team、Workflow 或 child。Development 也可在完整外发预览和逐次确认后复用该 Provider 生成独立只读建议分支。API key 仅在本地服务环境变量中，默认模型白名单只有 `openrouter/free`。Provider 配置与底层安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
+OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback adapter。真实 DeepAgent、JiuwenSwarm Agent Team、SwarmFlow Worker 与 TaskTool Subagent 分别通过自己的 Executor 使用框架 OpenRouter client，避免把普通模型调用误画成 Agent、Team、Workflow 或 child。Development 也可在完整外发预览和逐次确认后复用该 Provider 生成独立只读建议分支。API key 可在“连接”页面写入 Windows Credential Manager，也保留服务端环境变量回退；默认模型白名单只有 `openrouter/free`。Provider 配置与底层安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
 
 ### 运行档案与跨运行对比
 

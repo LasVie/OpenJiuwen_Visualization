@@ -31,7 +31,7 @@ Host 状态为 `active / blocked / disabled`。`disabled` 表示用户关闭生�
 | `secret` | 可撤销；插件只获得 opaque handle 状态，值只由 Host 在调用时解析 |
 | `write` | 必须声明为 `per-operation`，不能持久授予；受控 Development 的 apply/test/commit/rollback 各消费一次 exact digest 确认 |
 
-OpenRouter 使用 `openrouter.default` 句柄。快照只返回 `resolved: true/false` 和 `storage: host-environment`，不会返回环境变量名或值。实际 key 仍只从 `OPENJIUWEN_OPENROUTER_API_KEY` / `OPENROUTER_API_KEY` 解析，既不进入浏览器，也不进入 Host 数据库、审计、Trace metadata 或日志。模型输入和输出仍按 Runtime 归档合同保存到本机，并在用户启动调用时发送到 OpenRouter；opaque handle 只隔离凭据，不改变上游数据处理边界。
+OpenRouter 使用 `openrouter.default` 句柄。快照只返回 `resolved: true/false` 和 `storage: host-local-authority`，不会返回具体来源或值。Companion 优先从 Windows Credential Manager 解析页面写入的 key，并在未托管凭据时保留 `OPENJIUWEN_OPENROUTER_API_KEY` / `OPENROUTER_API_KEY` 环境变量回退；key 不进入 Host 数据库、审计、Trace metadata 或日志。模型输入和输出仍按 Runtime 归档合同保存到本机，并在用户启动调用时发送到 OpenRouter；opaque handle 只隔离凭据，不改变上游数据处理边界。
 
 ## 持久化与审计
 
@@ -69,7 +69,7 @@ OpenRouter、Tool Catalog 与 Controlled Development Executor 的浏览器模块
 
 - 不从页面安装、卸载、升级或下载插件；
 - 不为第三方插件执行动态代码，也没有进程沙箱、崩溃监督或热升级；
-- 不提供通用本机 vault/系统凭据录入 UI；OpenRouter 仍由服务进程环境配置；
+- 不提供任意第三方 secret 的通用 vault；当前网页录入仅限固定 `openrouter.default`，并由操作系统凭据库持久化；
 - 不实现通用写操作审批框架；当前只支持 Controlled Development 的四项关闭式动作，并由专用浏览器面板逐项消费 exact digest；
 - 不声称内置 manifest integrity 等同第三方签名；后续签名链和发布者信任必须另行设计；
 - 不把 Tool 静态声明或 `catalog-read-only` 授权自动视为 Runtime 已注册或已调用；Tool Registry 四层证据已分别消费 `ability.register` 与 `tool.call`。

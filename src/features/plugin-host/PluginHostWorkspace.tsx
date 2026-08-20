@@ -287,7 +287,7 @@ export function PluginHostWorkspace({ controller }: PluginHostWorkspaceProps) {
                       <i />{handle.resolved ? "已解析" : "未配置"}
                     </span>
                     <code>{handle.id}</code>
-                    <p>Host environment · {handle.exposure}</p>
+                    <p>Host 本机凭据源 · {handle.exposure}</p>
                   </article>
                 ))}
               </section>

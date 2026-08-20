@@ -809,7 +809,7 @@ export default function App() {
         ) : workbenchMode === "connections" ? (
           <div className="runtime-key connection-header-assurance" aria-label="连接设置安全边界">
             <ShieldCheck size={15} aria-hidden="true" />
-            <span><strong>LOCAL WRITE ONLY</strong><small>敏感值不回读、不进入 Git</small></span>
+            <span><strong>LOCAL CONTROL ONLY</strong><small>敏感值不回读、不进入 Git</small></span>
           </div>
         ) : (
           <div className="runtime-key" aria-label="节点来源颜色图例">

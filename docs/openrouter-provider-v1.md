@@ -8,7 +8,9 @@ OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的浏览器
 flowchart LR
   UI["OpenRouter 启动面板"] -->|"创建实时 Trace + 归档 Session"| Trace["Runtime Trace V1"]
   UI -->|"traceId + X-Trace-Token + 输入"| Host["Local Plugin Host\nlifecycle + permission gate"]
-  Env["服务进程环境变量"] -->|"opaque handle 解析"| Host
+  Settings["连接设置\nwrite-only key"] -->|"Windows Credential Manager"| Vault["openrouter.default"]
+  Env["服务进程环境变量"] -.->|"未托管时回退"| Vault
+  Vault -->|"opaque handle 解析"| Host
   Host -->|"授权后的本机调用"| Adapter["本地 OpenRouter adapter"]
   Adapter -->|"HTTPS / Bearer"| OR["openrouter.ai\nchat/completions"]
   OR -->|"SSE delta / usage / finish"| Adapter
@@ -16,18 +18,20 @@ flowchart LR
   Trace -->|"SSE"| UI
 ```
 
-- API key 只从本地服务进程环境读取。Host 向插件和浏览器只公开 `openrouter.default` opaque handle 的 resolved 状态，不公开环境变量名或值；key 不进入 React state、请求正文、API 响应、Trace、审计、日志、插件偏好或磁盘。模型输入与输出作为 Runtime 事件进入本机归档，并会在显式调用时发送给 OpenRouter，但 key 永不进入事件。
+- API key 可由“连接”页面通过 write-only endpoint 写入 Windows Credential Manager；保存成功后表单立即清空，Host 向插件和浏览器只公开 `openrouter.default` opaque handle 的 resolved 状态。未托管系统凭据时仍可从服务进程环境回退。key 不进入项目 SQLite、API 响应、Trace、审计、日志或 Git；模型输入与输出作为 Runtime 事件进入本机归档，并会在显式调用时发送给 OpenRouter，但 key 永不进入事件。
 - 浏览器仍持有当前 Trace 的高熵写入令牌；Provider endpoint 必须用它证明本次调用属于一个开放的 `agent-core` Trace。
 - Provider URL 固定为 `https://openrouter.ai/api/v1/chat/completions`，拒绝重定向，不接受浏览器提供 base URL。
 - 浏览器模块关闭后会同步关闭 Host 生命周期；撤销 `network.openrouter.invoke` 或 `secret.openrouter.use` 后 Host 进入 blocked。两种情况都会让 Provider contribution 及其 Agent Core、JiuwenSwarm、SwarmFlow、Subagent Executor 依赖收敛，并在每次新调用前由服务端最终拒绝；既有调用仍保留取消入口。
 
 ## 服务端配置
 
-启动本地服务前设置环境变量：
+普通使用在页面顶部“连接 → OpenRouter”中输入 key 并保存。系统凭据写入成功后会立即热更新 Provider、Agent Core、JiuwenSwarm、SwarmFlow 与 Subagent；存在活动调用时，替换或删除会被拒绝。
+
+环境变量作为可选回退与高级配置继续保留：
 
 | Variable | Required | Purpose |
 |---|---:|---|
-| `OPENJIUWEN_OPENROUTER_API_KEY` | 是 | 首选的项目级 API key；也兼容官方常用的 `OPENROUTER_API_KEY` |
+| `OPENJIUWEN_OPENROUTER_API_KEY` | 否 | 未配置系统凭据时的 key 回退；也兼容 `OPENROUTER_API_KEY` |
 | `OPENJIUWEN_OPENROUTER_MODELS` | 否 | 逗号分隔的模型 allowlist；缺省仅注册 `openrouter/free` |
 | `OPENJIUWEN_OPENROUTER_DEFAULT_MODEL` | 否 | 默认模型，必须存在于 allowlist |
 | `OPENJIUWEN_OPENROUTER_SITE_URL` | 否 | 映射为 OpenRouter 可选 `HTTP-Referer` header |
@@ -50,6 +54,9 @@ python -B services/local-server/scripts/run_server.py `
 
 | Method | Path | Purpose |
 |---|---|---|
+| `GET` | `/api/v1/settings` | 读取无凭据的 OpenRouter 与代码来源设置快照 |
+| `POST` | `/api/v1/settings/openrouter/credential` | write-only 保存 `{ "apiKey": string }`；响应不含 key |
+| `DELETE` | `/api/v1/settings/openrouter/credential` | 删除页面托管的系统凭据并恢复环境变量回退 |
 | `GET` | `/api/v1/model-providers/openrouter` | 读取无凭据的状态、模型 allowlist、默认模型和本地上限 |
 | `POST` | `/api/v1/model-providers/openrouter/invocations` | 校验 Trace authority 后异步启动流式调用 |
 | `POST` | `/api/v1/model-providers/openrouter/invocations/{id}/cancel` | 用同一个 Trace token 请求取消并关闭上游流 |
@@ -104,5 +111,5 @@ Development 的调用不会扩大底层 Provider 合同。页面先在本机从�
 
 - provider-only adapter 本身不做多轮会话持久化、自动 Tool loop、Subagent 或 Swarm 调度；这些生命周期只能由独立 Executor 明确拥有；
 - 不从浏览器新增任意模型、Provider、URL、header 或采样参数；
-- 不管理 OpenRouter key、余额、模型价格或账号设置；
+- 不管理 OpenRouter 余额、模型价格或账号设置；key 管理仅限固定系统凭据句柄，不扩展为通用 secret vault；
 - 不把 live 调用伪装成确定性 replay；既有录制演示继续独立存在。

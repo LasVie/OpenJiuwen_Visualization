@@ -2,6 +2,7 @@
 
 from .app import LocalRepositoryApi, create_http_server
 from .config import LocalServiceConfig, PathAccessError
+from .companion import CompanionLaunchError, CompanionPaths, run_companion
 from .development_execution import DevelopmentExecutionError, DevelopmentExecutionStore
 from .repository import RepositoryIdentity, RepositoryResolver
 from .repository_connections import (
@@ -16,10 +17,13 @@ from .trace_store import RuntimeTraceStore, TraceStoreError
 from .trace_archive import TraceArchiveError, TraceArchiveStore
 from .subagent_runtime import SubagentRuntimeAdapter, SubagentRuntimeConfig
 from .swarmflow_runtime import SwarmFlowRuntimeAdapter, SwarmFlowRuntimeConfig
+from .static_web import StaticWebError, StaticWebRoot
 
 __all__ = [
     "LocalRepositoryApi",
     "LocalServiceConfig",
+    "CompanionLaunchError",
+    "CompanionPaths",
     "OpenRouterProviderConfig",
     "OpenRouterRuntimeAdapter",
     "PluginHost",
@@ -42,5 +46,8 @@ __all__ = [
     "SubagentRuntimeConfig",
     "SwarmFlowRuntimeAdapter",
     "SwarmFlowRuntimeConfig",
+    "StaticWebError",
+    "StaticWebRoot",
     "create_http_server",
+    "run_companion",
 ]
