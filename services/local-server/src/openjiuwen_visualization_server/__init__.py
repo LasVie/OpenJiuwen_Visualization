@@ -4,6 +4,10 @@ from .app import LocalRepositoryApi, create_http_server
 from .config import LocalServiceConfig, PathAccessError
 from .development_execution import DevelopmentExecutionError, DevelopmentExecutionStore
 from .repository import RepositoryIdentity, RepositoryResolver
+from .repository_connections import (
+    RepositoryConnectionError,
+    RepositoryConnectionStore,
+)
 from .scan_cache import DefinitionScanCache
 from .openrouter_provider import OpenRouterProviderConfig, OpenRouterRuntimeAdapter
 from .plugin_host import PluginHost, PluginHostError
@@ -26,6 +30,8 @@ __all__ = [
     "PathAccessError",
     "PythonRepositoryScanner",
     "RepositoryIdentity",
+    "RepositoryConnectionError",
+    "RepositoryConnectionStore",
     "RepositoryResolver",
     "ScanOptions",
     "RuntimeTraceStore",

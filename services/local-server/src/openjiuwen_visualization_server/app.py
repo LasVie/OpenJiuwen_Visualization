@@ -60,6 +60,11 @@ from .plugin_host import (
     PluginHostError,
 )
 from .repository import RepositoryResolutionError, RepositoryResolver
+from .repository_connections import (
+    REPOSITORY_CONNECTION_API_VERSION,
+    RepositoryConnectionError,
+    RepositoryConnectionStore,
+)
 from .secret_store import system_secret_store
 from .scan_cache import DefinitionScanCache
 from .source_reader import SourceReadError, SourceReadOptions, SourceReader
@@ -138,6 +143,12 @@ PLUGIN_STATE_ROUTE = re.compile(
 PLUGIN_PERMISSION_ROUTE = re.compile(
     r"^/api/v1/plugin-host/plugins/([^/]+)/permissions/([^/]+)$"
 )
+REPOSITORY_CONNECTION_ROUTE = re.compile(
+    r"^/api/v1/settings/repositories/(agent-core|jiuwenswarm)$"
+)
+REPOSITORY_CONNECTION_SYNC_ROUTE = re.compile(
+    r"^/api/v1/settings/repositories/(agent-core|jiuwenswarm)/sync$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +206,7 @@ class LocalRepositoryApi:
         development_execution_enabled: bool = True,
         plugin_host: PluginHost | None = None,
         plugin_host_enabled: bool = True,
+        repository_connections: RepositoryConnectionStore | None = None,
     ) -> None:
         self.config = config
         self._resolver = resolver or RepositoryResolver(config)
@@ -320,6 +332,21 @@ class LocalRepositoryApi:
             SwarmFlowRuntimeConfig.from_environment(provider_config),
             self.trace_store,
         )
+        connection_settings_path = config.connection_settings_path or (
+            config.allowed_roots[0]
+            / ".openjiuwen-visualization"
+            / "connection-settings.sqlite3"
+        )
+        self.repository_connections = repository_connections or RepositoryConnectionStore(
+            config,
+            self._resolver,
+            default_paths={
+                "agent-core": self.agent_core_adapter.config.source_root,
+                "jiuwenswarm": self.jiuwenswarm_adapter.config.source_root,
+            },
+            database_path=connection_settings_path,
+        )
+        self._apply_repository_connections()
 
     def dispatch(
         self,
@@ -364,6 +391,8 @@ class LocalRepositoryApi:
                             else []
                         ),
                         "repository.source.read",
+                        "repository.binding.local",
+                        "repository.binding.github.public",
                         "git.change.read",
                         "github.pull-request.read",
                         "trace.ephemeral",
@@ -430,6 +459,7 @@ class LocalRepositoryApi:
                         "openRouter": self.openrouter_credentials.descriptor()[
                             "credential"
                         ],
+                        "repositories": self.repository_connections.descriptor(),
                         "service": {
                             "transport": "loopback-http",
                             "remoteAccess": False,
@@ -472,13 +502,26 @@ class LocalRepositoryApi:
                 ),
             )
         if method == "GET" and route == "/api/v1/repositories":
+            repositories = {
+                identity.id: identity
+                for identity in self._resolver.discover()
+            }
+            repositories.update(
+                {
+                    identity.id: identity
+                    for identity in self.repository_connections.identities()
+                }
+            )
             return ApiResponse(
                 HTTPStatus.OK,
                 {
                     "allowedRoots": [str(root) for root in self.config.allowed_roots],
                     "repositories": [
                         identity.to_api_dict()
-                        for identity in self._resolver.discover()
+                        for identity in sorted(
+                            repositories.values(),
+                            key=lambda item: (item.owner, item.name.casefold()),
+                        )
                     ],
                     "writeOperations": False,
                 },
@@ -523,6 +566,15 @@ class LocalRepositoryApi:
             return self._start_openrouter(body or {}, trace_token)
         if method == "POST" and route == "/api/v1/settings/openrouter/credential":
             return self._set_openrouter_credential(body or {})
+        repository_sync_match = REPOSITORY_CONNECTION_SYNC_ROUTE.fullmatch(route)
+        if method == "POST" and repository_sync_match:
+            return self._sync_repository_connection(repository_sync_match.group(1))
+        repository_connection_match = REPOSITORY_CONNECTION_ROUTE.fullmatch(route)
+        if method == "POST" and repository_connection_match:
+            return self._set_repository_connection(
+                repository_connection_match.group(1),
+                body or {},
+            )
         if method == "POST" and route == "/api/v1/agent-core/invocations":
             return self._start_agent_core(body or {}, trace_token)
         if method == "POST" and route == "/api/v1/jiuwenswarm/invocations":
@@ -586,6 +638,11 @@ class LocalRepositoryApi:
             )
         if method == "DELETE" and route == "/api/v1/settings/openrouter/credential":
             return self._delete_openrouter_credential()
+        repository_connection_match = REPOSITORY_CONNECTION_ROUTE.fullmatch(route)
+        if method == "DELETE" and repository_connection_match:
+            return self._reset_repository_connection(
+                repository_connection_match.group(1)
+            )
         development_apply_match = DEVELOPMENT_EXECUTION_APPLY_ROUTE.fullmatch(route)
         if method == "POST" and development_apply_match:
             return self._development_execution_apply(
@@ -788,6 +845,104 @@ class LocalRepositoryApi:
                 self.swarmflow_adapter,
             )
         )
+
+    def _apply_repository_connections(self) -> None:
+        agent_core_root = self.repository_connections.effective_path("agent-core")
+        jiuwenswarm_root = self.repository_connections.effective_path("jiuwenswarm")
+        self.agent_core_adapter.rebind_source_root(agent_core_root)
+        self.jiuwenswarm_adapter.rebind_source_roots(
+            jiuwenswarm_root,
+            agent_core_root,
+        )
+        self.subagent_adapter.rebind_agent_core_root(agent_core_root)
+        self.swarmflow_adapter.rebind_source_roots(
+            jiuwenswarm_root,
+            agent_core_root,
+        )
+
+    @staticmethod
+    def _repository_connection_response(
+        connection: dict[str, object],
+    ) -> ApiResponse:
+        return ApiResponse(
+            HTTPStatus.OK,
+            {
+                "apiVersion": REPOSITORY_CONNECTION_API_VERSION,
+                "connection": connection,
+            },
+        )
+
+    def _set_repository_connection(
+        self,
+        slot: str,
+        body: dict[str, Any],
+    ) -> ApiResponse:
+        kind = body.get("kind")
+        allowed_fields = (
+            {"kind", "path"}
+            if kind == "local"
+            else {"kind", "url", "ref"}
+            if kind == "github"
+            else {"kind"}
+        )
+        unknown = set(body) - allowed_fields
+        if unknown or kind not in {"local", "github"}:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_repository_connection",
+                "Repository connection must be local(path) or github(url, optional ref).",
+            )
+        with self._provider_control_lock:
+            if self._active_provider_invocations():
+                return _error(
+                    HTTPStatus.CONFLICT,
+                    "runtime_busy",
+                    "Stop active model and Agent runs before changing repository sources.",
+                )
+            try:
+                connection = (
+                    self.repository_connections.bind_local(slot, body.get("path"))
+                    if kind == "local"
+                    else self.repository_connections.bind_github(
+                        slot,
+                        body.get("url"),
+                        body.get("ref"),
+                    )
+                )
+                self._apply_repository_connections()
+            except RepositoryConnectionError as exc:
+                return _error(exc.status, exc.code, str(exc))
+            return self._repository_connection_response(connection)
+
+    def _sync_repository_connection(self, slot: str) -> ApiResponse:
+        with self._provider_control_lock:
+            if self._active_provider_invocations():
+                return _error(
+                    HTTPStatus.CONFLICT,
+                    "runtime_busy",
+                    "Stop active model and Agent runs before synchronizing repository sources.",
+                )
+            try:
+                connection = self.repository_connections.sync(slot)
+                self._apply_repository_connections()
+            except RepositoryConnectionError as exc:
+                return _error(exc.status, exc.code, str(exc))
+            return self._repository_connection_response(connection)
+
+    def _reset_repository_connection(self, slot: str) -> ApiResponse:
+        with self._provider_control_lock:
+            if self._active_provider_invocations():
+                return _error(
+                    HTTPStatus.CONFLICT,
+                    "runtime_busy",
+                    "Stop active model and Agent runs before resetting repository sources.",
+                )
+            try:
+                connection = self.repository_connections.reset(slot)
+                self._apply_repository_connections()
+            except RepositoryConnectionError as exc:
+                return _error(exc.status, exc.code, str(exc))
+            return self._repository_connection_response(connection)
 
     def _record_openrouter_secret_event(
         self,

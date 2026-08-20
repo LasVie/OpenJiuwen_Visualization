@@ -14,7 +14,7 @@ import subprocess
 import sys
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Callable, Iterable, Protocol, TextIO
@@ -366,6 +366,17 @@ class SubagentRuntimeAdapter:
                 job.state in {"accepted", "running", "cancelling"}
                 for job in self._jobs.values()
             )
+
+    def rebind_agent_core_root(self, agent_core_root: Path) -> None:
+        with self._lock:
+            if self.active_invocations:
+                raise RuntimeError("Subagent source cannot change during an active invocation.")
+            self.config = replace(
+                self.config,
+                agent_core_root=Path(agent_core_root).resolve(strict=False),
+            )
+            self._probe_value = None
+            self._probe_time = 0.0
 
     def _probe(self, *, force: bool = False) -> SubagentBridgeProbe:
         now = self._clock()

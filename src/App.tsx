@@ -248,6 +248,21 @@ export default function App() {
     trace: swarmRuntime.trace,
     traceClient: swarmRuntime.client,
   });
+  const refreshConnectionConsumers = useCallback(async () => {
+    await pluginHost.refresh();
+    await Promise.all([
+      agentCoreExecution.refresh(),
+      jiuwenSwarmExecution.refresh(),
+      subagentExecution.refresh(),
+      swarmFlowExecution.refresh(),
+    ]);
+  }, [
+    agentCoreExecution.refresh,
+    jiuwenSwarmExecution.refresh,
+    pluginHost.refresh,
+    subagentExecution.refresh,
+    swarmFlowExecution.refresh,
+  ]);
   useEffect(() => {
     if (pluginHost.connection !== "ready") return;
     void Promise.all([
@@ -1080,7 +1095,7 @@ export default function App() {
         />
       ) : workbenchMode === "connections" ? (
         <Suspense fallback={<div className="connection-workspace-loading">加载本地连接设置…</div>}>
-          <ConnectionSettingsWorkspace onCredentialChanged={pluginHost.refresh} />
+          <ConnectionSettingsWorkspace onSettingsChanged={refreshConnectionConsumers} />
         </Suspense>
       ) : (
         <PluginManagementWorkspace

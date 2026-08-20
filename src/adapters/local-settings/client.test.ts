@@ -26,12 +26,70 @@ function credential(configured = false) {
   };
 }
 
+function repositoryConnection(slot: "agent-core" | "jiuwenswarm", mode: "local" | "github" = "local") {
+  const label = slot === "agent-core" ? "Agent Core" : "JiuwenSwarm";
+  return {
+    slot,
+    label,
+    configured: true,
+    mode,
+    origin: mode === "github" ? "configured" : "default",
+    path: `C:\\workspace\\${slot}`,
+    managed: mode === "github",
+    canReset: mode === "github",
+    canSync: mode === "github",
+    github: mode === "github" ? {
+      url: `https://github.com/LasVie/${slot}.git`,
+      repository: `LasVie/${slot}`,
+      ref: "main",
+      public: true,
+    } : null,
+    repository: {
+      id: `${slot}-id`,
+      name: slot,
+      owner: slot,
+      path: `C:\\workspace\\${slot}`,
+      scanScope: `C:\\workspace\\${slot}`,
+      revision: "a".repeat(40),
+      branch: "main",
+      dirty: false,
+    },
+    validation: { status: "ready", code: "ready", message: "ready" },
+    createdAt: mode === "github" ? "2026-08-20T00:00:00Z" : null,
+    updatedAt: mode === "github" ? "2026-08-20T00:00:00Z" : null,
+    lastSyncedAt: mode === "github" ? "2026-08-20T00:00:00Z" : null,
+  };
+}
+
+function repositories() {
+  return {
+    apiVersion: "1.0.0",
+    storage: {
+      id: "sqlite",
+      journalMode: "wal",
+      path: "C:\\workspace\\state.sqlite3",
+    },
+    policy: {
+      allowedRoots: ["C:\\workspace"],
+      githubPublicOnly: true,
+      githubAuthentication: false,
+      synchronization: "manual",
+      managedCheckoutRoot: "C:\\workspace\\managed",
+    },
+    slots: {
+      agentCore: repositoryConnection("agent-core"),
+      jiuwenSwarm: repositoryConnection("jiuwenswarm"),
+    },
+  };
+}
+
 describe("LocalSettingsClient", () => {
   it("reads a strict loopback settings snapshot", async () => {
     const fetcher = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => response({
       apiVersion: "1.0.0",
       settings: {
         openRouter: credential(false),
+        repositories: repositories(),
         service: { transport: "loopback-http", remoteAccess: false },
       },
     }));
@@ -73,6 +131,7 @@ describe("LocalSettingsClient", () => {
         apiVersion: "1.0.0",
         settings: {
           openRouter: { ...credential(false), configured: true },
+          repositories: repositories(),
           service: { transport: "loopback-http", remoteAccess: false },
         },
       }));
@@ -82,5 +141,54 @@ describe("LocalSettingsClient", () => {
     expect(deleted.configured).toBe(false);
     expect((fetcher.mock.calls[0][1] as RequestInit).method).toBe("DELETE");
     await expect(client.getSettings()).rejects.toThrow("凭据状态格式无效");
+  });
+
+  it("binds local and public GitHub repositories through fixed slot routes", async () => {
+    const fetcher = vi
+      .fn((_input: RequestInfo | URL, _init?: RequestInit) => response({}))
+      .mockImplementationOnce(() => response({
+        apiVersion: "1.0.0",
+        connection: repositoryConnection("agent-core"),
+      }))
+      .mockImplementationOnce(() => response({
+        apiVersion: "1.0.0",
+        connection: repositoryConnection("jiuwenswarm", "github"),
+      }))
+      .mockImplementationOnce(() => response({
+        apiVersion: "1.0.0",
+        connection: repositoryConnection("jiuwenswarm", "github"),
+      }))
+      .mockImplementationOnce(() => response({
+        apiVersion: "1.0.0",
+        connection: repositoryConnection("agent-core"),
+      }));
+    const client = new LocalSettingsClient({ fetcher: fetcher as typeof fetch });
+
+    await client.setLocalRepository("agent-core", " C:\\workspace\\agent-core ");
+    await client.setGitHubRepository(
+      "jiuwenswarm",
+      " https://github.com/LasVie/jiuwenswarm ",
+      " main ",
+    );
+    await client.syncRepository("jiuwenswarm");
+    await client.resetRepository("agent-core");
+
+    expect(fetcher.mock.calls[0][0]).toBe(
+      "http://127.0.0.1:8765/api/v1/settings/repositories/agent-core",
+    );
+    expect((fetcher.mock.calls[0][1] as RequestInit).body).toBe(JSON.stringify({
+      kind: "local",
+      path: "C:\\workspace\\agent-core",
+    }));
+    expect((fetcher.mock.calls[1][1] as RequestInit).body).toBe(JSON.stringify({
+      kind: "github",
+      url: "https://github.com/LasVie/jiuwenswarm",
+      ref: "main",
+    }));
+    expect(fetcher.mock.calls[2][0]).toBe(
+      "http://127.0.0.1:8765/api/v1/settings/repositories/jiuwenswarm/sync",
+    );
+    expect((fetcher.mock.calls[2][1] as RequestInit).body).toBe("{}");
+    expect((fetcher.mock.calls[3][1] as RequestInit).method).toBe("DELETE");
   });
 });

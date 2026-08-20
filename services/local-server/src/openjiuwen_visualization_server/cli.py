@@ -59,6 +59,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Plugin Host SQLite path inside an allowed root.",
     )
     serve.add_argument(
+        "--connection-settings-path",
+        help="Connection settings SQLite path inside an allowed root.",
+    )
+    serve.add_argument(
+        "--managed-source-root",
+        help="Directory for public GitHub repository checkouts.",
+    )
+    serve.add_argument(
         "--disable-system-credential-store",
         action="store_true",
         help="Disable write-only operating-system credential storage.",
@@ -139,6 +147,10 @@ def _config(arguments: argparse.Namespace) -> LocalServiceConfig:
             arguments, "development_worktree_root", None
         ),
         plugin_host_path=getattr(arguments, "plugin_host_path", None),
+        connection_settings_path=getattr(
+            arguments, "connection_settings_path", None
+        ),
+        managed_source_root=getattr(arguments, "managed_source_root", None),
         system_credentials_enabled=(
             getattr(arguments, "command", None) == "serve"
             and not getattr(arguments, "disable_system_credential_store", False)

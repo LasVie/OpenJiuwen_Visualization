@@ -9,4 +9,9 @@ export type {
   LocalSettingsSnapshot,
   OpenRouterCredentialSource,
   OpenRouterCredentialStatus,
+  ConnectedRepositoryIdentity,
+  RepositoryConnectionMode,
+  RepositoryConnectionSlot,
+  RepositoryConnectionStatus,
+  RepositoryConnectionsStatus,
 } from "./client";

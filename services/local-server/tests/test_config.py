@@ -48,6 +48,16 @@ class LocalServiceConfigTests(unittest.TestCase):
             / ".openjiuwen-visualization"
             / "development-worktrees",
         )
+        self.assertEqual(
+            config.connection_settings_path,
+            REPOSITORY_ROOT
+            / ".openjiuwen-visualization"
+            / "connection-settings.sqlite3",
+        )
+        self.assertEqual(
+            config.managed_source_root,
+            REPOSITORY_ROOT / ".openjiuwen-visualization" / "sources",
+        )
         with self.assertRaises(PathAccessError):
             config.authorize_directory(REPOSITORY_ROOT.parent)
 
@@ -78,6 +88,12 @@ class LocalServiceConfigTests(unittest.TestCase):
             development_worktree_root=(
                 REPOSITORY_ROOT / ".runtime-temp" / "controlled-worktrees"
             ),
+            connection_settings_path=(
+                REPOSITORY_ROOT / ".runtime-temp" / "connections.sqlite3"
+            ),
+            managed_source_root=(
+                REPOSITORY_ROOT / ".runtime-temp" / "managed-sources"
+            ),
         )
         self.assertEqual(
             configured.archive_path,
@@ -99,6 +115,14 @@ class LocalServiceConfigTests(unittest.TestCase):
             configured.development_worktree_root,
             REPOSITORY_ROOT / ".runtime-temp" / "controlled-worktrees",
         )
+        self.assertEqual(
+            configured.connection_settings_path,
+            REPOSITORY_ROOT / ".runtime-temp" / "connections.sqlite3",
+        )
+        self.assertEqual(
+            configured.managed_source_root,
+            REPOSITORY_ROOT / ".runtime-temp" / "managed-sources",
+        )
 
         with self.assertRaises(PathAccessError):
             LocalServiceConfig.create(
@@ -114,6 +138,16 @@ class LocalServiceConfigTests(unittest.TestCase):
             LocalServiceConfig.create(
                 allowed_roots=[REPOSITORY_ROOT],
                 development_worktree_root=REPOSITORY_ROOT.parent / "outside-worktrees",
+            )
+        with self.assertRaises(PathAccessError):
+            LocalServiceConfig.create(
+                allowed_roots=[REPOSITORY_ROOT],
+                connection_settings_path=REPOSITORY_ROOT.parent / "outside.sqlite3",
+            )
+        with self.assertRaises(PathAccessError):
+            LocalServiceConfig.create(
+                allowed_roots=[REPOSITORY_ROOT],
+                managed_source_root=REPOSITORY_ROOT.parent / "outside-sources",
             )
 
     def test_scopes_unsigned_plugin_discovery_to_explicit_allowed_paths(self) -> None:

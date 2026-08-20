@@ -25,6 +25,8 @@ class LocalServiceConfig:
     development_execution_path: Path | None = None
     development_worktree_root: Path | None = None
     plugin_host_path: Path | None = None
+    connection_settings_path: Path | None = None
+    managed_source_root: Path | None = None
     system_credentials_enabled: bool = False
     allow_unsigned_plugins: bool = False
     plugin_developer_roots: tuple[Path, ...] = ()
@@ -45,6 +47,8 @@ class LocalServiceConfig:
         development_execution_path: str | Path | None = None,
         development_worktree_root: str | Path | None = None,
         plugin_host_path: str | Path | None = None,
+        connection_settings_path: str | Path | None = None,
+        managed_source_root: str | Path | None = None,
         system_credentials_enabled: bool = False,
         allow_unsigned_plugins: bool = False,
         plugin_developer_roots: Iterable[str | Path] = (),
@@ -161,6 +165,44 @@ class LocalServiceConfig:
         if not any(resolved_plugin_host.is_relative_to(root) for root in resolved_roots):
             raise PathAccessError("Plugin Host path must stay inside an allowed root.")
 
+        resolved_connection_settings = (
+            Path(connection_settings_path).expanduser().resolve(strict=False)
+            if connection_settings_path is not None
+            else resolved_roots[0]
+            / ".openjiuwen-visualization"
+            / "connection-settings.sqlite3"
+        )
+        if resolved_connection_settings.exists() and resolved_connection_settings.is_dir():
+            raise PathAccessError(
+                "Connection settings path must be a file, not a directory."
+            )
+        if not any(
+            resolved_connection_settings.is_relative_to(root)
+            for root in resolved_roots
+        ):
+            raise PathAccessError(
+                "Connection settings path must stay inside an allowed root."
+            )
+
+        resolved_managed_sources = (
+            Path(managed_source_root).expanduser().resolve(strict=False)
+            if managed_source_root is not None
+            else resolved_roots[0]
+            / ".openjiuwen-visualization"
+            / "sources"
+        )
+        if resolved_managed_sources.exists() and not resolved_managed_sources.is_dir():
+            raise PathAccessError(
+                "Managed source root must be a directory, not a file."
+            )
+        if not any(
+            resolved_managed_sources.is_relative_to(root)
+            for root in resolved_roots
+        ):
+            raise PathAccessError(
+                "Managed source root must stay inside an allowed root."
+            )
+
         resolved_developer_roots: list[Path] = []
         for raw_root in plugin_developer_roots:
             root = Path(raw_root).expanduser().resolve(strict=True)
@@ -193,6 +235,8 @@ class LocalServiceConfig:
             development_execution_path=resolved_development_execution,
             development_worktree_root=resolved_development_worktrees,
             plugin_host_path=resolved_plugin_host,
+            connection_settings_path=resolved_connection_settings,
+            managed_source_root=resolved_managed_sources,
             system_credentials_enabled=system_credentials_enabled,
             allow_unsigned_plugins=allow_unsigned_plugins,
             plugin_developer_roots=tuple(resolved_developer_roots),

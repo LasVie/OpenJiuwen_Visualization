@@ -9,7 +9,7 @@ import subprocess
 import sys
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Callable, Iterable, Protocol, TextIO
@@ -334,6 +334,17 @@ class AgentCoreRuntimeAdapter:
                 job.state in {"accepted", "running", "cancelling"}
                 for job in self._jobs.values()
             )
+
+    def rebind_source_root(self, source_root: Path) -> None:
+        with self._lock:
+            if self.active_invocations:
+                raise RuntimeError("Agent Core source cannot change during an active invocation.")
+            self.config = replace(
+                self.config,
+                source_root=Path(source_root).resolve(strict=False),
+            )
+            self._probe_value = None
+            self._probe_time = 0.0
 
     def _probe(self, *, force: bool = False) -> AgentCoreBridgeProbe:
         now = self._clock()

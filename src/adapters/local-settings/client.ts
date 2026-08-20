@@ -28,10 +28,72 @@ export interface OpenRouterCredentialStatus {
   diagnostic?: { code: string };
 }
 
+export type RepositoryConnectionSlot = "agent-core" | "jiuwenswarm";
+export type RepositoryConnectionMode = "local" | "github";
+
+export interface ConnectedRepositoryIdentity {
+  id: string;
+  name: string;
+  owner: string;
+  path: string;
+  scanScope: string;
+  revision: string;
+  branch: string;
+  dirty: boolean;
+}
+
+export interface RepositoryConnectionStatus {
+  slot: RepositoryConnectionSlot;
+  label: string;
+  configured: boolean;
+  mode: RepositoryConnectionMode;
+  origin: "default" | "configured";
+  path: string;
+  managed: boolean;
+  canReset: boolean;
+  canSync: boolean;
+  github: {
+    url: string;
+    repository: string;
+    ref: string | null;
+    public: true;
+  } | null;
+  repository: ConnectedRepositoryIdentity | null;
+  validation: {
+    status: "ready" | "unavailable";
+    code: string;
+    message: string;
+  };
+  createdAt: string | null;
+  updatedAt: string | null;
+  lastSyncedAt: string | null;
+}
+
+export interface RepositoryConnectionsStatus {
+  apiVersion: typeof LOCAL_SETTINGS_API_VERSION;
+  storage: {
+    id: "sqlite";
+    journalMode: "wal";
+    path: string;
+  };
+  policy: {
+    allowedRoots: string[];
+    githubPublicOnly: true;
+    githubAuthentication: false;
+    synchronization: "manual";
+    managedCheckoutRoot: string;
+  };
+  slots: {
+    agentCore: RepositoryConnectionStatus;
+    jiuwenSwarm: RepositoryConnectionStatus;
+  };
+}
+
 export interface LocalSettingsSnapshot {
   apiVersion: typeof LOCAL_SETTINGS_API_VERSION;
   settings: {
     openRouter: OpenRouterCredentialStatus;
+    repositories: RepositoryConnectionsStatus;
     service: {
       transport: "loopback-http";
       remoteAccess: false;
@@ -42,6 +104,11 @@ export interface LocalSettingsSnapshot {
 interface CredentialMutationResponse {
   apiVersion: typeof LOCAL_SETTINGS_API_VERSION;
   credential: OpenRouterCredentialStatus;
+}
+
+interface RepositoryConnectionMutationResponse {
+  apiVersion: typeof LOCAL_SETTINGS_API_VERSION;
+  connection: RepositoryConnectionStatus;
 }
 
 interface ClientOptions {
@@ -90,6 +157,92 @@ function credential(value: unknown): OpenRouterCredentialStatus {
   return value as unknown as OpenRouterCredentialStatus;
 }
 
+function nullableText(value: unknown) {
+  return value === null || typeof value === "string";
+}
+
+function repositoryIdentity(value: unknown): value is ConnectedRepositoryIdentity {
+  return (
+    isRecord(value) &&
+    ["id", "name", "owner", "path", "scanScope", "revision", "branch"].every(
+      (field) => typeof value[field] === "string",
+    ) &&
+    typeof value.dirty === "boolean"
+  );
+}
+
+function repositoryConnection(value: unknown): RepositoryConnectionStatus {
+  if (
+    !isRecord(value) ||
+    !["agent-core", "jiuwenswarm"].includes(String(value.slot)) ||
+    typeof value.label !== "string" ||
+    typeof value.configured !== "boolean" ||
+    !["local", "github"].includes(String(value.mode)) ||
+    !["default", "configured"].includes(String(value.origin)) ||
+    typeof value.path !== "string" ||
+    typeof value.managed !== "boolean" ||
+    typeof value.canReset !== "boolean" ||
+    typeof value.canSync !== "boolean" ||
+    !(value.repository === null || repositoryIdentity(value.repository)) ||
+    !isRecord(value.validation) ||
+    !["ready", "unavailable"].includes(String(value.validation.status)) ||
+    typeof value.validation.code !== "string" ||
+    typeof value.validation.message !== "string" ||
+    !nullableText(value.createdAt) ||
+    !nullableText(value.updatedAt) ||
+    !nullableText(value.lastSyncedAt)
+  ) {
+    throw new TypeError("本地代码来源状态格式无效。");
+  }
+  if (value.mode === "github") {
+    if (
+      !isRecord(value.github) ||
+      typeof value.github.url !== "string" ||
+      typeof value.github.repository !== "string" ||
+      !nullableText(value.github.ref) ||
+      value.github.public !== true ||
+      value.managed !== true ||
+      value.origin !== "configured"
+    ) {
+      throw new TypeError("GitHub 代码来源状态格式无效。");
+    }
+  } else if (value.github !== null || value.managed) {
+    throw new TypeError("本地代码来源不能声明 GitHub 托管状态。");
+  }
+  if (
+    value.configured !== (value.validation.status === "ready") ||
+    value.canSync !== (value.mode === "github" && value.origin === "configured") ||
+    value.canReset !== (value.origin === "configured")
+  ) {
+    throw new TypeError("代码来源能力与状态不一致。");
+  }
+  return value as unknown as RepositoryConnectionStatus;
+}
+
+function repositoryConnections(value: unknown): RepositoryConnectionsStatus {
+  if (
+    !isRecord(value) ||
+    value.apiVersion !== LOCAL_SETTINGS_API_VERSION ||
+    !isRecord(value.storage) ||
+    value.storage.id !== "sqlite" ||
+    value.storage.journalMode !== "wal" ||
+    typeof value.storage.path !== "string" ||
+    !isRecord(value.policy) ||
+    !Array.isArray(value.policy.allowedRoots) ||
+    !value.policy.allowedRoots.every((root) => typeof root === "string") ||
+    value.policy.githubPublicOnly !== true ||
+    value.policy.githubAuthentication !== false ||
+    value.policy.synchronization !== "manual" ||
+    typeof value.policy.managedCheckoutRoot !== "string" ||
+    !isRecord(value.slots)
+  ) {
+    throw new TypeError("本地代码来源设置格式无效。");
+  }
+  repositoryConnection(value.slots.agentCore);
+  repositoryConnection(value.slots.jiuwenSwarm);
+  return value as unknown as RepositoryConnectionsStatus;
+}
+
 function settingsSnapshot(value: unknown): LocalSettingsSnapshot {
   if (
     !isRecord(value) ||
@@ -102,6 +255,7 @@ function settingsSnapshot(value: unknown): LocalSettingsSnapshot {
     throw new TypeError("本地设置响应与 API 1.0.0 不匹配。");
   }
   credential(value.settings.openRouter);
+  repositoryConnections(value.settings.repositories);
   return value as unknown as LocalSettingsSnapshot;
 }
 
@@ -115,6 +269,18 @@ function credentialMutation(value: unknown): CredentialMutationResponse {
   return {
     apiVersion: LOCAL_SETTINGS_API_VERSION,
     credential: credential(value.credential),
+  };
+}
+
+function repositoryConnectionMutation(
+  value: unknown,
+): RepositoryConnectionMutationResponse {
+  if (!isRecord(value) || value.apiVersion !== LOCAL_SETTINGS_API_VERSION) {
+    throw new TypeError("本地代码来源响应与 API 1.0.0 不匹配。");
+  }
+  return {
+    apiVersion: LOCAL_SETTINGS_API_VERSION,
+    connection: repositoryConnection(value.connection),
   };
 }
 
@@ -168,6 +334,73 @@ export class LocalSettingsClient {
       "/api/v1/settings/openrouter/credential",
       { method: "DELETE", signal },
     )).credential;
+  }
+
+  async setLocalRepository(
+    slot: RepositoryConnectionSlot,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<RepositoryConnectionStatus> {
+    const normalized = path.trim();
+    if (!normalized) throw new TypeError("本地仓库路径不能为空。");
+    return repositoryConnectionMutation(await this.request(
+      `/api/v1/settings/repositories/${slot}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "local", path: normalized }),
+        signal,
+      },
+    )).connection;
+  }
+
+  async setGitHubRepository(
+    slot: RepositoryConnectionSlot,
+    url: string,
+    ref?: string,
+    signal?: AbortSignal,
+  ): Promise<RepositoryConnectionStatus> {
+    const normalizedUrl = url.trim();
+    const normalizedRef = ref?.trim();
+    if (!normalizedUrl) throw new TypeError("GitHub 仓库 URL 不能为空。");
+    return repositoryConnectionMutation(await this.request(
+      `/api/v1/settings/repositories/${slot}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "github",
+          url: normalizedUrl,
+          ...(normalizedRef ? { ref: normalizedRef } : {}),
+        }),
+        signal,
+      },
+    )).connection;
+  }
+
+  async syncRepository(
+    slot: RepositoryConnectionSlot,
+    signal?: AbortSignal,
+  ): Promise<RepositoryConnectionStatus> {
+    return repositoryConnectionMutation(await this.request(
+      `/api/v1/settings/repositories/${slot}/sync`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        signal,
+      },
+    )).connection;
+  }
+
+  async resetRepository(
+    slot: RepositoryConnectionSlot,
+    signal?: AbortSignal,
+  ): Promise<RepositoryConnectionStatus> {
+    return repositoryConnectionMutation(await this.request(
+      `/api/v1/settings/repositories/${slot}`,
+      { method: "DELETE", signal },
+    )).connection;
   }
 
   private async request(path: string, init: RequestInit) {
