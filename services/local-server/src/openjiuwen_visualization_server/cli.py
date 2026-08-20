@@ -45,6 +45,16 @@ def _build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--archive-retention-days", type=int, default=30)
     serve.add_argument("--archive-max-bytes", type=int, default=2 * 1024 * 1024 * 1024)
     serve.add_argument(
+        "--development-session-path",
+        help="Development analysis Session SQLite path inside an allowed root.",
+    )
+    serve.add_argument("--development-session-retention-days", type=int, default=30)
+    serve.add_argument(
+        "--development-session-max-bytes",
+        type=int,
+        default=2 * 1024 * 1024 * 1024,
+    )
+    serve.add_argument(
         "--plugin-host-path",
         help="Plugin Host SQLite path inside an allowed root.",
     )
@@ -96,6 +106,17 @@ def _config(arguments: argparse.Namespace) -> LocalServiceConfig:
         archive_max_bytes=getattr(
             arguments,
             "archive_max_bytes",
+            2 * 1024 * 1024 * 1024,
+        ),
+        development_session_path=getattr(
+            arguments, "development_session_path", None
+        ),
+        development_session_retention_days=getattr(
+            arguments, "development_session_retention_days", 30
+        ),
+        development_session_max_bytes=getattr(
+            arguments,
+            "development_session_max_bytes",
             2 * 1024 * 1024 * 1024,
         ),
         plugin_host_path=getattr(arguments, "plugin_host_path", None),

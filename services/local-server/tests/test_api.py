@@ -16,6 +16,71 @@ FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "sample_project"
 ALLOWED_ORIGIN = "http://127.0.0.1:4173"
 
 
+def development_analysis() -> dict:
+    source = {
+        "repository": "OpenJiuwen_Visualization",
+        "path": "src/features/development-assistant/model.ts",
+        "revision": "b" * 40,
+        "symbol": "projectDevelopmentAnalysis",
+    }
+    stage_kinds = (
+        "intent", "scope", "evidence", "diagnosis", "impact",
+        "change-plan", "test-plan", "patch-outline", "boundary",
+    )
+    return {
+        "repository": {
+            "id": "repository:visualization",
+            "name": "OpenJiuwen_Visualization",
+            "owner": "visualization",
+            "path": str(REPOSITORY_ROOT),
+            "scanScope": str(REPOSITORY_ROOT),
+            "revision": "b" * 40,
+            "branch": "main",
+            "dirty": False,
+        },
+        "intent": "API-DEVELOPMENT-RAW-INTENT",
+        "terms": ["development"],
+        "evidence": [{
+            "id": "evidence:one",
+            "node": {
+                "id": "node:one",
+                "label": "analysis",
+                "evidence": [{"source": source}],
+            },
+            "source": source,
+            "score": 1,
+            "matchedTerms": ["development"],
+            "confidence": "exact",
+            "reason": "exact",
+        }],
+        "impacts": [],
+        "changes": [],
+        "tests": [],
+        "patchOutlines": [{
+            "id": "patch:one",
+            "path": source["path"],
+            "title": "outline",
+            "preview": "*** READ-ONLY STRUCTURAL OUTLINE — NOT AN APPLICABLE PATCH ***",
+            "applicable": False,
+            "basis": "structural-outline",
+        }],
+        "stages": [
+            {
+                "id": f"development-stage:{kind}",
+                "kind": kind,
+                "ordinal": index,
+                "label": kind,
+                "summary": "bounded",
+            }
+            for index, kind in enumerate(stage_kinds, start=1)
+        ],
+        "diagnosis": "One exact definition.",
+        "warnings": [],
+        "readOnly": True,
+        "repositoryWrite": False,
+    }
+
+
 class LocalRepositoryApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -29,6 +94,9 @@ class LocalRepositoryApiTests(unittest.TestCase):
             allowed_roots=[REPOSITORY_ROOT],
             allowed_origins=[ALLOWED_ORIGIN],
             archive_path=Path(cls.archive_temp.name) / "archive.sqlite3",
+            development_session_path=(
+                Path(cls.archive_temp.name) / "development-sessions.sqlite3"
+            ),
         )
         cls.api = LocalRepositoryApi(config)
 
@@ -68,8 +136,75 @@ class LocalRepositoryApiTests(unittest.TestCase):
         self.assertIn("repository.scan.cache.memory", health.body["capabilities"])
         self.assertIn("github.pull-request.read", health.body["capabilities"])
         self.assertIn("trace.archive.sqlite", health.body["capabilities"])
+        self.assertIn("development.session.sqlite", health.body["capabilities"])
         self.assertEqual(health.body["traceStorage"], "memory-live+sqlite-archive")
         self.assertEqual(health.body["archiveStorage"]["journalMode"], "wal")
+        self.assertEqual(
+            health.body["developmentSessionStorage"]["journalMode"], "wal"
+        )
+
+    def test_persists_restores_exports_and_deletes_development_sessions(self) -> None:
+        created = self.api.dispatch(
+            "POST",
+            "/api/v1/development/sessions",
+            body={"analysis": development_analysis(), "label": "API session"},
+            origin=ALLOWED_ORIGIN,
+        )
+        self.assertEqual(created.status, 201)
+        session_id = created.body["session"]["id"]
+
+        listing = self.api.dispatch(
+            "GET",
+            "/api/v1/development/sessions?limit=100&offset=0",
+            origin=ALLOWED_ORIGIN,
+        )
+        restored = self.api.dispatch(
+            "GET",
+            f"/api/v1/development/sessions/{session_id}",
+            origin=ALLOWED_ORIGIN,
+        )
+        exported = self.api.dispatch(
+            "GET",
+            f"/api/v1/development/sessions/{session_id}/export",
+            origin=ALLOWED_ORIGIN,
+        )
+
+        self.assertEqual(listing.status, 200)
+        self.assertNotIn(
+            "API-DEVELOPMENT-RAW-INTENT",
+            json.dumps(listing.body, ensure_ascii=False),
+        )
+        self.assertEqual(restored.status, 200)
+        self.assertEqual(
+            restored.body["analysis"]["intent"], "API-DEVELOPMENT-RAW-INTENT"
+        )
+        self.assertTrue(exported.body["containsFullAnalysis"])
+
+        deleted = self.api.dispatch(
+            "DELETE",
+            f"/api/v1/development/sessions/{session_id}",
+            origin=ALLOWED_ORIGIN,
+        )
+        missing = self.api.dispatch(
+            "GET",
+            f"/api/v1/development/sessions/{session_id}",
+            origin=ALLOWED_ORIGIN,
+        )
+        self.assertEqual(deleted.status, 200)
+        self.assertTrue(deleted.body["deletedFullAnalysis"])
+        self.assertEqual(missing.status, 404)
+
+    def test_rejects_development_sessions_outside_authorized_repository_scope(self) -> None:
+        payload = development_analysis()
+        payload["repository"]["path"] = str(REPOSITORY_ROOT.parent)
+        response = self.api.dispatch(
+            "POST",
+            "/api/v1/development/sessions",
+            body={"analysis": payload},
+            origin=ALLOWED_ORIGIN,
+        )
+        self.assertEqual(response.status, 403)
+        self.assertEqual(response.body["error"]["code"], "path_not_allowed")
 
     def test_reuses_a_validated_memory_only_definition_scan(self) -> None:
         config = LocalServiceConfig.create(

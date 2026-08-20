@@ -4,7 +4,7 @@ export const developmentAssistantPlugin: VisualizationPlugin = {
   manifest: {
     id: "openjiuwen.development-assistant",
     name: "Read-only Development Assistant",
-    version: "0.1.0",
+    version: "0.2.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "把开发意图投影为源码证据、影响范围、修改建议、测试建议与不可应用的补丁草案；不会修改绑定仓库。",
     group: "workspace",
@@ -14,6 +14,7 @@ export const developmentAssistantPlugin: VisualizationPlugin = {
       "development.analysis.readonly.v1",
       "graph.development.evidence.v1",
       "development.patch-outline.preview.v1",
+      "development.session.local.v1",
     ],
   },
   contribute: () => ({

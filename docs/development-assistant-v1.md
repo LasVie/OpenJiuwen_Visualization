@@ -80,12 +80,16 @@ Patch outline 必须以 `READ-ONLY STRUCTURAL OUTLINE — NOT AN APPLICABLE PATC
 - 九步时间轴始终显示完整阶段，可点击跳转，并支持上一步/下一步与非输入状态下的左右方向键；
 - 证据、影响、建议、测试和草案节点都有 inspector；存在 source reference 时可打开统一只读源码窗口，证据节点也可定位 Definition。
 - 入口来源在左侧显示为 `FROM RUNTIME / DEFINITION / CHANGE`，inspector 同时展示核验状态与最小结构化指标。
+- 成功分析自动形成一个本机 SQLite/WAL Session；工具栏显示保存状态，左侧入口打开独立管理抽屉；
+- Session 列表不读取原始意图或完整结果；恢复会显式读取完整分析并回到第 1 步，导出与删除也是独立用户动作。
 
 ## 模块化与安全
 
 `kernel/contracts/development.ts` 保存无 React 的 source contract；`plugins/development-assistant/` 只声明 manifest 和 contribution；`features/development-assistant/` 拥有纯投影模型、画布、时间轴、inspector 和工作区；`App` 只依据 Workbench availability 暴露入口。
 
-Development V1 不新增服务端写 endpoint，也不映射 Local Plugin Host 的 write/network/secret 权限。原始源文件只在用户点击已有 source evidence 后通过统一有界 Source Viewer 读取，不复制到日志、Git 或远程服务。
+Development 不映射 Local Plugin Host 的 repository write/network/secret 权限。新增的 Session endpoint 只能写独立本机分析数据库，保存前再次验证 allow-root、九步只读合同、source path 与不可应用 patch；它不能修改绑定仓库。原始源文件只在用户点击已有 source evidence 后通过统一有界 Source Viewer 读取，不复制到日志、Git 或远程服务。
+
+完整 Session payload、SQLite migration、保留、导出和删除合同见 [`development-session-persistence-v1.md`](development-session-persistence-v1.md)。
 
 ## 验证与明确限制
 
@@ -97,5 +101,5 @@ V1 仍有以下限制：
 - 关系影响是一阶静态证据，不等于完整 blast radius 或运行覆盖率；
 - 诊断和建议为确定性模板，不理解任意自然语言深层语义；
 - 跨平面入口只带结构化身份、指标和影响判断，不把完整 Runtime/Context/Tool/模型原文交给 Development；
-- 不保存开发分析 Session，也不比较两次建议；
+- 本机保存开发分析 Session，但暂不支持重命名、搜索、标签或两次建议对比；
 - 任何仓库修改、测试执行、分支/commit/PR 创建仍属于未来独立授权与审计决策。

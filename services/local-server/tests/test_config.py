@@ -25,6 +25,16 @@ class LocalServiceConfigTests(unittest.TestCase):
         )
         self.assertEqual(config.archive_retention_days, 30)
         self.assertEqual(config.archive_max_bytes, 2 * 1024 * 1024 * 1024)
+        self.assertEqual(
+            config.development_session_path,
+            REPOSITORY_ROOT
+            / ".openjiuwen-visualization"
+            / "development-sessions.sqlite3",
+        )
+        self.assertEqual(config.development_session_retention_days, 30)
+        self.assertEqual(
+            config.development_session_max_bytes, 2 * 1024 * 1024 * 1024
+        )
         with self.assertRaises(PathAccessError):
             config.authorize_directory(REPOSITORY_ROOT.parent)
 
@@ -44,6 +54,11 @@ class LocalServiceConfigTests(unittest.TestCase):
             archive_path=REPOSITORY_ROOT / ".runtime-temp" / "configured.sqlite3",
             archive_retention_days=90,
             archive_max_bytes=4 * 1024 * 1024,
+            development_session_path=(
+                REPOSITORY_ROOT / ".runtime-temp" / "development.sqlite3"
+            ),
+            development_session_retention_days=60,
+            development_session_max_bytes=8 * 1024 * 1024,
         )
         self.assertEqual(
             configured.archive_path,
@@ -51,6 +66,18 @@ class LocalServiceConfigTests(unittest.TestCase):
         )
         self.assertEqual(configured.archive_retention_days, 90)
         self.assertEqual(configured.archive_max_bytes, 4 * 1024 * 1024)
+        self.assertEqual(
+            configured.development_session_path,
+            REPOSITORY_ROOT / ".runtime-temp" / "development.sqlite3",
+        )
+        self.assertEqual(configured.development_session_retention_days, 60)
+        self.assertEqual(configured.development_session_max_bytes, 8 * 1024 * 1024)
+
+        with self.assertRaises(PathAccessError):
+            LocalServiceConfig.create(
+                allowed_roots=[REPOSITORY_ROOT],
+                development_session_path=REPOSITORY_ROOT.parent / "outside.sqlite3",
+            )
 
     def test_scopes_unsigned_plugin_discovery_to_explicit_allowed_paths(self) -> None:
         with self.assertRaises(ValueError):

@@ -119,6 +119,8 @@ Local Plugin Host ── lifecycle + grants + secret handles + audit
 
 `openjiuwen.development-assistant` 同时依赖 Local Repository 与 Source Convergence，贡献 `DevelopmentAssistantSourceDefinition`，而不把分析器硬编码进 `App`。关闭任一依赖时开发辅助入口进入 blocked/disabled；恢复依赖后按原 `requestedEnabled` 自动恢复。V1 source 固定声明 `engine=deterministic-static`、`readOnly=true`、`repositoryWrite=false`、`modelAccess=false`。
 
+Development 的历史状态由独立 `DevelopmentSessionStore` 持有，不复用 Runtime Archive 表。`features/development-assistant/` 通过 `adapters/development-session/` 自动保存成功 projection；列表仅取 metadata，恢复/导出才显式读取完整 payload。服务端再次验证 allow-root、九步阶段、数量上限、相对 source path、`repositoryWrite=false` 和不可应用 patch，再写入 SQLite/WAL。默认 30 天 / 2 GiB，删除后 secure-delete 并 checkpoint。完整合同见 [`development-session-persistence-v1.md`](development-session-persistence-v1.md)。
+
 `openjiuwen.trace-archive` 是独立 workspace 根插件，不依赖 Core、Swarm 或 Provider contribution。`features/trace-archive/` 只通过 `adapters/trace-archive/` 读取本地归档 API；Session 详情和对比默认使用脱敏预览，完整事件与 Context 必须走单独的显式 raw 请求。
 
 后续插件必须优先复用现有 capability；只有出现新的数据或交互边界时才扩充协议。
@@ -289,4 +291,4 @@ Runtime、Definition 与 Change 通过 `DevelopmentNavigationRequest` 进入 Dev
 
 Development 收到入口后按 source repository 自动选择允许目录中的仓库并扫描当前 snapshot，再用 `matchSourceToDefinition()` 核验 revision、dirty 与歧义状态。可核验目标被固定为第一条 evidence；revision mismatch 只保留 `inferred`，dirty/unverified 只保留 `strong`；没有匹配时保留 `unmatched` warning，绝不创建不存在的图节点。入口 ID 只负责同一页面会话中的导航去重，不作为持久 identity。
 
-建议层只描述改动边界、风险、guardrail 与验证层次。补丁预览带有不可应用标记，只包含结构化占位说明；它不是 unified diff，不能被工具应用。扫描上限、语法错误、缺少稳定标识符和推断关系都进入 warnings，不会被静默提升为精确事实。完整合同见 [`development-assistant-v1.md`](development-assistant-v1.md)。
+建议层只描述改动边界、风险、guardrail 与验证层次。补丁预览带有不可应用标记，只包含结构化占位说明；它不是 unified diff，不能被工具应用。扫描上限、语法错误、缺少稳定标识符和推断关系都进入 warnings，不会被静默提升为精确事实。成功 projection 会形成可恢复的本机 Session，但恢复历史证据不会自动声明其仍与当前工作树一致。完整合同见 [`development-assistant-v1.md`](development-assistant-v1.md) 与 [`development-session-persistence-v1.md`](development-session-persistence-v1.md)。

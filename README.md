@@ -26,7 +26,7 @@ python -B services/local-server/scripts/run_server.py `
   --allow-root "C:\Users\soong\Documents\OpenJiuwen_Visualization"
 ```
 
-服务默认在首个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 中增量保存完整 Runtime 原文，并使用 WAL、30 天保留期和 2 GiB 逻辑上限。Local Plugin Host 另用同目录的 `plugin-host.sqlite3` 保存生命周期、授权与无原文审计。可用 `--archive-path`、`--archive-retention-days`、`--archive-max-bytes` 与 `--plugin-host-path` 覆盖；数据库路径必须仍在允许根目录内。
+服务默认在首个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 中增量保存完整 Runtime 原文，并使用 WAL、30 天保留期和 2 GiB 逻辑上限。Development 分析另存到同目录的 `development-sessions.sqlite3`，Local Plugin Host 再用 `plugin-host.sqlite3` 保存生命周期、授权与无原文审计。可用 `--archive-*`、`--development-session-*` 与 `--plugin-host-path` 覆盖；数据库路径必须仍在允许根目录内。
 
 四个真实执行器（独立 DeepAgent、Agent Team、SwarmFlow、Subagent）都使用独立固定 bridge；浏览器不能提交 Python 入口、工作流源码或工具配置。只读扫描烟测：
 
@@ -75,8 +75,10 @@ python -B services/local-server/scripts/scan_repository.py `
 - 导航合同不复制 Context、Tool 参数/结果、模型流式正文或 Runtime observations，只传递分析所需的结构化身份与指标；
 - 建议保留来源、置信度、风险和测试层次；无法证明的关系继续标记为推断；
 - 补丁只输出不可应用的结构草案，不伪装成可执行 diff，也不会修改绑定仓库。
+- 每次成功分析自动保存为本机 SQLite/WAL Session；列表只读元数据，点击恢复或导出才读取原始意图与完整结果；
+- Session 管理支持恢复、完整 JSON 导出和带二次确认的删除，默认保留 30 天、逻辑上限 2 GiB。
 
-完整合同、阶段边界和限制见 [`docs/development-assistant-v1.md`](docs/development-assistant-v1.md)。
+完整分析合同见 [`docs/development-assistant-v1.md`](docs/development-assistant-v1.md)，本机持久化、迁移和删除边界见 [`docs/development-session-persistence-v1.md`](docs/development-session-persistence-v1.md)。
 
 ## Core Runtime
 
@@ -167,7 +169,7 @@ src/
 │  ├─ subagent-execution/      # 真实 TaskTool child 状态探测、启动、取消与 Trace 关联
 │  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
-│  ├─ development-assistant/  # 只读诊断、影响、修改/测试建议与补丁结构草案
+│  ├─ development-assistant/  # 只读诊断、建议、补丁结构草案与本机分析 Session
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
 │  ├─ plugin-host/             # Host 生命周期、权限、凭据句柄与本机审计界面
 │  ├─ openrouter-runtime/      # Provider-only OpenRouter 调用组件（底层模块）

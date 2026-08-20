@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   FileSearch,
   GitBranch,
+  History,
   Layers3,
   LoaderCircle,
   RefreshCw,
@@ -33,6 +34,7 @@ import { MagnetControls } from "../trace-graph";
 import { repositoryMatchesSource } from "../source-convergence";
 import { DevelopmentCanvas } from "./DevelopmentCanvas";
 import { DevelopmentInspector } from "./DevelopmentInspector";
+import { DevelopmentSessionPanel } from "./DevelopmentSessionPanel";
 import { DevelopmentTimeline } from "./DevelopmentTimeline";
 import {
   projectDevelopmentAnalysis,
@@ -41,6 +43,7 @@ import {
   type DevelopmentStageKind,
 } from "./model";
 import type { DevelopmentNavigationRequest } from "./navigation";
+import { useDevelopmentSessions } from "./use-development-sessions";
 
 type ConnectionState =
   | { status: "connecting" }
@@ -120,6 +123,7 @@ export function DevelopmentAssistantWorkspace({
   const client = useMemo(() => new LocalRepositoryClient(), []);
   const analysisAbortRef = useRef<AbortController | null>(null);
   const handledNavigationId = useRef(0);
+  const developmentSessions = useDevelopmentSessions();
   const [connectionRevision, setConnectionRevision] = useState(0);
   const [connection, setConnection] = useState<ConnectionState>({ status: "connecting" });
   const [repositoryPath, setRepositoryPath] = useState("");
@@ -131,6 +135,7 @@ export function DevelopmentAssistantWorkspace({
   const [activeIndex, setActiveIndex] = useState(0);
   const [expanded, setExpanded] = useState<ReadonlySet<DevelopmentStageKind>>(new Set());
   const [selection, setSelection] = useState<DevelopmentSelection | null>(null);
+  const [sessionPanelOpen, setSessionPanelOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -171,6 +176,7 @@ export function DevelopmentAssistantWorkspace({
     setAnalysisError("");
     setProjection(null);
     setSelection(null);
+    developmentSessions.clearActiveSession();
     try {
       const scan = await client.scan(path, {
         includeTests: true,
@@ -185,6 +191,7 @@ export function DevelopmentAssistantWorkspace({
       setExpanded(new Set());
       setSelection({ kind: "stage", id: next.stages[0].id });
       setStatus("ready");
+      void developmentSessions.save(next);
     } catch (error: unknown) {
       if (controller.signal.aborted) return;
       setStatus("error");
@@ -192,7 +199,7 @@ export function DevelopmentAssistantWorkspace({
     } finally {
       if (analysisAbortRef.current === controller) analysisAbortRef.current = null;
     }
-  }, [client]);
+  }, [client, developmentSessions.clearActiveSession, developmentSessions.save]);
 
   useEffect(() => {
     if (!navigation || connection.status !== "ready") return;
@@ -228,6 +235,24 @@ export function DevelopmentAssistantWorkspace({
     setActiveIndex(0);
     setExpanded(new Set());
     setSelection(null);
+    developmentSessions.clearActiveSession();
+  }
+
+  async function restoreSession(sessionId: string) {
+    const restored = await developmentSessions.restore(sessionId);
+    if (!restored) return;
+    analysisAbortRef.current?.abort();
+    analysisAbortRef.current = null;
+    setRepositoryPath(restored.repository.path);
+    setIntent(restored.intent);
+    setProjection(restored);
+    setActiveNavigation(restored.entry?.navigation ?? null);
+    setStatus("ready");
+    setAnalysisError("");
+    setActiveIndex(0);
+    setExpanded(new Set());
+    setSelection({ kind: "stage", id: restored.stages[0].id });
+    setSessionPanelOpen(false);
   }
 
   function analyze(event: FormEvent<HTMLFormElement>) {
@@ -305,6 +330,22 @@ export function DevelopmentAssistantWorkspace({
 
           {connection.status === "ready" ? (
             <>
+              <button
+                type="button"
+                className={`development-session-entry development-session-entry--${developmentSessions.connection}`}
+                onClick={() => setSessionPanelOpen(true)}
+              >
+                <span><History size={16} strokeWidth={1.8} aria-hidden="true" /></span>
+                <span>
+                  <strong>分析 Sessions</strong>
+                  <small>{developmentSessions.connection === "loading"
+                    ? "正在读取本机索引"
+                    : developmentSessions.connection === "offline"
+                      ? "本机持久化未连接"
+                      : `${developmentSessions.total} 条 · SQLite / WAL`}</small>
+                </span>
+                <em>{developmentSessions.saving ? <LoaderCircle size={12} className="spin" /> : developmentSessions.total}</em>
+              </button>
               {activeNavigation ? (
                 <section className={`development-entry-card development-entry-card--${activeNavigation.origin.plane}`}>
                   <header>
@@ -348,7 +389,7 @@ export function DevelopmentAssistantWorkspace({
                 />
                 <div className="development-intent-hint">
                   <ShieldCheck size={12} />
-                  <span>只读取当前工作树；不运行目标代码、不调用模型、不生成可应用 patch。</span>
+                  <span>只读取当前工作树；分析成功后自动保存到本机 SQLite，不进入 Git、日志或远程服务。</span>
                 </div>
                 <button type="submit" disabled={status === "loading" || !repositoryPath || !intent.trim()}>
                   {status === "loading" ? <LoaderCircle size={15} className="spin" /> : <FileSearch size={15} />}
@@ -363,7 +404,7 @@ export function DevelopmentAssistantWorkspace({
                   <div><dt>ENGINE</dt><dd>{source?.engine ?? "deterministic-static"}</dd></div>
                   <div><dt>MODEL</dt><dd>disabled</dd></div>
                   <div><dt>REPO WRITE</dt><dd>false</dd></div>
-                  <div><dt>OUTPUT</dt><dd>{source?.capabilities.length ?? 5} layers</dd></div>
+                  <div><dt>SESSION</dt><dd>{developmentSessions.connection === "ready" ? "local / wal" : "offline"}</dd></div>
                 </dl>
               </section>
 
@@ -391,6 +432,23 @@ export function DevelopmentAssistantWorkspace({
                 <b>{projection.evidence.length}</b> evidence
                 <b>{projection.impacts.length}</b> impacts
               </span>
+              <button
+                type="button"
+                className={`development-session-save-state development-session-save-state--${developmentSessions.error ? "error" : developmentSessions.saving ? "saving" : developmentSessions.activeSessionId ? "saved" : "unsaved"}`}
+                onClick={() => setSessionPanelOpen(true)}
+                title={developmentSessions.error || "打开本机分析 Sessions"}
+              >
+                {developmentSessions.saving
+                  ? <LoaderCircle size={13} className="spin" aria-hidden="true" />
+                  : <History size={13} aria-hidden="true" />}
+                {developmentSessions.saving
+                  ? "正在保存"
+                  : developmentSessions.error
+                    ? "未保存"
+                    : developmentSessions.activeSessionId
+                      ? "本机已保存"
+                      : "Session"}
+              </button>
               <button
                 type="button"
                 className="development-expand-all"
@@ -441,6 +499,23 @@ export function DevelopmentAssistantWorkspace({
       {projection ? (
         <DevelopmentTimeline stages={projection.stages} activeIndex={activeIndex} onChange={changeStep} />
       ) : <div className="development-timeline development-timeline--empty" />}
+
+      <DevelopmentSessionPanel
+        open={sessionPanelOpen}
+        connection={developmentSessions.connection}
+        storage={developmentSessions.storage}
+        sessions={developmentSessions.sessions}
+        total={developmentSessions.total}
+        activeSessionId={developmentSessions.activeSessionId}
+        action={developmentSessions.action}
+        error={developmentSessions.error}
+        onClose={() => setSessionPanelOpen(false)}
+        onRefresh={() => void developmentSessions.refresh()}
+        onRestore={(sessionId) => void restoreSession(sessionId)}
+        onExport={(sessionId) => void developmentSessions.exportSession(sessionId)}
+        onDelete={developmentSessions.deleteSession}
+        onClearError={developmentSessions.clearError}
+      />
     </section>
   );
 }

@@ -19,6 +19,9 @@ class LocalServiceConfig:
     archive_path: Path | None = None
     archive_retention_days: int = 30
     archive_max_bytes: int = 2 * 1024 * 1024 * 1024
+    development_session_path: Path | None = None
+    development_session_retention_days: int = 30
+    development_session_max_bytes: int = 2 * 1024 * 1024 * 1024
     plugin_host_path: Path | None = None
     allow_unsigned_plugins: bool = False
     plugin_developer_roots: tuple[Path, ...] = ()
@@ -33,6 +36,9 @@ class LocalServiceConfig:
         archive_path: str | Path | None = None,
         archive_retention_days: int = 30,
         archive_max_bytes: int = 2 * 1024 * 1024 * 1024,
+        development_session_path: str | Path | None = None,
+        development_session_retention_days: int = 30,
+        development_session_max_bytes: int = 2 * 1024 * 1024 * 1024,
         plugin_host_path: str | Path | None = None,
         allow_unsigned_plugins: bool = False,
         plugin_developer_roots: Iterable[str | Path] = (),
@@ -53,6 +59,14 @@ class LocalServiceConfig:
             raise ValueError("archive_retention_days must be between 1 and 3650.")
         if archive_max_bytes < 1_048_576:
             raise ValueError("archive_max_bytes must be at least 1048576.")
+        if not 1 <= development_session_retention_days <= 3_650:
+            raise ValueError(
+                "development_session_retention_days must be between 1 and 3650."
+            )
+        if development_session_max_bytes < 1_048_576:
+            raise ValueError(
+                "development_session_max_bytes must be at least 1048576."
+            )
 
         resolved_archive = (
             Path(archive_path).expanduser().resolve(strict=False)
@@ -65,6 +79,25 @@ class LocalServiceConfig:
             raise PathAccessError("Archive path must be a file, not a directory.")
         if not any(resolved_archive.is_relative_to(root) for root in resolved_roots):
             raise PathAccessError("Archive path must stay inside an allowed root.")
+
+        resolved_development_sessions = (
+            Path(development_session_path).expanduser().resolve(strict=False)
+            if development_session_path is not None
+            else resolved_roots[0]
+            / ".openjiuwen-visualization"
+            / "development-sessions.sqlite3"
+        )
+        if resolved_development_sessions.exists() and resolved_development_sessions.is_dir():
+            raise PathAccessError(
+                "Development Session path must be a file, not a directory."
+            )
+        if not any(
+            resolved_development_sessions.is_relative_to(root)
+            for root in resolved_roots
+        ):
+            raise PathAccessError(
+                "Development Session path must stay inside an allowed root."
+            )
 
         resolved_plugin_host = (
             Path(plugin_host_path).expanduser().resolve(strict=False)
@@ -98,15 +131,18 @@ class LocalServiceConfig:
             origin.rstrip("/") for origin in allowed_origins if origin.strip()
         )
         return cls(
-            tuple(resolved_roots),
-            normalized_origins,
-            max_request_bytes,
-            resolved_archive,
-            archive_retention_days,
-            archive_max_bytes,
-            resolved_plugin_host,
-            allow_unsigned_plugins,
-            tuple(resolved_developer_roots),
+            allowed_roots=tuple(resolved_roots),
+            allowed_origins=normalized_origins,
+            max_request_bytes=max_request_bytes,
+            archive_path=resolved_archive,
+            archive_retention_days=archive_retention_days,
+            archive_max_bytes=archive_max_bytes,
+            development_session_path=resolved_development_sessions,
+            development_session_retention_days=development_session_retention_days,
+            development_session_max_bytes=development_session_max_bytes,
+            plugin_host_path=resolved_plugin_host,
+            allow_unsigned_plugins=allow_unsigned_plugins,
+            plugin_developer_roots=tuple(resolved_developer_roots),
         )
 
     def authorize_directory(self, raw_path: str | Path) -> Path:

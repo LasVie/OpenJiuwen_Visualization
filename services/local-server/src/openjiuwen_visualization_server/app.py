@@ -18,6 +18,11 @@ from .agent_core_runtime import (
     AgentCoreRuntimeError,
 )
 from .config import LocalServiceConfig, PathAccessError
+from .development_sessions import (
+    DEVELOPMENT_SESSION_API_VERSION,
+    DevelopmentSessionError,
+    DevelopmentSessionStore,
+)
 from .git_changes import GitChangeError, GitChangeInspector, GitChangeOptions
 from .github_pull_requests import (
     GitHubPullRequestError,
@@ -77,6 +82,10 @@ TRACE_STREAM_ROUTE = re.compile(r"^/api/v1/traces/([^/]+)/stream$")
 ARCHIVE_SESSION_ROUTE = re.compile(r"^/api/v1/archive/sessions/([^/]+)$")
 ARCHIVE_RAW_ROUTE = re.compile(r"^/api/v1/archive/sessions/([^/]+)/raw$")
 ARCHIVE_EXPORT_ROUTE = re.compile(r"^/api/v1/archive/sessions/([^/]+)/export$")
+DEVELOPMENT_SESSION_ROUTE = re.compile(r"^/api/v1/development/sessions/([^/]+)$")
+DEVELOPMENT_SESSION_EXPORT_ROUTE = re.compile(
+    r"^/api/v1/development/sessions/([^/]+)/export$"
+)
 OPENROUTER_CANCEL_ROUTE = re.compile(
     r"^/api/v1/model-providers/openrouter/invocations/([^/]+)/cancel$"
 )
@@ -148,6 +157,8 @@ class LocalRepositoryApi:
         swarmflow_adapter: SwarmFlowRuntimeAdapter | None = None,
         archive_store: TraceArchiveStore | None = None,
         archive_enabled: bool = True,
+        development_session_store: DevelopmentSessionStore | None = None,
+        development_sessions_enabled: bool = True,
         plugin_host: PluginHost | None = None,
         plugin_host_enabled: bool = True,
     ) -> None:
@@ -175,6 +186,22 @@ class LocalRepositoryApi:
         )
         self.trace_store = trace_store or RuntimeTraceStore()
         self.trace_store.set_archive_sink(self.archive_store)
+        development_session_path = config.development_session_path or (
+            config.allowed_roots[0]
+            / ".openjiuwen-visualization"
+            / "development-sessions.sqlite3"
+        )
+        self.development_session_store = (
+            development_session_store
+            if development_session_store is not None
+            else DevelopmentSessionStore(
+                development_session_path,
+                retention_days=config.development_session_retention_days,
+                max_bytes=config.development_session_max_bytes,
+            )
+            if development_sessions_enabled
+            else None
+        )
         self._change_inspector = change_inspector or GitChangeInspector()
         self._github_pull_request_inspector = (
             github_pull_request_inspector or GitHubPullRequestInspector()
@@ -269,6 +296,11 @@ class LocalRepositoryApi:
                         "github.pull-request.read",
                         "trace.ephemeral",
                         *(["trace.archive.sqlite"] if self.archive_store else []),
+                        *(
+                            ["development.session.sqlite"]
+                            if self.development_session_store
+                            else []
+                        ),
                         "model.provider.openrouter.registry",
                         *(["model.provider.openrouter.invoke"] if openrouter_ready else []),
                         "runtime.agent-core.registry",
@@ -283,6 +315,9 @@ class LocalRepositoryApi:
                     else "memory-only",
                     "archiveStorage": self.archive_store.descriptor()
                     if self.archive_store
+                    else None,
+                    "developmentSessionStorage": self.development_session_store.descriptor()
+                    if self.development_session_store
                     else None,
                     "pluginHost": {
                         "enabled": self.plugin_host is not None,
@@ -363,6 +398,10 @@ class LocalRepositoryApi:
             )
         if method == "GET" and route == "/api/v1/archive/sessions":
             return self._archive_list(split_path.query)
+        if method == "GET" and route == "/api/v1/development/sessions":
+            return self._development_session_list(split_path.query)
+        if method == "POST" and route == "/api/v1/development/sessions":
+            return self._development_session_create(body or {})
         if method == "POST" and route == "/api/v1/repositories/scan":
             return self._scan(body or {})
         if method == "POST" and route == "/api/v1/repositories/source":
@@ -424,6 +463,20 @@ class LocalRepositoryApi:
             return self._archive_session(archive_session_match.group(1), split_path.query)
         if method == "DELETE" and archive_session_match:
             return self._archive_delete(archive_session_match.group(1))
+        development_export_match = DEVELOPMENT_SESSION_EXPORT_ROUTE.fullmatch(route)
+        if method == "GET" and development_export_match:
+            return self._development_session_export(
+                unquote(development_export_match.group(1))
+            )
+        development_session_match = DEVELOPMENT_SESSION_ROUTE.fullmatch(route)
+        if method == "GET" and development_session_match:
+            return self._development_session_get(
+                unquote(development_session_match.group(1))
+            )
+        if method == "DELETE" and development_session_match:
+            return self._development_session_delete(
+                unquote(development_session_match.group(1))
+            )
         trace_match = TRACE_ROUTE.fullmatch(route)
         if method == "GET" and trace_match:
             return self._trace_snapshot(trace_match.group(1), split_path.query)
@@ -880,6 +933,102 @@ class LocalRepositoryApi:
         try:
             result = self.archive_store.delete_session(trace_id)
         except TraceArchiveError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_session_list(self, query: str) -> ApiResponse:
+        if self.development_session_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_sessions_disabled",
+                "Development Session persistence is disabled.",
+            )
+        values = parse_qs(query)
+        try:
+            result = self.development_session_store.list_sessions(
+                limit=int(values.get("limit", ["50"])[0]),
+                offset=int(values.get("offset", ["0"])[0]),
+            )
+        except DevelopmentSessionError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        except ValueError:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_pagination",
+                "Development Session pagination is invalid.",
+            )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_session_create(self, body: dict[str, Any]) -> ApiResponse:
+        if self.development_session_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_sessions_disabled",
+                "Development Session persistence is disabled.",
+            )
+        unknown = set(body) - {"analysis", "label"}
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_development_session",
+                f"Unsupported Development Session field: {sorted(unknown)[0]}",
+            )
+        analysis = body.get("analysis")
+        repository = analysis.get("repository") if isinstance(analysis, dict) else None
+        repository_path = repository.get("path") if isinstance(repository, dict) else None
+        try:
+            if not isinstance(repository_path, str):
+                raise DevelopmentSessionError(
+                    "invalid_development_session",
+                    "analysis.repository.path must be a string.",
+                )
+            self.config.authorize_directory(repository_path)
+            result = self.development_session_store.create_session(
+                analysis,
+                label=body.get("label"),
+            )
+        except PathAccessError as exc:
+            return _error(HTTPStatus.FORBIDDEN, "path_not_allowed", str(exc))
+        except DevelopmentSessionError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.CREATED, result)
+
+    def _development_session_get(self, session_id: str) -> ApiResponse:
+        if self.development_session_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_sessions_disabled",
+                "Development Session persistence is disabled.",
+            )
+        try:
+            result = self.development_session_store.get_session(session_id)
+        except DevelopmentSessionError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_session_export(self, session_id: str) -> ApiResponse:
+        if self.development_session_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_sessions_disabled",
+                "Development Session persistence is disabled.",
+            )
+        try:
+            result = self.development_session_store.export_session(session_id)
+        except DevelopmentSessionError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_session_delete(self, session_id: str) -> ApiResponse:
+        if self.development_session_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_sessions_disabled",
+                "Development Session persistence is disabled.",
+            )
+        try:
+            result = self.development_session_store.delete_session(session_id)
+        except DevelopmentSessionError as exc:
             return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.OK, result)
 

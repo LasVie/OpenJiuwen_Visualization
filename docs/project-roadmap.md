@@ -37,6 +37,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | Provider 与 Local Plugin Host V1 | 已完成 | 内置 OpenRouter/Tool Host、信任来源、持久生命周期、风险分级权限、opaque secret handle、最终调用 gate 与本机审计 |
 | 只读辅助开发 V1 | 已完成 | 开发意图 → 源码证据 → 诊断/影响 → 修改/测试建议 → 不可应用补丁结构草案，零模型与零仓库写入 |
 | Development 跨平面入口 V1 | 已完成 | Runtime/Definition/Change 焦点自动进入同一开发证据链，保留 source/revision 与最小结构化运行/变更证据 |
+| Development 分析 Session V1 | 已完成 | 独立 SQLite/WAL、自动保存、元数据列表、显式恢复/导出、完整删除、30 天 / 2 GiB 与 schema migration |
 
 ## 当前已支持功能
 
@@ -73,6 +74,9 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - Runtime、Definition、Change inspector 均可进入 Development；入口自动选择对应授权仓库并立即扫描；
 - source identity 匹配目标固定为首条证据，revision mismatch、dirty、unverified、ambiguous 与 unmatched 都保持显式状态；
 - 跨平面合同只传递事件指标、Runtime 聚合或 Change comparison/hunk/impact，不复制 Context、Tool 或模型原文。
+- 成功分析自动保存为独立本机 Session；列表不读取原始意图，恢复/导出才读取完整九步结果；
+- Session 管理展示仓库/revision/dirty snapshot 和各层计数，支持恢复、完整 JSON 导出及带二次确认的删除；
+- Development Session 独立使用 SQLite/WAL 与 schema migration，默认保留 30 天、逻辑上限 2 GiB，不与 Runtime Archive 或 Plugin Host 数据混表。
 
 ### Runtime 与真实执行
 
@@ -119,7 +123,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 执行器不开放任意 Shell、Git 写入、文件写入、MCP、Skill 或浏览器自定义工具；
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
 - Development V1 只分析当前有界 Python 静态图；一阶关系不是完整 blast radius，跨平面运行/变更证据只用于锁定入口与解释边界；
-- Development V1 不运行目标仓测试、不保存分析 Session，也不产生可应用 patch 或任何仓库写入；
+- Development V1 不运行目标仓测试，也不产生可应用 patch 或任何仓库写入；分析 Session 暂不支持重命名、搜索、标签或两次建议对比；
 - 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
 - Host V1 不提供页面安装/卸载/升级、第三方签名链、动态插件代码执行、进程沙箱或崩溃监督；内置 integrity 只是本地发布摘要；
 - OpenRouter 凭据仍由服务进程环境配置，尚无通用本机 vault/系统凭据录入 UI；
@@ -158,15 +162,21 @@ V1 继续只读，不把 Host 目录读取授权表述成执行权限；真正�
 
 Runtime、Definition 与 Change 当前焦点现在都能生成最小化结构化入口。Development 会自动选择 source 对应的授权仓库、扫描当前 revision、固定可核验目标并展示入口状态；历史 revision、脏工作树、歧义与缺失不会静默提升为精确证据。导航不会复制 Context、Tool 或模型原文，也没有新增写权限。
 
-## 下一阶段：Development 能力边界（需要决策）
+## 已完成：Development 分析 Session V1
 
-当前预先确定的只读阶段已完成。继续前需要选择下一条产品路线：
+Development 的确定性九步 projection 现在会自动保存为独立本机 Session。默认列表只返回仓库、revision、dirty、结构计数、时间和字节等 metadata；点击恢复或导出才读取原始开发意图和完整分析。服务端再次验证 allow-root、九步顺序、相对 source path、数量/字节上限、`repositoryWrite=false` 和不可应用 patch，不能借持久化入口修改目标仓。
 
-1. 可选 OpenRouter 辅助分析：保留确定性证据链为事实底座，并明确哪些源码片段、开发意图、Runtime/Change 摘要允许按次发送到远程 Provider；
-2. Development 分析 Session：把意图、结构化证据与建议保存到本机，需要确定原文范围、保留/删除/导出和 schema migration；
-3. 受控开发执行：应用补丁、运行测试并形成 commit/PR，需要先确定逐操作审批、允许路径、隔离分支、回滚与审计。
+## 下一阶段：OpenRouter 可选只读增强（已确认）
 
-在完成路线和权限选择前，现有 Development 继续保持 `modelAccess=false / repositoryWrite=false`。
+下一阶段保留确定性证据链为事实底座，并增加每次显式开启的 OpenRouter 只读增强：
+
+1. 调用前展示精确外发预览，由用户针对本次调用确认；
+2. 只发送开发意图、用户选定的有界源码片段，以及结构化 Runtime/Change 摘要；
+3. 不发送完整 Context、Tool 参数/结果、Rail/Hook 原文或既有模型流式输出；
+4. Provider 返回只能成为带来源与不确定性标记的增强节点，不能覆盖确定性证据；
+5. 继续保持 `repositoryWrite=false`，不应用 patch、不运行测试、不创建 Git 变更。
+
+受控补丁、测试和 Git 写入流程按用户决定暂不启动；OpenRouter 阶段完成后再单独确定审批、分支隔离、回滚和审计模型。
 
 ## 后续路线
 
@@ -180,8 +190,8 @@ Runtime、Definition 与 Change 当前焦点现在都能生成最小化结构化
 | 已完成 | Tool Registry 运行证据收敛 | Tool 四层证据、节点深入画布、Definition/Host/Runtime 往返 | V1 只读；写 Tool 仍不开放 |
 | 已完成 | 只读辅助开发 V1 | 源码证据、诊断、影响、修改/测试建议与不可应用补丁结构草案 | 选择零模型、零仓库写入边界 |
 | 已完成 | Development 跨平面入口 V1 | Runtime/Definition/Change 焦点进入同一开发证据链 | 结构化最小入口与显式 revision 降级已落地 |
-| 待决策 | 可选 OpenRouter 辅助分析 | 在确定性证据上增强诊断与方案 | 必须决定按次外发的数据范围、确认和脱敏语义 |
-| 待决策 | Development 分析 Session | 本机保存、删除、导出开发证据链 | 必须决定原文范围、保留策略与迁移合同 |
+| 已完成 | Development 分析 Session | 本机自动保存、恢复、删除和完整导出开发证据链 | 独立 SQLite/WAL、完整本机 payload、30 天 / 2 GiB 与 schema migration 已落地 |
+| 进行中 | 可选 OpenRouter 辅助分析 | 在确定性证据上增强诊断与方案 | 已确定逐次开启、调用前外发预览、最小数据范围与零仓库写入 |
 | 待决策 | 受控开发执行 | 在受控分支应用补丁、运行测试并形成 commit/PR | 必须决定逐次审批、允许路径、回滚和审计 |
 
 ## 阶段管理规则
