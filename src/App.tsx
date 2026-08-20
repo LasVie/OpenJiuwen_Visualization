@@ -5,6 +5,7 @@ import {
   Box,
   Braces,
   Database,
+  FileSearch,
   GitCompareArrows,
   Layers2,
   Play,
@@ -26,6 +27,7 @@ import {
 import { DefinitionWorkspace } from "./features/definition-plane";
 import { ChangeWorkspace } from "./features/change-plane";
 import { TraceArchiveWorkspace } from "./features/trace-archive";
+import { DevelopmentAssistantWorkspace } from "./features/development-assistant";
 import {
   CoreRuntimeSessionBar,
   RuntimeSourceToggle,
@@ -82,7 +84,7 @@ const SwarmRuntimeInspector = lazy(() =>
   })),
 );
 
-type WorkbenchMode = "runtime" | "archive" | "definition" | "change" | "modules";
+type WorkbenchMode = "runtime" | "archive" | "definition" | "change" | "development" | "modules";
 
 export default function App() {
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>("runtime");
@@ -370,9 +372,10 @@ export default function App() {
       (workbenchMode === "runtime" && availability.runtime) ||
       (workbenchMode === "archive" && availability.archive) ||
       (workbenchMode === "definition" && availability.definition) ||
-      (workbenchMode === "change" && availability.change);
+      (workbenchMode === "change" && availability.change) ||
+      (workbenchMode === "development" && availability.development);
     if (!currentModeAvailable) setWorkbenchMode("modules");
-  }, [availability.archive, availability.change, availability.definition, availability.runtime, workbenchMode]);
+  }, [availability.archive, availability.change, availability.definition, availability.development, availability.runtime, workbenchMode]);
 
   useEffect(() => {
     if (runtimeSource === "fixture") return;
@@ -601,6 +604,16 @@ export default function App() {
           </button>
           <button
             type="button"
+            className={workbenchMode === "development" ? "workbench-mode--active" : ""}
+            onClick={() => setWorkbenchMode("development")}
+            aria-pressed={workbenchMode === "development"}
+            disabled={!availability.development}
+          >
+            <FileSearch size={15} />
+            <span><strong>开发辅助</strong><small>DEVELOP</small></span>
+          </button>
+          <button
+            type="button"
             className={workbenchMode === "modules" ? "workbench-mode--active" : ""}
             onClick={() => setWorkbenchMode("modules")}
             aria-pressed={workbenchMode === "modules"}
@@ -680,6 +693,14 @@ export default function App() {
               <small>工作树 / commit refs / GitHub PR · 节点影响映射 · 只读</small>
             </span>
           </div>
+        ) : workbenchMode === "development" ? (
+          <div className="definition-header-summary development-header-summary">
+            <FileSearch size={17} />
+            <span>
+              <strong>Read-only Development Plane</strong>
+              <small>源码证据 · 影响范围 · 修改与测试建议 · 补丁结构草案</small>
+            </span>
+          </div>
         ) : (
           <div className="definition-header-summary module-header-summary">
             <Box size={17} />
@@ -694,6 +715,11 @@ export default function App() {
           <div className="runtime-key archive-header-assurance" aria-label="档案原文边界">
             <ShieldCheck size={15} aria-hidden="true" />
             <span><strong>RAW LOCAL ONLY</strong><small>默认仅展示脱敏摘要</small></span>
+          </div>
+        ) : workbenchMode === "development" ? (
+          <div className="runtime-key development-header-assurance" aria-label="开发辅助只读边界">
+            <ShieldCheck size={15} aria-hidden="true" />
+            <span><strong>READ ONLY</strong><small>无模型 · 无仓库写入</small></span>
           </div>
         ) : (
           <div className="runtime-key" aria-label="节点来源颜色图例">
@@ -944,6 +970,17 @@ export default function App() {
           runtimeEvents={availability.sourceConvergence ? activeRuntimeEvents : []}
           sourceNavigation={availability.sourceConvergence ? changeNavigation : null}
           onOpenRuntimeEvent={openRuntimeEvent}
+          onOpenDefinition={availability.sourceConvergence
+            ? openDefinitionForSource
+            : undefined}
+          magnetEnabled={magnetEnabled}
+          magnetStrength={magnetStrength}
+          onToggleMagnet={toggleMagnet}
+          onMagnetStrengthChange={setMagnetStrength}
+        />
+      ) : workbenchMode === "development" ? (
+        <DevelopmentAssistantWorkspace
+          sources={workbench.developmentSources}
           onOpenDefinition={availability.sourceConvergence
             ? openDefinitionForSource
             : undefined}

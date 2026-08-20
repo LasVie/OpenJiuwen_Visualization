@@ -94,6 +94,16 @@ describe("visualization plugin registry", () => {
         contributedBy: "openjiuwen.tool-catalog",
       }),
     ]);
+    expect(defaultWorkbench.developmentSources).toEqual([
+      expect.objectContaining({
+        id: "openjiuwen.deterministic-static-development",
+        engine: "deterministic-static",
+        readOnly: true,
+        repositoryWrite: false,
+        modelAccess: false,
+        contributedBy: "openjiuwen.development-assistant",
+      }),
+    ]);
     expect(defaultWorkbench.plugins.map((item) => [item.id, item.state]))
       .toEqual([
         ["openjiuwen.agent-core", "enabled"],
@@ -109,6 +119,7 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.trace-archive", "enabled"],
         ["openjiuwen.local-repository", "enabled"],
         ["openjiuwen.source-convergence", "enabled"],
+        ["openjiuwen.development-assistant", "enabled"],
         ["openjiuwen.tool-catalog", "enabled"],
         ["openjiuwen.git-change", "enabled"],
         ["openjiuwen.github-pull-request", "enabled"],
@@ -171,6 +182,8 @@ describe("visualization plugin registry", () => {
       .toEqual(["openjiuwen.tool-catalog"]);
     expect(defaultWorkbench.capabilities["runtime.tool.call.observe"])
       .toEqual(["openjiuwen.tool-catalog"]);
+    expect(defaultWorkbench.capabilities["development.analysis.readonly.v1"])
+      .toEqual(["openjiuwen.development-assistant"]);
     expect(defaultWorkbench.capabilities["trace.archive.local.v1"])
       .toEqual(["openjiuwen.trace-archive"]);
     expect(defaultWorkbench.graph.nodes.find((node) => node.id === "model"))
@@ -203,6 +216,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.trace-archive": "enabled",
       "openjiuwen.local-repository": "enabled",
       "openjiuwen.source-convergence": "enabled",
+      "openjiuwen.development-assistant": "enabled",
       "openjiuwen.tool-catalog": "enabled",
       "openjiuwen.git-change": "enabled",
       "openjiuwen.github-pull-request": "enabled",
@@ -253,8 +267,13 @@ describe("visualization plugin registry", () => {
       withoutLocalGit.plugins.find((item) => item.id === "openjiuwen.source-convergence")
         ?.state,
     ).toBe("blocked");
+    expect(
+      withoutLocalGit.plugins.find((item) => item.id === "openjiuwen.development-assistant")
+        ?.state,
+    ).toBe("blocked");
     expect(withoutLocalGit.changeSources).toEqual([]);
     expect(withoutLocalGit.toolCatalogSources).toEqual([]);
+    expect(withoutLocalGit.developmentSources).toEqual([]);
   });
 
   it("keeps the canonical graph independent from its ReactFlow projection", () => {

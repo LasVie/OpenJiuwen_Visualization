@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路和 Git 变更工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、本机 SQLite 运行归档与跨运行对比、工作树/commit range/GitHub PR 的节点影响图、Runtime ↔ Definition ↔ Change 证据往返，以及由 Local Plugin Host 约束生命周期和权限的模块控制。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路、Git 变更与辅助开发工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、本机 SQLite 运行归档与跨运行对比、工作树/commit range/GitHub PR 的节点影响图、Runtime ↔ Definition ↔ Change 证据往返，以及基于当前 revision 源码证据的只读开发分析。
 
 已交付能力、阶段记录和后续路线见 [`docs/project-roadmap.md`](docs/project-roadmap.md)。
 
@@ -61,6 +61,19 @@ python -B services/local-server/scripts/scan_repository.py `
 源码窗口的路径边界、行范围和工作树语义见 [`docs/source-evidence-v1.md`](docs/source-evidence-v1.md)。
 
 关系画布的分层展开、方向语义和容量边界见 [`docs/relation-explorer-v1.md`](docs/relation-explorer-v1.md)。
+
+### 只读开发辅助
+
+顶部“开发辅助”把一段开发意图投影成九步证据链：开发意图、仓库范围、源码证据、诊断、影响范围、修改建议、测试建议、补丁结构草案和只读边界。分析器只读取允许根目录内当前 revision 的 Definition snapshot，不执行目标仓代码、不调用模型，也不请求仓库写权限。
+
+- Core 与 Swarm 使用独立的仓库身份和色彩语义；
+- 显式类、函数、Rail、Tool、Workflow 等目标优先覆盖，泛化词不会挤掉主要证据；
+- 每个可展开阶段进入聚焦画布，支持拖拽、缩放、fit、MiniMap、实时防重叠与可调磁吸；
+- 证据节点可打开统一只读源码窗口或定位 Definition；
+- 建议保留来源、置信度、风险和测试层次；无法证明的关系继续标记为推断；
+- 补丁只输出不可应用的结构草案，不伪装成可执行 diff，也不会修改绑定仓库。
+
+完整合同、阶段边界和限制见 [`docs/development-assistant-v1.md`](docs/development-assistant-v1.md)。
 
 ## Core Runtime
 
@@ -151,6 +164,7 @@ src/
 │  ├─ subagent-execution/      # 真实 TaskTool child 状态探测、启动、取消与 Trace 关联
 │  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
+│  ├─ development-assistant/  # 只读诊断、影响、修改/测试建议与补丁结构草案
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
 │  ├─ plugin-host/             # Host 生命周期、权限、凭据句柄与本机审计界面
 │  ├─ openrouter-runtime/      # Provider-only OpenRouter 调用组件（底层模块）

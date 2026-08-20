@@ -23,6 +23,7 @@ import type {
 } from "./contracts/model-provider";
 import type { RegisteredGitChangeSource } from "./contracts/change";
 import type { RegisteredToolCatalogSource } from "./contracts/tool-catalog";
+import type { RegisteredDevelopmentAssistantSource } from "./contracts/development";
 
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const PLUGIN_GROUPS = new Set([
@@ -49,6 +50,7 @@ export class PluginRegistryError extends Error {
       | "duplicate-model-recording"
       | "duplicate-change-source"
       | "duplicate-tool-catalog-source"
+      | "duplicate-development-source"
       | "dangling-edge"
       | "invalid-scenario-reference",
   ) {
@@ -101,6 +103,7 @@ export class VisualizationPluginRegistry {
     const modelRecordings: RegisteredModelRuntimeRecording[] = [];
     const changeSources: RegisteredGitChangeSource[] = [];
     const toolCatalogSources: RegisteredToolCatalogSource[] = [];
+    const developmentSources: RegisteredDevelopmentAssistantSource[] = [];
     const nodeIds = new Set<string>();
     const edgeIds = new Set<string>();
     const scenarioIds = new Set<string>();
@@ -110,6 +113,7 @@ export class VisualizationPluginRegistry {
     const modelRecordingIds = new Set<string>();
     const changeSourceIds = new Set<string>();
     const toolCatalogSourceIds = new Set<string>();
+    const developmentSourceIds = new Set<string>();
     const capabilities = new Map<string, string[]>();
 
     orderedPlugins.forEach((plugin) => {
@@ -169,6 +173,15 @@ export class VisualizationPluginRegistry {
         );
         toolCatalogSources.push({ ...source, contributedBy: pluginId });
       });
+      (contribution.developmentSources ?? []).forEach((source) => {
+        this.assertUnique(
+          developmentSourceIds,
+          source.id,
+          "development-source",
+          pluginId,
+        );
+        developmentSources.push({ ...source, contributedBy: pluginId });
+      });
     });
 
     this.validateEdges(edges, nodeIds);
@@ -188,6 +201,7 @@ export class VisualizationPluginRegistry {
       modelRecordings,
       changeSources,
       toolCatalogSources,
+      developmentSources,
       plugins: statuses,
       capabilities: Object.fromEntries(capabilities),
     };
@@ -282,7 +296,8 @@ export class VisualizationPluginRegistry {
       | "model-provider"
       | "model-recording"
       | "change-source"
-      | "tool-catalog-source",
+      | "tool-catalog-source"
+      | "development-source",
     pluginId: string,
   ) {
     if (ids.has(id)) {
@@ -295,7 +310,8 @@ export class VisualizationPluginRegistry {
         | "duplicate-model-provider"
         | "duplicate-model-recording"
         | "duplicate-change-source"
-        | "duplicate-tool-catalog-source";
+        | "duplicate-tool-catalog-source"
+        | "duplicate-development-source";
       throw new PluginRegistryError(
         `${entity} "${id}" contributed by "${pluginId}" is duplicated.`,
         code,

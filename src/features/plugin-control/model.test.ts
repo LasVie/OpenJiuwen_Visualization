@@ -45,6 +45,7 @@ describe("plugin control model", () => {
     expect(modules.find((plugin) => plugin.id === "openjiuwen.local-repository")
       ?.dependants).toEqual([
         "openjiuwen.source-convergence",
+        "openjiuwen.development-assistant",
         "openjiuwen.tool-catalog",
         "openjiuwen.git-change",
         "openjiuwen.github-pull-request",
@@ -58,6 +59,7 @@ describe("plugin control model", () => {
       archive: true,
       definition: true,
       change: true,
+      development: true,
       tools: true,
       modelRuntime: true,
       openRouter: true,
@@ -82,6 +84,7 @@ describe("plugin control model", () => {
       archive: true,
       definition: false,
       change: false,
+      development: false,
       tools: false,
       modelRuntime: false,
       openRouter: false,
@@ -115,6 +118,7 @@ describe("plugin control model", () => {
     expect(workbenchAvailability(withoutSourceConvergence)).toMatchObject({
       definition: true,
       change: true,
+      development: false,
       sourceConvergence: false,
     });
 

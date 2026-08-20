@@ -18,6 +18,7 @@ export interface WorkbenchAvailability {
   archive: boolean;
   definition: boolean;
   change: boolean;
+  development: boolean;
   tools: boolean;
   modelRuntime: boolean;
   openRouter: boolean;
@@ -92,6 +93,7 @@ export function workbenchAvailability(
     archive: Boolean(workbench.capabilities["trace.archive.local.v1"]),
     definition: Boolean(workbench.capabilities["repository.local.read"]),
     change: workbench.changeSources.length > 0,
+    development: workbench.developmentSources.length > 0,
     tools: workbench.toolCatalogSources.length > 0,
     modelRuntime: workbench.modelProviders.length > 0,
     openRouter: Boolean(workbench.capabilities["runtime.model.openrouter.v1"]),

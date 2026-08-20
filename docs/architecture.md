@@ -2,12 +2,13 @@
 
 ## 产品边界
 
-项目面向 OpenJiuwen 的代码理解、运行调试与变更影响分析。一个工作台组合四种相互关联的数据平面，并由一个控制平面决定当前装配：
+项目面向 OpenJiuwen 的代码理解、运行调试、变更影响分析与辅助开发。一个工作台组合五种相互关联的数据平面，并由一个控制平面决定当前装配：
 
 - Definition：从仓库、配置和注册表得到的定义图。
 - Runtime：确定性回放或真实 Agent/Workflow 运行事件。
 - Archive：本机历史 Session、受控原文读取和跨运行对比。
 - Change：本地 Git、commit 和 GitHub PR 的变更与影响关系。
+- Development：把开发意图收敛为可复核源码、影响、修改/测试建议和不可应用的补丁结构草案。
 - Modules：浏览器 Workbench contribution 与本地 Host 生命周期、权限、capability 可见性。
 
 浏览器只负责交互与渲染。读取本地仓库、运行 Python、执行 Git 或调用模型的能力必须进入独立本地服务，不允许 React 组件直接访问凭据或执行目标仓代码。Repository API 始终只读且不 import 目标仓；真实 Agent Core 与 JiuwenSwarm Agent Team 只通过显式启动的固定子进程 bridge 运行。
@@ -68,7 +69,7 @@ repository@revision:path:symbol
 - `id`、版本、Plugin API 版本。
 - 默认启用状态、稳定 group 与依赖插件。
 - 能力列表，例如 `graph.definition.agent-core`、`trace.replay`。
-- 可选图节点、边和轨迹场景。
+- 可选图节点、边、轨迹场景和数据平面 source contribution。
 
 注册器按依赖拓扑顺序解析插件。关闭一个插件时，依赖它的插件进入 `blocked`，不会留下悬空边或半可用场景。注册器拒绝重复 ID、缺失依赖、依赖环、悬空边和无效轨迹引用。
 
@@ -107,6 +108,7 @@ Local Plugin Host ── lifecycle + grants + secret handles + audit
 | `openjiuwen.tool-catalog` | Tool 发现、目录授权、`ability.register` 与 `tool.call` 四层证据 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.source-convergence` | Runtime、Definition 与 Change 的稳定源码身份、运行聚合和往返导航 |
+| `openjiuwen.development-assistant` | 基于本地 Definition snapshot 的确定性只读诊断、影响、修改/测试建议和补丁结构草案 |
 | `openjiuwen.trace-archive` | 本机 SQLite/WAL Session 管理、按需原文、完整导出、删除和跨运行对比 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务、静态定义图、有界源码证据与 Git Change 客户端，默认开启 |
@@ -114,6 +116,8 @@ Local Plugin Host ── lifecycle + grants + secret handles + audit
 `openjiuwen.agent-core` 和 `openjiuwen.jiuwenswarm` 分别注册 `openjiuwen.agent-core.runtime`、`openjiuwen.jiuwenswarm.runtime` 数据源。Runtime source 只贡献协议能力和 transport 元数据；通用网络连接、状态合并与 SSE 生命周期由 `features/runtime-trace/` 管理，Core/Swarm feature 各自完成领域投影。四个 Executor 只增加各自显式执行入口：独立 DeepAgent、Agent Team、固定 SwarmFlow 和 TaskTool Subagent 拥有不同 capability 与 bridge；它们依赖对应 Runtime source 与 OpenRouter 模块，组件不会读取 Python 对象或原始日志格式。
 
 `openjiuwen.source-convergence` 依赖 Local Repository，并用 `graph.cross-plane.source.v1` capability 控制 Runtime、Definition 与 Change 的源码证据往返；它不要求 Core 与 Swarm 同时启用。`features/source-convergence/` 只拥有 identity、匹配与聚合模型；各平面仍由自己的 feature 管理扫描、Trace 播放和 Git 投影，不能互相导入内部组件。
+
+`openjiuwen.development-assistant` 同时依赖 Local Repository 与 Source Convergence，贡献 `DevelopmentAssistantSourceDefinition`，而不把分析器硬编码进 `App`。关闭任一依赖时开发辅助入口进入 blocked/disabled；恢复依赖后按原 `requestedEnabled` 自动恢复。V1 source 固定声明 `engine=deterministic-static`、`readOnly=true`、`repositoryWrite=false`、`modelAccess=false`。
 
 `openjiuwen.trace-archive` 是独立 workspace 根插件，不依赖 Core、Swarm 或 Provider contribution。`features/trace-archive/` 只通过 `adapters/trace-archive/` 读取本地归档 API；Session 详情和对比默认使用脱敏预览，完整事件与 Context 必须走单独的显式 raw 请求。
 
@@ -274,3 +278,11 @@ Git Change 插件把 `working-tree` 与本地 `base/head` 比较归一化为 cha
 前端并行取得 change set 与当前 Python AST Definition snapshot。hunk 与完整符号范围相交形成 direct impact，祖先形成 container impact，非 contains 关系形成 dependent impact。只有当前检出与比较 head 对齐时行号证据才是 exact；历史 ref、脏检出、删除、重命名和二进制会降级为 inferred。Runtime 观察作为正交 `runtimeObserved` 维度叠加，不覆盖原 change impact kind；没有进入 diff 的目标源码不会被伪造成影响节点。完整协议见 [`git-change-plane-v1.md`](git-change-plane-v1.md) 与 [`runtime-definition-change-convergence-v1.md`](runtime-definition-change-convergence-v1.md)。
 
 `openjiuwen.github-pull-request` 通过独立 adapter 把 GitHub PR metadata 与 files endpoint 归一化到同一个 change set，不让 React 组件理解 GitHub 原始响应。浏览器只提交结构化 PR 引用；loopback 服务固定访问 `api.github.com`，不会接受任意 URL，也不会为了对齐代码自动 fetch。PR head SHA 与当前干净检出一致时才能产生 exact 行号证据。完整协议见 [`github-pull-request-v1.md`](github-pull-request-v1.md)。
+
+## Development Assistant V1
+
+`features/development-assistant/` 是独立的只读 Development 平面。它复用 `LocalRepositoryClient.scan()` 获取当前 revision 的有界 Python AST 图，再以显式开发意图中的稳定标识符为检索入口。候选排序优先覆盖不同的直接目标，之后才用节点类型、source path、summary 和关系证据补齐；测试目录不会仅因名称完全匹配就压过生产定义。
+
+投影固定为九个阶段，并把五类可展开结果保持为独立实体：source evidence、relation impact、change suggestion、test suggestion 和 patch outline。单个阶段展开时画布进入聚焦布局并自动 fit；宏观模式保留 3×3 主链；“展开全部”才同时投影所有分支。所有节点继续复用共享磁吸、实时避碰、Source Viewer 和 Definition 导航。
+
+建议层只描述改动边界、风险、guardrail 与验证层次。补丁预览带有不可应用标记，只包含结构化占位说明；它不是 unified diff，不能被工具应用。扫描上限、语法错误、缺少稳定标识符和推断关系都进入 warnings，不会被静默提升为精确事实。完整合同见 [`development-assistant-v1.md`](development-assistant-v1.md)。

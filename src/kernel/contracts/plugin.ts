@@ -20,6 +20,10 @@ import type {
   RegisteredToolCatalogSource,
   ToolCatalogSourceDefinition,
 } from "./tool-catalog";
+import type {
+  DevelopmentAssistantSourceDefinition,
+  RegisteredDevelopmentAssistantSource,
+} from "./development";
 
 export const PLUGIN_API_VERSION = "1.0.0" as const;
 
@@ -50,6 +54,7 @@ export interface VisualizationPluginContribution {
   modelRecordings?: readonly ModelRuntimeRecording[];
   changeSources?: readonly GitChangeSourceDefinition[];
   toolCatalogSources?: readonly ToolCatalogSourceDefinition[];
+  developmentSources?: readonly DevelopmentAssistantSourceDefinition[];
 }
 
 export interface VisualizationPlugin {
@@ -87,6 +92,7 @@ export interface WorkbenchSnapshot {
   modelRecordings: readonly RegisteredModelRuntimeRecording[];
   changeSources: readonly RegisteredGitChangeSource[];
   toolCatalogSources: readonly RegisteredToolCatalogSource[];
+  developmentSources: readonly RegisteredDevelopmentAssistantSource[];
   plugins: readonly ResolvedPluginStatus[];
   capabilities: Readonly<Record<string, readonly string[]>>;
 }

@@ -1,17 +1,18 @@
 # Project Status and Roadmap
 
-更新日期：2026-08-19
+更新日期：2026-08-20
 
 ## 产品方向
 
 OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，而是把代码定义、真实运行证据和 Git 变更放进同一套可展开语义图，逐步形成面向理解、调试和开发的工作台。
 
-长期能力按五个平面组织：
+长期能力按六个平面组织：
 
 - Definition：仓库、符号、Tool、Rail、Hook、Agent、Workflow 与配置定义；
 - Runtime：Agent、Agent Team、SwarmFlow、Subagent、Model、Tool、Context 和决策过程；
 - Archive：本机历史 Session、原文受控查看、导出、删除和跨运行对比；
 - Change：工作树、commit range、GitHub PR 与受影响节点；
+- Development：基于 Definition/Runtime/Change 证据的诊断、影响、修改与测试建议；
 - Modules：Provider、执行器、数据源和深入画布的可开关插件。
 
 同一个功能优先使用稳定 node identity、source evidence 和 runtime evidence 逐层展开，而不是为每个页面重新定义一套不可关联的卡片。
@@ -34,6 +35,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | Runtime ↔ Definition ↔ Change 收敛 | 已完成 | 稳定 source identity、方法级定位、revision 降级、Runtime 聚合、Change 运行证据叠加与精确往返 |
 | 运行归档与对比 V1 | 已完成 | SQLite/WAL 增量归档、默认完整本机原文、脱敏读取、Session 管理、保留策略与双运行结构化 diff |
 | Provider 与 Local Plugin Host V1 | 已完成 | 内置 OpenRouter/Tool Host、信任来源、持久生命周期、风险分级权限、opaque secret handle、最终调用 gate 与本机审计 |
+| 只读辅助开发 V1 | 已完成 | 开发意图 → 源码证据 → 诊断/影响 → 修改/测试建议 → 不可应用补丁结构草案，零模型与零仓库写入 |
 
 ## 当前已支持功能
 
@@ -62,6 +64,11 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - Definition inspector 展示本次 Trace 的 span、事件、Token、最后状态和可返回的最近步骤；
 - 从节点逐层展开 `contains / imports / inherits` 上下游关系；
 - Tool Registry 以稳定 identity 对齐代码发现、Host 目录读取授权、本次 Runtime 的 `ability.register` 与配对后的 `tool.call`，并提供独立深入画布和运行步骤往返。
+- 顶部“开发辅助”可选择 Core、Swarm 或 Visualization 仓库，把开发意图投影为九步只读证据链；
+- 源码候选优先覆盖不同的显式标识符目标，输出 exact/strong/inferred 置信度和扫描 warning；
+- 源码、影响、修改、测试与补丁草案均可成为可点击节点，单阶段聚焦展开并自动 fit；
+- 修改建议携带目标、风险和 guardrail，测试建议覆盖聚焦/合同/回归层，补丁明确为不可应用的结构草案；
+- 证据节点复用统一 Source Viewer 和 Definition 定位；全程 `modelAccess=false`、`repositoryWrite=false`。
 
 ### Runtime 与真实执行
 
@@ -107,6 +114,8 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - WorkflowProgress 尚无可靠的结构化 tool activity，页面不会从文本猜 Tool 调用；
 - 执行器不开放任意 Shell、Git 写入、文件写入、MCP、Skill 或浏览器自定义工具；
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
+- Development V1 只分析当前有界 Python 静态图；一阶关系不是完整 blast radius，建议不会自动读取当前 Change/Runtime 焦点；
+- Development V1 不运行目标仓测试、不保存分析 Session，也不产生可应用 patch 或任何仓库写入；
 - 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
 - Host V1 不提供页面安装/卸载/升级、第三方签名链、动态插件代码执行、进程沙箱或崩溃监督；内置 integrity 只是本地发布摘要；
 - OpenRouter 凭据仍由服务进程环境配置，尚无通用本机 vault/系统凭据录入 UI；
@@ -128,9 +137,22 @@ Tool 已从“静态目录 + 零散 Runtime 事件”收敛为稳定证据对象
 
 V1 继续只读，不把 Host 目录读取授权表述成执行权限；真正引入写 Tool 前仍需确定逐次审批、超时和撤销语义。
 
-## 下一阶段：辅助开发闭环 V1（待决策）
+## 已完成：只读辅助开发 V1
 
-下一步将从“理解代码”进入“提出或执行开发动作”。在开始实现前，需要先确定 V1 的写入边界：仅生成可复制的修改/测试建议，还是允许在受控分支创建补丁；如果允许写入，还必须同步确定逐操作审批、允许路径、失败回滚和本机审计合同。
+本阶段选择了只读边界，先让开发建议可追溯、可展开、可复核，不把生成内容直接写回绑定仓库。
+
+已交付：
+
+1. 独立 Development source contract、插件 contribution、依赖阻塞和顶层工作台入口；
+2. 基于当前 revision Definition snapshot 的确定性目标检索与来源置信度；
+3. 开发意图、范围、证据、诊断、影响、修改、测试、草案、边界九步时间轴；
+4. 宏观 3×3 主链、单阶段聚焦画布、全分支展开、磁吸/避碰/缩放/MiniMap；
+5. Source Viewer 与 Definition 往返，以及 Core/Swarm 明确身份区分；
+6. 不可应用 patch 标记和 `repositoryWrite=false / modelAccess=false` 产品边界。
+
+## 下一阶段：Development 跨平面入口 V1（计划）
+
+下一步继续保持只读，把 Runtime、Definition 与 Change 的当前焦点作为结构化开发分析入口：从运行步骤、定义节点或变更影响节点进入 Development 时，保留 repository/path/symbol/revision 与 runtimeObserved/change impact 证据，不要求用户重新输入目标，也不把未命中的节点制造成影响。该阶段不新增写权限，因此暂不需要产品决策。
 
 ## 后续路线
 
@@ -142,7 +164,9 @@ V1 继续只读，不把 Host 目录读取授权表述成执行权限；真正�
 | 已完成 | 运行归档与对比 | SQLite/WAL 持久化、Session 管理、原文受控读取、跨运行结构化 diff | SQLite、默认完整本机原文、30 天 / 2 GiB 已落地 |
 | 已完成 | Provider 与插件 Host V1 | OpenRouter/Tool 生命周期、权限、opaque secret handle、最终 gate 与审计 | bundled trust、path-scoped dev、Host-owned secret、风险分级授权已落地 |
 | 已完成 | Tool Registry 运行证据收敛 | Tool 四层证据、节点深入画布、Definition/Host/Runtime 往返 | V1 只读；写 Tool 仍不开放 |
-| P6 | 辅助开发闭环 | 从受影响节点生成测试/修改建议并回写受控分支 | 任何写操作都需要独立权限和可审计逐次审批 |
+| 已完成 | 只读辅助开发 V1 | 源码证据、诊断、影响、修改/测试建议与不可应用补丁结构草案 | 选择零模型、零仓库写入边界 |
+| P7 | Development 跨平面入口 V1 | Runtime/Definition/Change 焦点进入同一开发证据链 | 继续只读，无新增安全决策 |
+| P8 | 受控开发执行 | 在受控分支应用补丁、运行测试并形成 commit/PR | 必须另行决定逐次审批、允许路径、回滚和审计 |
 
 ## 阶段管理规则
 

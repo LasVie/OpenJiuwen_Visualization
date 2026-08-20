@@ -55,6 +55,7 @@ localStorage["openjiuwen.visualization.plugin-states.v1"]
 - Runtime：至少存在一个 fixture、Core Runtime source 或 Swarm Runtime source；
 - Definition：存在 `repository.local.read` capability；
 - Change：至少存在一个 `changeSource`；
+- Development：至少存在一个 `developmentSource`；
 - Archive：存在 `trace.archive.local.v1` capability；
 - Tool 注册表：至少存在一个 `toolCatalogSource`；
 - Model 录制与面板：存在 Model Provider contribution；
@@ -66,6 +67,8 @@ localStorage["openjiuwen.visualization.plugin-states.v1"]
 - Subagent 深入画布：存在 `runtime.subagent.execution.v1` capability；
 - Rail 深入画布：存在 `graph.rail` capability；
 - Runtime ↔ Definition ↔ Change 源码往返：存在 `graph.cross-plane.source.v1` capability。
+
+`openjiuwen.development-assistant` 依赖 `openjiuwen.local-repository` 与 `openjiuwen.source-convergence`。关闭任一依赖时，开发辅助模块保留开启意图但进入 `blocked`，顶层入口不可用；依赖恢复后自动重新贡献确定性只读 source。该浏览器模块不映射 Host 写权限，也不会绕过 Repository API 获取文件系统访问。
 
 关闭当前 Runtime source 后，页面选择第一个仍可用来源；一个数据平面完全不可用时，其顶层导航进入 disabled 状态。启动时若持久化配置使默认页不可用，页面转到始终可访问的模块控制中心。
 

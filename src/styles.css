@@ -251,6 +251,15 @@ kbd,
   color: var(--success);
 }
 
+.development-header-summary {
+  color: #2d7477;
+}
+
+.development-header-assurance {
+  color: #466c61;
+  background: #e5efea;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -3441,7 +3450,7 @@ kbd {
   font-size: 10px;
 }
 
-@media (max-width: 1240px) {
+@media (max-width: 1320px) {
   .app-header {
     grid-template-columns: 175px auto minmax(260px, 1fr) auto;
     gap: 10px;
@@ -3505,6 +3514,10 @@ kbd {
 
   .runtime-key {
     min-width: 210px;
+  }
+
+  .workbench-mode-switch button small {
+    display: none;
   }
 }
 
