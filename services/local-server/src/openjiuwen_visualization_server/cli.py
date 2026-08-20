@@ -59,6 +59,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Plugin Host SQLite path inside an allowed root.",
     )
     serve.add_argument(
+        "--development-execution-path",
+        help="Controlled Development execution SQLite path inside an allowed root.",
+    )
+    serve.add_argument(
+        "--development-worktree-root",
+        help="Directory for isolated controlled Development worktrees.",
+    )
+    serve.add_argument(
         "--allow-unsigned-plugins",
         action="store_true",
         help=(
@@ -118,6 +126,12 @@ def _config(arguments: argparse.Namespace) -> LocalServiceConfig:
             arguments,
             "development_session_max_bytes",
             2 * 1024 * 1024 * 1024,
+        ),
+        development_execution_path=getattr(
+            arguments, "development_execution_path", None
+        ),
+        development_worktree_root=getattr(
+            arguments, "development_worktree_root", None
         ),
         plugin_host_path=getattr(arguments, "plugin_host_path", None),
         allow_unsigned_plugins=getattr(arguments, "allow_unsigned_plugins", False),

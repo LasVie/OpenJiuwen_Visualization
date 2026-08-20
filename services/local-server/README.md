@@ -1,6 +1,6 @@
 # Local Repository Service
 
-该服务为 Visualization Web 提供本地仓库的只读边界、实时 Runtime Trace、本机 SQLite/WAL 运行归档、Local Plugin Host、可选 OpenRouter provider-only adapter，以及显式启动的 Agent Core / JiuwenSwarm / SwarmFlow / Subagent 隔离执行器。主服务只使用 Python 标准库；Repository API 不导入目标仓模块、不执行仓库脚本，也不提供 Git 或文件写接口。四个真实执行器仅通过各自固定 bridge 与单独 Python 环境运行，OpenRouter 仅在用户显式启动、Host 授权且服务端已配置密钥时访问外网。
+该服务为 Visualization Web 提供本地仓库的只读边界、实时 Runtime Trace、本机 SQLite/WAL 运行归档、Local Plugin Host、可选 OpenRouter provider-only adapter，以及显式启动的 Agent Core / JiuwenSwarm / SwarmFlow / Subagent 隔离执行器。主服务只使用 Python 标准库；Repository API 不导入目标仓模块且始终只读。另有默认关闭的 Controlled Development Executor：它只能在逐操作确认后创建隔离 worktree/branch、应用已审查补丁、运行固定测试并形成不 push 的本地提交。
 
 ## 启动
 
@@ -14,7 +14,7 @@ python -B services/local-server/scripts/run_server.py `
 
 默认只监听 `127.0.0.1:8765`。`--allow-root` 可重复；所有扫描路径及 Git 根都必须位于其中。非 loopback host 会被拒绝。
 
-服务默认在第一个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 保存完整 Runtime 事件，保留 30 天且逻辑上限为 2 GiB。Development 分析 Session 独立保存到同目录的 `development-sessions.sqlite3`，同样默认 30 天 / 2 GiB；可分别使用 `--archive-*` 与 `--development-session-*` 覆盖，路径仍必须位于允许根目录内。
+服务默认在第一个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 保存完整 Runtime 事件，保留 30 天且逻辑上限为 2 GiB。Development 分析 Session 独立保存到同目录的 `development-sessions.sqlite3`，同样默认 30 天 / 2 GiB；受控执行状态保存为 `development-executions.sqlite3`，隔离 worktree 放在 `development-worktrees/`。可分别使用 `--archive-*`、`--development-session-*`、`--development-execution-path` 与 `--development-worktree-root` 覆盖，路径仍必须位于允许根目录内。
 
 Local Plugin Host 默认使用同目录下的 `.openjiuwen-visualization/plugin-host.sqlite3` 保存生命周期、可撤销权限和无业务原文的审计，并启用 WAL。可使用 `--plugin-host-path` 覆盖，路径仍必须位于允许根目录内。内置 OpenRouter 与 Tool Catalog 插件自动信任；未签名本地 manifest 默认关闭。开发时必须同时显式提供：
 
@@ -53,6 +53,13 @@ python -B services/local-server/scripts/run_server.py `
 | `GET` | `/api/v1/development/sessions/{id}` | 显式恢复原始意图与完整结构化分析 |
 | `GET` | `/api/v1/development/sessions/{id}/export` | 显式导出含完整分析的 Session JSON |
 | `DELETE` | `/api/v1/development/sessions/{id}` | 删除原始意图、完整结果与索引 |
+| `GET/POST` | `/api/v1/development/executions` | 列出元数据或只读验证完整 unified diff preview |
+| `GET` | `/api/v1/development/executions/{id}` | 读取本机完整 preview、状态与受控执行审计 |
+| `POST` | `/api/v1/development/executions/{id}/apply` | 逐次确认后在隔离 worktree/branch 应用精确补丁 |
+| `POST` | `/api/v1/development/executions/{id}/tests` | 逐次确认后运行一个 Host 固定测试 profile |
+| `POST` | `/api/v1/development/executions/{id}/commit-preview` | 生成 commit message 与 staged diff 绑定的审批摘要 |
+| `POST` | `/api/v1/development/executions/{id}/commit` | 逐次确认后形成不 push 的本地 branch commit |
+| `POST` | `/api/v1/development/executions/{id}/rollback` | 逐次确认后删除未发生外部推进的生成状态 |
 | `GET` | `/api/v1/plugin-host` | 读取 Host 策略、插件生命周期、权限与 opaque secret handle 状态 |
 | `GET` | `/api/v1/plugin-host/audit` | 游标读取本机无业务原文审计 |
 | `POST` | `/api/v1/plugin-host/plugins/{id}/state` | 启用或关闭 Host 插件生命周期 |
@@ -115,9 +122,11 @@ Tool 目录请求：
 - 浏览器 Origin 必须在启动白名单中；响应禁止缓存并设置 `nosniff`。
 - 请求体有大小上限，文件、文件数量和边数量均有扫描上限。
 - Definition cache 最多保存 8 个深拷贝快照、默认 300 秒过期，并限制单条 24 MB、总计 96 MB；源码指纹最多读取 128 MB，任一上限超出都会绕过缓存而不是返回未经验证的旧图。
-- Repository API 没有任何写、命令执行或凭据接口；Provider 与 Agent 执行位于独立显式路由，不扩大 Repository 权限。
+- Repository API 没有任何写、命令执行或凭据接口；Provider、Agent 执行与默认关闭的 Controlled Development Executor 位于各自显式路由，不扩大 Repository 权限。
 - Local Plugin Host 是 Provider、四个真实 Executor 和 Tool Catalog 新调用的最终授权边界。内置插件自动信任；其 integrity 是本地发布摘要，不等于第三方密码学签名。未签名插件只有在显式开发模式和 allow-root 内 path scope 下才能发现，且 V1 不执行其代码。
-- Host 将 read 视为安装时固定授权，将 network/secret 视为可撤销授权，将 write 强制为逐操作审批；当前没有通用写执行器。撤销后新调用失败，但取消既有调用始终可用。
+- Host 将 read 视为安装时固定授权，将 network/secret 视为可撤销授权，将 write 强制为逐操作审批。Controlled Development Executor 的 apply/test/commit/rollback 没有持久 write grant；每次确认均绑定 exact SHA-256，且服务没有 push 路由。
+- Controlled Development preview 通过临时 Git index 校验，限制 512 KiB / 12 个文本文件并形成精确 path allowlist；拒绝删除、重命名、binary、mode、submodule、symlink/junction 与 checkout filter。源 checkout 必须干净且 HEAD 不变。
+- 测试命令由 Host 从有限 profile 中生成，浏览器不能提交 Shell 或 argv。Commit 只含 reviewed staged diff；rollback 只删除本工具命名且 HEAD 未被外部推进的 branch/worktree。
 - OpenRouter key 只由 Host 通过 `openrouter.default` opaque handle 在调用时解析。Host 快照仅返回 handle 是否 resolved；Host 数据库和最多 5,000 条本机审计均不保存 secret、prompt、Context、Tool/Rail 原文或模型输出。
 - Agent Core endpoint 只运行仓库自带的固定 bridge，浏览器不能提交解释器、源码路径、命令或工具。bridge stdout 只接收固定前缀的有界 JSON event；其他运行日志被丢弃。
 - V1 Agent Core 只注册只读 `inspect_input` 工具，不开放文件、shell、Git、MCP、Subagent 或写操作。DeepAgent workspace 与日志限制在 `.agent-core-runtime/`。
@@ -142,7 +151,7 @@ Tool 目录请求：
 - GitHub PR API 只接受结构化 owner/repository/PR 编号，固定访问 `api.github.com` 且拒绝重定向；浏览器不接触凭据，本地 Git 与远端 PR 都不会被修改。公共仓默认无需 token；可选的 `OPENJIUWEN_GITHUB_TOKEN` 只从服务端进程环境读取。
 - Tool Catalog 仅解析候选文件 AST，不 import、执行或实例化 Tool；注册数据流无法静态解析时保留为 `dynamic`，返回始终声明 `writeOperations: false`。
 
-Trace、归档、Development Session、Plugin Host、Provider、Agent 执行、源码、缓存、变更、跨平面收敛与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/runtime-archive-and-compare-v1.md`](../../docs/runtime-archive-and-compare-v1.md)、[`docs/development-session-persistence-v1.md`](../../docs/development-session-persistence-v1.md)、[`docs/plugin-host-v1.md`](../../docs/plugin-host-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md)、[`docs/swarmflow-execution-v1.md`](../../docs/swarmflow-execution-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/subagent-execution-v1.md`](../../docs/subagent-execution-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/runtime-definition-change-convergence-v1.md`](../../docs/runtime-definition-change-convergence-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
+Trace、归档、Development Session、受控执行、Plugin Host、Provider、Agent 执行、源码、缓存、变更、跨平面收敛与 Tool 目录协议见 [`docs/core-runtime-v1.md`](../../docs/core-runtime-v1.md)、[`docs/runtime-archive-and-compare-v1.md`](../../docs/runtime-archive-and-compare-v1.md)、[`docs/development-session-persistence-v1.md`](../../docs/development-session-persistence-v1.md)、[`docs/development-controlled-execution-v1.md`](../../docs/development-controlled-execution-v1.md)、[`docs/plugin-host-v1.md`](../../docs/plugin-host-v1.md)、[`docs/agent-core-execution-v1.md`](../../docs/agent-core-execution-v1.md)、[`docs/swarm-runtime-v1.md`](../../docs/swarm-runtime-v1.md)、[`docs/jiuwenswarm-execution-v1.md`](../../docs/jiuwenswarm-execution-v1.md)、[`docs/swarmflow-execution-v1.md`](../../docs/swarmflow-execution-v1.md)、[`docs/subagent-runtime-v1.md`](../../docs/subagent-runtime-v1.md)、[`docs/subagent-execution-v1.md`](../../docs/subagent-execution-v1.md)、[`docs/model-provider-v1.md`](../../docs/model-provider-v1.md)、[`docs/openrouter-provider-v1.md`](../../docs/openrouter-provider-v1.md)、[`docs/source-evidence-v1.md`](../../docs/source-evidence-v1.md)、[`docs/repository-scan-cache-v1.md`](../../docs/repository-scan-cache-v1.md)、[`docs/git-change-plane-v1.md`](../../docs/git-change-plane-v1.md)、[`docs/runtime-definition-change-convergence-v1.md`](../../docs/runtime-definition-change-convergence-v1.md)、[`docs/github-pull-request-v1.md`](../../docs/github-pull-request-v1.md) 与 [`docs/tool-catalog-v1.md`](../../docs/tool-catalog-v1.md)。
 
 仓库发现只检查允许根目录本身和最多 200 个一级子目录，不做无界递归搜索；更深层仓库仍可由页面手动输入绝对路径并经过相同白名单校验。
 

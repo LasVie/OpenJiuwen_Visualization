@@ -23,6 +23,11 @@ from .development_sessions import (
     DevelopmentSessionError,
     DevelopmentSessionStore,
 )
+from .development_execution import (
+    DEVELOPMENT_EXECUTION_API_VERSION,
+    DevelopmentExecutionError,
+    DevelopmentExecutionStore,
+)
 from .git_changes import GitChangeError, GitChangeInspector, GitChangeOptions
 from .github_pull_requests import (
     GitHubPullRequestError,
@@ -41,6 +46,7 @@ from .openrouter_provider import (
     OpenRouterRuntimeAdapter,
 )
 from .plugin_host import (
+    DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
     OPENROUTER_HOST_PLUGIN_ID,
     TOOL_CATALOG_HOST_PLUGIN_ID,
     PluginAuthorization,
@@ -85,6 +91,24 @@ ARCHIVE_EXPORT_ROUTE = re.compile(r"^/api/v1/archive/sessions/([^/]+)/export$")
 DEVELOPMENT_SESSION_ROUTE = re.compile(r"^/api/v1/development/sessions/([^/]+)$")
 DEVELOPMENT_SESSION_EXPORT_ROUTE = re.compile(
     r"^/api/v1/development/sessions/([^/]+)/export$"
+)
+DEVELOPMENT_EXECUTION_ROUTE = re.compile(
+    r"^/api/v1/development/executions/([^/]+)$"
+)
+DEVELOPMENT_EXECUTION_APPLY_ROUTE = re.compile(
+    r"^/api/v1/development/executions/([^/]+)/apply$"
+)
+DEVELOPMENT_EXECUTION_TEST_ROUTE = re.compile(
+    r"^/api/v1/development/executions/([^/]+)/tests$"
+)
+DEVELOPMENT_EXECUTION_COMMIT_PREVIEW_ROUTE = re.compile(
+    r"^/api/v1/development/executions/([^/]+)/commit-preview$"
+)
+DEVELOPMENT_EXECUTION_COMMIT_ROUTE = re.compile(
+    r"^/api/v1/development/executions/([^/]+)/commit$"
+)
+DEVELOPMENT_EXECUTION_ROLLBACK_ROUTE = re.compile(
+    r"^/api/v1/development/executions/([^/]+)/rollback$"
 )
 OPENROUTER_CANCEL_ROUTE = re.compile(
     r"^/api/v1/model-providers/openrouter/invocations/([^/]+)/cancel$"
@@ -159,6 +183,8 @@ class LocalRepositoryApi:
         archive_enabled: bool = True,
         development_session_store: DevelopmentSessionStore | None = None,
         development_sessions_enabled: bool = True,
+        development_execution_store: DevelopmentExecutionStore | None = None,
+        development_execution_enabled: bool = True,
         plugin_host: PluginHost | None = None,
         plugin_host_enabled: bool = True,
     ) -> None:
@@ -200,6 +226,26 @@ class LocalRepositoryApi:
                 max_bytes=config.development_session_max_bytes,
             )
             if development_sessions_enabled
+            else None
+        )
+        development_execution_path = config.development_execution_path or (
+            config.allowed_roots[0]
+            / ".openjiuwen-visualization"
+            / "development-executions.sqlite3"
+        )
+        development_worktree_root = config.development_worktree_root or (
+            config.allowed_roots[0]
+            / ".openjiuwen-visualization"
+            / "development-worktrees"
+        )
+        self.development_execution_store = (
+            development_execution_store
+            if development_execution_store is not None
+            else DevelopmentExecutionStore(
+                development_execution_path,
+                development_worktree_root,
+            )
+            if development_execution_enabled
             else None
         )
         self._change_inspector = change_inspector or GitChangeInspector()
@@ -273,6 +319,9 @@ class LocalRepositoryApi:
             tool_authorization = self._host_authorization(
                 TOOL_CATALOG_HOST_PLUGIN_ID
             )
+            development_execution_authorization = self._host_authorization(
+                DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID
+            )
             openrouter_ready = (
                 openrouter_authorization.allowed
                 and self.openrouter_adapter.config.configured
@@ -301,6 +350,12 @@ class LocalRepositoryApi:
                             if self.development_session_store
                             else []
                         ),
+                        *(
+                            ["development.execution.controlled"]
+                            if self.development_execution_store
+                            and development_execution_authorization.allowed
+                            else []
+                        ),
                         "model.provider.openrouter.registry",
                         *(["model.provider.openrouter.invoke"] if openrouter_ready else []),
                         "runtime.agent-core.registry",
@@ -319,10 +374,17 @@ class LocalRepositoryApi:
                     "developmentSessionStorage": self.development_session_store.descriptor()
                     if self.development_session_store
                     else None,
+                    "developmentExecutionStorage": {
+                        "apiVersion": DEVELOPMENT_EXECUTION_API_VERSION,
+                        **self.development_execution_store.descriptor(),
+                    }
+                    if self.development_execution_store
+                    else None,
                     "pluginHost": {
                         "enabled": self.plugin_host is not None,
                         "openRouterStatus": openrouter_authorization.plugin_status,
                         "toolCatalogStatus": tool_authorization.plugin_status,
+                        "developmentExecutorStatus": development_execution_authorization.plugin_status,
                     },
                 },
             )
@@ -402,6 +464,10 @@ class LocalRepositoryApi:
             return self._development_session_list(split_path.query)
         if method == "POST" and route == "/api/v1/development/sessions":
             return self._development_session_create(body or {})
+        if method == "GET" and route == "/api/v1/development/executions":
+            return self._development_execution_list(split_path.query)
+        if method == "POST" and route == "/api/v1/development/executions":
+            return self._development_execution_preview(body or {})
         if method == "POST" and route == "/api/v1/repositories/scan":
             return self._scan(body or {})
         if method == "POST" and route == "/api/v1/repositories/source":
@@ -476,6 +542,38 @@ class LocalRepositoryApi:
         if method == "DELETE" and development_session_match:
             return self._development_session_delete(
                 unquote(development_session_match.group(1))
+            )
+        development_apply_match = DEVELOPMENT_EXECUTION_APPLY_ROUTE.fullmatch(route)
+        if method == "POST" and development_apply_match:
+            return self._development_execution_apply(
+                unquote(development_apply_match.group(1)), body or {}
+            )
+        development_test_match = DEVELOPMENT_EXECUTION_TEST_ROUTE.fullmatch(route)
+        if method == "POST" and development_test_match:
+            return self._development_execution_test(
+                unquote(development_test_match.group(1)), body or {}
+            )
+        development_commit_preview_match = (
+            DEVELOPMENT_EXECUTION_COMMIT_PREVIEW_ROUTE.fullmatch(route)
+        )
+        if method == "POST" and development_commit_preview_match:
+            return self._development_execution_commit_preview(
+                unquote(development_commit_preview_match.group(1)), body or {}
+            )
+        development_commit_match = DEVELOPMENT_EXECUTION_COMMIT_ROUTE.fullmatch(route)
+        if method == "POST" and development_commit_match:
+            return self._development_execution_commit(
+                unquote(development_commit_match.group(1)), body or {}
+            )
+        development_rollback_match = DEVELOPMENT_EXECUTION_ROLLBACK_ROUTE.fullmatch(route)
+        if method == "POST" and development_rollback_match:
+            return self._development_execution_rollback(
+                unquote(development_rollback_match.group(1)), body or {}
+            )
+        development_execution_match = DEVELOPMENT_EXECUTION_ROUTE.fullmatch(route)
+        if method == "GET" and development_execution_match:
+            return self._development_execution_get(
+                unquote(development_execution_match.group(1))
             )
         trace_match = TRACE_ROUTE.fullmatch(route)
         if method == "GET" and trace_match:
@@ -1030,6 +1128,444 @@ class LocalRepositoryApi:
             result = self.development_session_store.delete_session(session_id)
         except DevelopmentSessionError as exc:
             return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_execution_list(self, query: str) -> ApiResponse:
+        denied = self._host_gate(DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
+        if self.development_execution_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_execution_disabled",
+                "Controlled Development execution is disabled.",
+            )
+        values = parse_qs(query)
+        try:
+            result = self.development_execution_store.list_executions(
+                limit=int(values.get("limit", ["50"])[0]),
+                offset=int(values.get("offset", ["0"])[0]),
+            )
+        except (ValueError, DevelopmentExecutionError) as exc:
+            if isinstance(exc, DevelopmentExecutionError):
+                return _error(exc.status, exc.code, str(exc))
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_pagination",
+                "Controlled execution pagination is invalid.",
+            )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_execution_preview(self, body: dict[str, Any]) -> ApiResponse:
+        denied = self._host_gate(DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
+        if self.development_execution_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_execution_disabled",
+                "Controlled Development execution is disabled.",
+            )
+        unknown = set(body) - {
+            "repositoryPath",
+            "baseRevision",
+            "intent",
+            "unifiedDiff",
+        }
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_execution_preview",
+                f"Unsupported execution preview field: {sorted(unknown)[0]}",
+            )
+        repository_path = body.get("repositoryPath")
+        if not isinstance(repository_path, str):
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_path",
+                "repositoryPath must be a string.",
+            )
+        try:
+            identity = self._resolver.resolve(repository_path)
+            result = self.development_execution_store.create_preview(
+                identity,
+                expected_revision=body.get("baseRevision"),
+                intent=body.get("intent"),
+                patch=body.get("unifiedDiff"),
+            )
+        except PathAccessError as exc:
+            return _error(HTTPStatus.FORBIDDEN, "path_not_allowed", str(exc))
+        except RepositoryResolutionError as exc:
+            return _error(
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+                "repository_unavailable",
+                str(exc),
+            )
+        except DevelopmentExecutionError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.CREATED, result)
+
+    def _development_execution_get(self, execution_id: str) -> ApiResponse:
+        denied = self._host_gate(DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
+        if self.development_execution_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_execution_disabled",
+                "Controlled Development execution is disabled.",
+            )
+        try:
+            result = self.development_execution_store.get_execution(execution_id)
+        except DevelopmentExecutionError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_operation_gate(
+        self,
+        execution_id: str,
+        permission_id: str,
+        *,
+        confirmed: object,
+        approval_sha256: object,
+    ) -> ApiResponse | None:
+        if confirmed is not True:
+            if self.plugin_host is not None and isinstance(approval_sha256, str):
+                try:
+                    self.plugin_host.authorize_operation(
+                        DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
+                        permission_id,
+                        confirmed=False,
+                        target=execution_id,
+                        preview_sha256=approval_sha256,
+                    )
+                except PluginHostError:
+                    pass
+            return _error(
+                HTTPStatus.CONFLICT,
+                "operation_confirmation_required",
+                "This exact controlled operation requires explicit confirmation.",
+            )
+        if not isinstance(approval_sha256, str):
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_operation_digest",
+                "Approval digest must be a lowercase SHA-256 value.",
+            )
+        if self.plugin_host is None:
+            if not re.fullmatch(r"[0-9a-f]{64}", approval_sha256):
+                return _error(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_operation_digest",
+                    "Approval digest must be a lowercase SHA-256 value.",
+                )
+            return None
+        try:
+            authorization = self.plugin_host.authorize_operation(
+                DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
+                permission_id,
+                confirmed=True,
+                target=execution_id,
+                preview_sha256=approval_sha256,
+            )
+        except PluginHostError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        if authorization.allowed:
+            return None
+        status = (
+            HTTPStatus.SERVICE_UNAVAILABLE
+            if authorization.code == "plugin_disabled"
+            else HTTPStatus.FORBIDDEN
+        )
+        return _error(status, authorization.code, authorization.message)
+
+    def _record_development_operation(
+        self,
+        execution_id: str,
+        permission_id: str,
+        *,
+        outcome: str,
+        detail_code: str,
+    ) -> None:
+        if self.plugin_host is None:
+            return
+        try:
+            self.plugin_host.record_operation_result(
+                DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
+                permission_id,
+                target=execution_id,
+                outcome=outcome,
+                detail_code=detail_code,
+            )
+        except PluginHostError:
+            LOGGER.exception("Plugin Host could not record controlled operation result")
+
+    def _development_execution_identity(self, execution_id: str):
+        if self.development_execution_store is None:
+            raise DevelopmentExecutionError(
+                "development_execution_disabled",
+                "Controlled Development execution is disabled.",
+                status=HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+        value = self.development_execution_store.get_execution(execution_id)
+        execution = value.get("execution")
+        repository = execution.get("repository") if isinstance(execution, dict) else None
+        path = repository.get("path") if isinstance(repository, dict) else None
+        if not isinstance(path, str):
+            raise DevelopmentExecutionError(
+                "invalid_execution_repository",
+                "Stored execution repository is invalid.",
+            )
+        return self._resolver.resolve(path)
+
+    def _development_execution_apply(
+        self,
+        execution_id: str,
+        body: dict[str, Any],
+    ) -> ApiResponse:
+        unknown = set(body) - {"previewSha256", "confirmed"}
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_apply_request",
+                f"Unsupported patch apply field: {sorted(unknown)[0]}",
+            )
+        preview_sha256 = body.get("previewSha256")
+        denied = self._development_operation_gate(
+            execution_id,
+            "repository.patch.apply",
+            confirmed=body.get("confirmed"),
+            approval_sha256=preview_sha256,
+        )
+        if denied is not None:
+            return denied
+        try:
+            identity = self._development_execution_identity(execution_id)
+            assert self.development_execution_store is not None
+            result = self.development_execution_store.apply(
+                execution_id,
+                preview_sha256=preview_sha256,
+                identity=identity,
+            )
+        except (PathAccessError, RepositoryResolutionError) as exc:
+            self._record_development_operation(
+                execution_id,
+                "repository.patch.apply",
+                outcome="failed",
+                detail_code="repository_changed",
+            )
+            return _error(HTTPStatus.CONFLICT, "repository_changed", str(exc))
+        except DevelopmentExecutionError as exc:
+            self._record_development_operation(
+                execution_id,
+                "repository.patch.apply",
+                outcome="failed",
+                detail_code=exc.code,
+            )
+            return _error(exc.status, exc.code, str(exc))
+        self._record_development_operation(
+            execution_id,
+            "repository.patch.apply",
+            outcome="allowed",
+            detail_code="isolated_patch_applied",
+        )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_execution_test(
+        self,
+        execution_id: str,
+        body: dict[str, Any],
+    ) -> ApiResponse:
+        unknown = set(body) - {
+            "previewSha256",
+            "profileId",
+            "planSha256",
+            "confirmed",
+        }
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_test_request",
+                f"Unsupported test field: {sorted(unknown)[0]}",
+            )
+        plan_sha256 = body.get("planSha256")
+        denied = self._development_operation_gate(
+            execution_id,
+            "repository.test.run",
+            confirmed=body.get("confirmed"),
+            approval_sha256=plan_sha256,
+        )
+        if denied is not None:
+            return denied
+        if self.development_execution_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_execution_disabled",
+                "Controlled Development execution is disabled.",
+            )
+        try:
+            result = self.development_execution_store.run_test(
+                execution_id,
+                preview_sha256=body.get("previewSha256"),
+                profile_id=body.get("profileId"),
+                plan_sha256=plan_sha256,
+            )
+        except DevelopmentExecutionError as exc:
+            self._record_development_operation(
+                execution_id,
+                "repository.test.run",
+                outcome="failed",
+                detail_code=exc.code,
+            )
+            return _error(exc.status, exc.code, str(exc))
+        execution = result.get("execution")
+        test = execution.get("lastTest") if isinstance(execution, dict) else None
+        passed = isinstance(test, dict) and test.get("status") == "passed"
+        self._record_development_operation(
+            execution_id,
+            "repository.test.run",
+            outcome="allowed" if passed else "failed",
+            detail_code="test_passed" if passed else "test_failed",
+        )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_execution_commit_preview(
+        self,
+        execution_id: str,
+        body: dict[str, Any],
+    ) -> ApiResponse:
+        denied = self._host_gate(DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID)
+        if denied is not None:
+            return denied
+        unknown = set(body) - {"previewSha256", "message"}
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_commit_preview",
+                f"Unsupported commit preview field: {sorted(unknown)[0]}",
+            )
+        if self.development_execution_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_execution_disabled",
+                "Controlled Development execution is disabled.",
+            )
+        try:
+            result = self.development_execution_store.preview_commit(
+                execution_id,
+                preview_sha256=body.get("previewSha256"),
+                message=body.get("message"),
+            )
+        except DevelopmentExecutionError as exc:
+            return _error(exc.status, exc.code, str(exc))
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_execution_commit(
+        self,
+        execution_id: str,
+        body: dict[str, Any],
+    ) -> ApiResponse:
+        unknown = set(body) - {
+            "previewSha256",
+            "approvalSha256",
+            "message",
+            "confirmed",
+        }
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_commit_request",
+                f"Unsupported commit field: {sorted(unknown)[0]}",
+            )
+        approval_sha256 = body.get("approvalSha256")
+        denied = self._development_operation_gate(
+            execution_id,
+            "repository.git.commit",
+            confirmed=body.get("confirmed"),
+            approval_sha256=approval_sha256,
+        )
+        if denied is not None:
+            return denied
+        if self.development_execution_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_execution_disabled",
+                "Controlled Development execution is disabled.",
+            )
+        try:
+            result = self.development_execution_store.commit(
+                execution_id,
+                preview_sha256=body.get("previewSha256"),
+                message=body.get("message"),
+                approval_sha256=approval_sha256,
+            )
+        except DevelopmentExecutionError as exc:
+            self._record_development_operation(
+                execution_id,
+                "repository.git.commit",
+                outcome="failed",
+                detail_code=exc.code,
+            )
+            return _error(exc.status, exc.code, str(exc))
+        self._record_development_operation(
+            execution_id,
+            "repository.git.commit",
+            outcome="allowed",
+            detail_code="local_branch_commit_created",
+        )
+        return ApiResponse(HTTPStatus.OK, result)
+
+    def _development_execution_rollback(
+        self,
+        execution_id: str,
+        body: dict[str, Any],
+    ) -> ApiResponse:
+        unknown = set(body) - {
+            "previewSha256",
+            "approvalSha256",
+            "confirmed",
+        }
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_rollback_request",
+                f"Unsupported rollback field: {sorted(unknown)[0]}",
+            )
+        approval_sha256 = body.get("approvalSha256")
+        denied = self._development_operation_gate(
+            execution_id,
+            "repository.branch.rollback",
+            confirmed=body.get("confirmed"),
+            approval_sha256=approval_sha256,
+        )
+        if denied is not None:
+            return denied
+        if self.development_execution_store is None:
+            return _error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "development_execution_disabled",
+                "Controlled Development execution is disabled.",
+            )
+        try:
+            result = self.development_execution_store.rollback(
+                execution_id,
+                preview_sha256=body.get("previewSha256"),
+                approval_sha256=approval_sha256,
+            )
+        except DevelopmentExecutionError as exc:
+            self._record_development_operation(
+                execution_id,
+                "repository.branch.rollback",
+                outcome="failed",
+                detail_code=exc.code,
+            )
+            return _error(exc.status, exc.code, str(exc))
+        self._record_development_operation(
+            execution_id,
+            "repository.branch.rollback",
+            outcome="allowed",
+            detail_code="isolated_state_removed",
+        )
         return ApiResponse(HTTPStatus.OK, result)
 
     def _scan(self, body: dict[str, Any]) -> ApiResponse:

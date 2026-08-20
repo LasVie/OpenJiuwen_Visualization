@@ -8,6 +8,7 @@ from pathlib import Path
 from openjiuwen_visualization_server.app import LocalRepositoryApi
 from openjiuwen_visualization_server.config import LocalServiceConfig
 from openjiuwen_visualization_server.plugin_host import (
+    DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
     OPENROUTER_HOST_PLUGIN_ID,
     TOOL_CATALOG_HOST_PLUGIN_ID,
     PluginHost,
@@ -80,6 +81,60 @@ class PluginHostTests(unittest.TestCase):
                 OPENROUTER_HOST_PLUGIN_ID,
                 "provider.registry.read",
                 False,
+            )
+        self.assertEqual(context.exception.code, "permission_policy_fixed")
+
+    def test_write_permissions_are_disabled_by_default_and_approved_per_operation(self) -> None:
+        host = PluginHost(self.root / "host.sqlite3")
+        descriptor = host.descriptor()
+        executor = next(
+            plugin
+            for plugin in descriptor["host"]["plugins"]
+            if plugin["id"] == DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID
+        )
+
+        self.assertEqual(executor["status"], "disabled")
+        self.assertTrue(
+            all(
+                not permission["granted"]
+                for permission in executor["permissions"]
+                if permission["kind"] == "write"
+            )
+        )
+        host.set_enabled(DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID, True)
+        denied = host.authorize_operation(
+            DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
+            "repository.patch.apply",
+            confirmed=False,
+            target="devexec_0123456789abcdef0123456789abcdef",
+            preview_sha256="a" * 64,
+        )
+        approved = host.authorize_operation(
+            DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
+            "repository.patch.apply",
+            confirmed=True,
+            target="devexec_0123456789abcdef0123456789abcdef",
+            preview_sha256="a" * 64,
+        )
+        host.record_operation_result(
+            DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
+            "repository.patch.apply",
+            target="devexec_0123456789abcdef0123456789abcdef",
+            outcome="allowed",
+            detail_code="isolated_patch_applied",
+        )
+
+        self.assertFalse(denied.allowed)
+        self.assertEqual(denied.code, "operation_confirmation_required")
+        self.assertTrue(approved.allowed)
+        audit = host.audit_events()["events"]
+        self.assertEqual(audit[-1]["action"], "plugin.operation.result")
+        self.assertNotIn(str(self.root), json.dumps(audit))
+        with self.assertRaises(PluginHostError) as context:
+            host.set_permission(
+                DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
+                "repository.patch.apply",
+                True,
             )
         self.assertEqual(context.exception.code, "permission_policy_fixed")
 

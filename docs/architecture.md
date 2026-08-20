@@ -8,10 +8,10 @@
 - Runtime：确定性回放或真实 Agent/Workflow 运行事件。
 - Archive：本机历史 Session、受控原文读取和跨运行对比。
 - Change：本地 Git、commit 和 GitHub PR 的变更与影响关系。
-- Development：把开发意图收敛为可复核源码、影响、修改/测试建议和不可应用的补丁结构草案。
+- Development：把开发意图收敛为可复核源码、影响、修改/测试建议；受控执行作为独立、默认关闭的写入子平面。
 - Modules：浏览器 Workbench contribution 与本地 Host 生命周期、权限、capability 可见性。
 
-浏览器只负责交互与渲染。读取本地仓库、运行 Python、执行 Git 或调用模型的能力必须进入独立本地服务，不允许 React 组件直接访问凭据或执行目标仓代码。Repository API 始终只读且不 import 目标仓；真实 Agent Core 与 JiuwenSwarm Agent Team 只通过显式启动的固定子进程 bridge 运行。
+浏览器只负责交互与渲染。读取本地仓库、运行 Python、执行 Git 或调用模型的能力必须进入独立本地服务，不允许 React 组件直接访问凭据或执行目标仓代码。Repository API 始终只读且不 import 目标仓；真实 Agent Core 与 JiuwenSwarm Agent Team 只通过显式启动的固定子进程 bridge 运行。受控开发写入进入默认关闭的独立 executor，每个动作由 Host 按 exact digest 逐次授权。
 
 ## 依赖方向
 
@@ -86,7 +86,8 @@ Browser Workbench manifest / requestedEnabled
 Local Plugin Host ── lifecycle + grants + secret handles + audit
                     │ final gate
                     ├── OpenRouter provider / Agent executors
-                    └── Tool Catalog repository scan
+                    ├── Tool Catalog repository scan
+                    └── Controlled Development executor
 ```
 
 内置插件随本地服务发布并自动信任；其 integrity 是发布内稳定摘要，不冒充第三方密码学签名。未签名 manifest 只有在显式开发者模式和 allow-root 内的 path scope 下才能被发现，V1 只解析声明而不执行插件代码。SQLite/WAL 只保存状态与无原文审计；Runtime 原文仍由独立 Archive 平面持有。完整合同见 [`plugin-host-v1.md`](plugin-host-v1.md)。
@@ -296,3 +297,11 @@ Development 收到入口后按 source repository 自动选择允许目录中的�
 建议层只描述改动边界、风险、guardrail 与验证层次。补丁预览带有不可应用标记，只包含结构化占位说明；它不是 unified diff，不能被工具应用。扫描上限、语法错误、缺少稳定标识符和推断关系都进入 warnings，不会被静默提升为精确事实。成功 projection 会形成可恢复的本机 Session，但恢复历史证据不会自动声明其仍与当前工作树一致。
 
 可选 OpenRouter 分支从同一 projection 派生，但不会修改它。用户每次显式选择最多三个源码 evidence；Source Reader 每个最多返回 64 行，feature 将开发意图、最小结构化 Runtime/Change 摘要与所选源码构造成完整 OpenRouter body，显示 destination、字符数和 SHA-256。只有再次确认才创建独立 `agent-core` Runtime Trace 并调用 Provider。完整 Context、Tool、Rail/Hook 与既有模型原文不进入该 payload。模型 delta/usage/terminal event 只生成紫色旁支节点；结构不合格的模型输出只按原文展示。Development Session 不复制该输入或结果，完整模型调用由 Runtime Archive 管理。完整合同见 [`development-assistant-v1.md`](development-assistant-v1.md)、[`development-session-persistence-v1.md`](development-session-persistence-v1.md) 与 [`development-openrouter-enhancement-v1.md`](development-openrouter-enhancement-v1.md)。
+
+## Controlled Development Execution V1
+
+`services/local-server/.../development_execution.py` 是只读 Development 与仓库写入之间的新隔离边界。它不改变九步确定性 projection，也不把 OpenRouter 建议自动提升为 patch。调用者显式提交完整 unified diff 后，服务先用临时 Git index 对分析 revision 做只读校验，形成精确 path allowlist、测试 profile 与 preview SHA-256。
+
+Host 插件 `openjiuwen.host.development-executor` 默认关闭；启用只开放 preview，apply/test/commit/rollback 仍各自需要不可持久化的 per-operation approval。Apply 只创建工具命名的 worktree/branch，禁用 hooks、GPG、fsmonitor、交互式凭据与外部 checkout filter；测试 argv 只能来自服务端固定 profile；commit 仅包含已核验 staged diff 且没有 push 路由；rollback 在 branch HEAD 未被外部推进时删除精确生成状态。
+
+完整 patch、测试输出、状态机和本机事件保存在独立 SQLite/WAL，不进入 Plugin Host 的无原文审计。当前服务端合同已完成，浏览器画布与审批交互由下一独立模块接入。完整协议见 [`development-controlled-execution-v1.md`](development-controlled-execution-v1.md)。

@@ -39,6 +39,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | Development 跨平面入口 V1 | 已完成 | Runtime/Definition/Change 焦点自动进入同一开发证据链，保留 source/revision 与最小结构化运行/变更证据 |
 | Development 分析 Session V1 | 已完成 | 独立 SQLite/WAL、自动保存、元数据列表、显式恢复/导出、完整删除、30 天 / 2 GiB 与 schema migration |
 | Development OpenRouter 只读增强 V1 | 已完成 | 逐次源码选择、完整外发 JSON/SHA-256、单次确认、独立 Runtime Trace 与紫色模型建议分支 |
+| Controlled Development Executor 服务 V1 | 已完成 | 临时 index 校验、隔离 worktree/branch、逐次摘要审批、测试白名单、本地 commit、审计与回滚 |
 
 ## 当前已支持功能
 
@@ -82,6 +83,9 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 外发只含开发意图、最小结构化 Runtime/Definition/Change 摘要和所选源码；完整 Context、Tool、Rail/Hook、既有模型原文与 Session payload 被排除；
 - 实际调用从同一个 preview 对象生成参数，确认后进入独立 Runtime Trace；模型流、usage、结构化建议与原文形成紫色旁支，不能覆盖确定性节点；
 - Provider 关闭、撤权或未配置时只禁用可选增强，确定性 Development 与 Session 继续可用。
+- 受控执行 Host 插件默认关闭；服务端已支持把用户审查后的 unified diff 只读校验为 exact preview，并将 apply/test/commit/rollback 拆成四次摘要绑定确认；
+- 补丁只允许最多 12 个普通文本新增/修改路径，源 checkout 必须 clean 且 revision 未变化；工作仅发生在工具命名的隔离 worktree/branch，commit 不会 push；
+- 测试命令不能由浏览器提供，只能从服务端固定 profile 选择；执行状态、完整 diff、测试输出与本机审计使用独立 SQLite/WAL。
 
 ### Runtime 与真实执行
 
@@ -129,6 +133,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
 - Development V1 只分析当前有界 Python 静态图；一阶关系不是完整 blast radius，跨平面运行/变更证据只用于锁定入口与解释边界；
 - Development V1 不运行目标仓测试，也不产生可应用 patch 或任何仓库写入；分析 Session 暂不支持重命名、搜索、标签或两次建议对比；
+- 受控执行浏览器审批 UI 尚未接入；当前只能通过版本化本机 API 使用，且执行入口只接受用户已经审查的 unified diff；
 - Development 模型输入/输出由 Runtime Archive 持有，尚未与 Development Session 建立持久关联；恢复 Session 不会自动恢复或重放模型分支；
 - 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
 - Host V1 不提供页面安装/卸载/升级、第三方签名链、动态插件代码执行、进程沙箱或崩溃监督；内置 integrity 只是本地发布摘要；
@@ -184,7 +189,7 @@ Development 的确定性九步 projection 现在会自动保存为独立本机 S
 
 实现还包括每个源码最多 64 行 / 8,000 字符、总源码最多 24,000 字符、旧预览随选择/model/预算变化失效、JSON schema 验证以及不合格响应只保留原文。OpenRouter 数据进入现有 Runtime Archive，不复制进 Development Session。
 
-受控补丁、测试和 Git 写入流程按用户决定暂不启动；下一步需要单独确定审批、允许路径、分支隔离、回滚和审计模型。
+受控执行安全模型已经按逐次审批、exact allowlist、隔离 branch/worktree、无 push、可回滚和双层本机审计落地到服务端。下一步接入 Development 画布与审批 UI；OpenRouter 仍保持只读，不自动生成或应用 patch。
 
 ## 后续路线
 
@@ -200,7 +205,7 @@ Development 的确定性九步 projection 现在会自动保存为独立本机 S
 | 已完成 | Development 跨平面入口 V1 | Runtime/Definition/Change 焦点进入同一开发证据链 | 结构化最小入口与显式 revision 降级已落地 |
 | 已完成 | Development 分析 Session | 本机自动保存、恢复、删除和完整导出开发证据链 | 独立 SQLite/WAL、完整本机 payload、30 天 / 2 GiB 与 schema migration 已落地 |
 | 已完成 | 可选 OpenRouter 辅助分析 | 在确定性证据上增强诊断与方案 | 逐次开启、完整外发预览、最小数据范围、独立 Trace 与零仓库写入已落地 |
-| 待决策 | 受控开发执行 | 在受控分支应用补丁、运行测试并形成 commit/PR | 必须决定逐次审批、允许路径、回滚和审计 |
+| 进行中 | 受控开发执行 | 服务端已完成；接入补丁预览、逐次审批、测试结果、commit 与 rollback 画布 | 安全基线已批准；V1 不 push、不创建远端 PR |
 
 ## 阶段管理规则
 

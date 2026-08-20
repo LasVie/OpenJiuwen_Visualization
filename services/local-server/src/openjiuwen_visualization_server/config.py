@@ -22,6 +22,8 @@ class LocalServiceConfig:
     development_session_path: Path | None = None
     development_session_retention_days: int = 30
     development_session_max_bytes: int = 2 * 1024 * 1024 * 1024
+    development_execution_path: Path | None = None
+    development_worktree_root: Path | None = None
     plugin_host_path: Path | None = None
     allow_unsigned_plugins: bool = False
     plugin_developer_roots: tuple[Path, ...] = ()
@@ -39,6 +41,8 @@ class LocalServiceConfig:
         development_session_path: str | Path | None = None,
         development_session_retention_days: int = 30,
         development_session_max_bytes: int = 2 * 1024 * 1024 * 1024,
+        development_execution_path: str | Path | None = None,
+        development_worktree_root: str | Path | None = None,
         plugin_host_path: str | Path | None = None,
         allow_unsigned_plugins: bool = False,
         plugin_developer_roots: Iterable[str | Path] = (),
@@ -99,6 +103,50 @@ class LocalServiceConfig:
                 "Development Session path must stay inside an allowed root."
             )
 
+        resolved_development_execution = (
+            Path(development_execution_path).expanduser().resolve(strict=False)
+            if development_execution_path is not None
+            else resolved_roots[0]
+            / ".openjiuwen-visualization"
+            / "development-executions.sqlite3"
+        )
+        if (
+            resolved_development_execution.exists()
+            and resolved_development_execution.is_dir()
+        ):
+            raise PathAccessError(
+                "Development execution path must be a file, not a directory."
+            )
+        if not any(
+            resolved_development_execution.is_relative_to(root)
+            for root in resolved_roots
+        ):
+            raise PathAccessError(
+                "Development execution path must stay inside an allowed root."
+            )
+
+        resolved_development_worktrees = (
+            Path(development_worktree_root).expanduser().resolve(strict=False)
+            if development_worktree_root is not None
+            else resolved_roots[0]
+            / ".openjiuwen-visualization"
+            / "development-worktrees"
+        )
+        if (
+            resolved_development_worktrees.exists()
+            and not resolved_development_worktrees.is_dir()
+        ):
+            raise PathAccessError(
+                "Development worktree root must be a directory, not a file."
+            )
+        if not any(
+            resolved_development_worktrees.is_relative_to(root)
+            for root in resolved_roots
+        ):
+            raise PathAccessError(
+                "Development worktree root must stay inside an allowed root."
+            )
+
         resolved_plugin_host = (
             Path(plugin_host_path).expanduser().resolve(strict=False)
             if plugin_host_path is not None
@@ -140,6 +188,8 @@ class LocalServiceConfig:
             development_session_path=resolved_development_sessions,
             development_session_retention_days=development_session_retention_days,
             development_session_max_bytes=development_session_max_bytes,
+            development_execution_path=resolved_development_execution,
+            development_worktree_root=resolved_development_worktrees,
             plugin_host_path=resolved_plugin_host,
             allow_unsigned_plugins=allow_unsigned_plugins,
             plugin_developer_roots=tuple(resolved_developer_roots),

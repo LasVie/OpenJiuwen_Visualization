@@ -19,12 +19,14 @@ PLUGIN_HOST_API_VERSION = "1.0.0"
 PLUGIN_MANIFEST_VERSION = "1.0.0"
 OPENROUTER_HOST_PLUGIN_ID = "openjiuwen.host.openrouter"
 TOOL_CATALOG_HOST_PLUGIN_ID = "openjiuwen.host.tool-catalog"
+DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID = "openjiuwen.host.development-executor"
 MAX_AUDIT_EVENTS = 5_000
 MAX_DEVELOPER_MANIFESTS = 100
 MAX_MANIFEST_BYTES = 256 * 1024
 
 _IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9._-]{2,119}$")
 _VERSION = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MANIFEST_FILENAME = "*.openjiuwen-plugin.json"
 
 
@@ -126,6 +128,17 @@ def _bundled_plugins() -> tuple[PluginDefinition, ...]:
         "version": "1.0.0",
         "capabilities": ["repository.tools.read"],
     }
+    development_executor_payload: dict[str, object] = {
+        "id": DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
+        "version": "1.0.0",
+        "capabilities": [
+            "development.execution.preview",
+            "development.patch.apply",
+            "development.test.run",
+            "development.git.commit",
+            "development.rollback",
+        ],
+    }
     return (
         PluginDefinition(
             id=OPENROUTER_HOST_PLUGIN_ID,
@@ -201,6 +214,72 @@ def _bundled_plugins() -> tuple[PluginDefinition, ...]:
             source_kind="bundled",
             source_identity="openjiuwen-visualization/local-service",
             integrity=_integrity(tool_payload),
+            runtime_mode="builtin-adapter",
+            executable=True,
+        ),
+        PluginDefinition(
+            id=DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
+            name="Controlled Development Executor",
+            version="1.0.0",
+            description=(
+                "Validates reviewed unified diffs, creates an isolated local Git "
+                "worktree, runs fixed test profiles, and forms a local branch commit. "
+                "Every mutating action requires a digest-bound confirmation; push is absent."
+            ),
+            group="integration",
+            capabilities=tuple(development_executor_payload["capabilities"]),
+            permissions=(
+                _permission(
+                    "repository.development.preview",
+                    "预览受控开发操作",
+                    "只读校验补丁、base revision、精确路径和可用测试计划。",
+                    "read",
+                    "install",
+                    default_granted=True,
+                    revocable=False,
+                ),
+                _permission(
+                    "repository.patch.apply",
+                    "应用隔离补丁",
+                    "为单次已审查补丁创建隔离 worktree 和本地分支。",
+                    "write",
+                    "per-operation",
+                    default_granted=False,
+                    revocable=False,
+                ),
+                _permission(
+                    "repository.test.run",
+                    "运行白名单测试",
+                    "仅运行 Host 识别并在调用前展示的固定测试命令。",
+                    "write",
+                    "per-operation",
+                    default_granted=False,
+                    revocable=False,
+                ),
+                _permission(
+                    "repository.git.commit",
+                    "创建本地分支提交",
+                    "只提交已审查并已暂存的路径；不会 push。",
+                    "write",
+                    "per-operation",
+                    default_granted=False,
+                    revocable=False,
+                ),
+                _permission(
+                    "repository.branch.rollback",
+                    "回滚隔离执行",
+                    "删除本工具创建且未发生外部推进的 worktree 和分支。",
+                    "write",
+                    "per-operation",
+                    default_granted=False,
+                    revocable=False,
+                ),
+            ),
+            default_enabled=False,
+            trust="bundled-trusted",
+            source_kind="bundled",
+            source_identity="openjiuwen-visualization/local-service",
+            integrity=_integrity(development_executor_payload),
             runtime_mode="builtin-adapter",
             executable=True,
         ),
@@ -536,6 +615,116 @@ class PluginHost:
         if not requested:
             return PluginAuthorization(False, code, message, status)
         return PluginAuthorization(False, code, message, status)
+
+    def authorize_operation(
+        self,
+        plugin_id: str,
+        permission_id: str,
+        *,
+        confirmed: bool,
+        target: str,
+        preview_sha256: str,
+    ) -> PluginAuthorization:
+        """Consume no standing grant; audit one exact digest-bound approval."""
+        definition = self._definition(plugin_id)
+        permission = next(
+            (item for item in definition.permissions if item.id == permission_id),
+            None,
+        )
+        if permission is None:
+            raise PluginHostError(
+                "permission_not_found",
+                "Permission is not declared by this plugin.",
+                status=HTTPStatus.NOT_FOUND,
+            )
+        if permission.kind != "write" or permission.grant_mode != "per-operation":
+            raise PluginHostError(
+                "permission_policy_fixed",
+                "Only per-operation write permissions use this approval gate.",
+                status=HTTPStatus.CONFLICT,
+            )
+        if not isinstance(confirmed, bool):
+            raise PluginHostError(
+                "invalid_operation_confirmation",
+                "confirmed must be a boolean.",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        if not isinstance(target, str) or not _IDENTIFIER.fullmatch(target):
+            raise PluginHostError(
+                "invalid_operation_target",
+                "Operation target must be an opaque local identifier.",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        if not isinstance(preview_sha256, str) or not _SHA256.fullmatch(preview_sha256):
+            raise PluginHostError(
+                "invalid_operation_digest",
+                "Operation preview digest must be a lowercase SHA-256 value.",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        lifecycle = self.authorize(plugin_id)
+        if not lifecycle.allowed:
+            return lifecycle
+        allowed = confirmed
+        code = "operation_approved" if allowed else "operation_confirmation_required"
+        message = (
+            "One digest-bound operation is approved."
+            if allowed
+            else "This write operation requires an explicit confirmation."
+        )
+        with self._lock, self._connection() as connection:
+            self._audit(
+                connection,
+                plugin_id=plugin_id,
+                action="plugin.operation.approval",
+                target=target,
+                outcome="allowed" if allowed else "denied",
+                detail_code=f"{permission_id}:{preview_sha256[:16]}",
+            )
+        return PluginAuthorization(allowed, code, message, lifecycle.plugin_status)
+
+    def record_operation_result(
+        self,
+        plugin_id: str,
+        permission_id: str,
+        *,
+        target: str,
+        outcome: str,
+        detail_code: str,
+    ) -> None:
+        """Record an opaque result without repository paths, commands, or payload text."""
+        definition = self._definition(plugin_id)
+        permission = next(
+            (item for item in definition.permissions if item.id == permission_id),
+            None,
+        )
+        if permission is None or permission.grant_mode != "per-operation":
+            raise PluginHostError(
+                "permission_not_found",
+                "Per-operation permission is not declared by this plugin.",
+                status=HTTPStatus.NOT_FOUND,
+            )
+        if not isinstance(target, str) or not _IDENTIFIER.fullmatch(target):
+            raise PluginHostError(
+                "invalid_operation_target",
+                "Operation target must be an opaque local identifier.",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        if outcome not in {"allowed", "failed", "cancelled"}:
+            raise PluginHostError(
+                "invalid_operation_outcome",
+                "Operation outcome is invalid.",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        normalized_detail = _required_string(detail_code, "detail_code", maximum=120)
+        with self._lock, self._connection() as connection:
+            self._audit(
+                connection,
+                plugin_id=plugin_id,
+                action="plugin.operation.result",
+                target=target,
+                outcome=outcome,
+                detail_code=f"{permission_id}:{normalized_detail}",
+            )
 
     def _secret_resolved(self, handle_id: str | None) -> bool:
         if handle_id is None:
