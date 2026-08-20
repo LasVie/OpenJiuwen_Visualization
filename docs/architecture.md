@@ -285,4 +285,8 @@ Git Change 插件把 `working-tree` 与本地 `base/head` 比较归一化为 cha
 
 投影固定为九个阶段，并把五类可展开结果保持为独立实体：source evidence、relation impact、change suggestion、test suggestion 和 patch outline。单个阶段展开时画布进入聚焦布局并自动 fit；宏观模式保留 3×3 主链；“展开全部”才同时投影所有分支。所有节点继续复用共享磁吸、实时避碰、Source Viewer 和 Definition 导航。
 
+Runtime、Definition 与 Change 通过 `DevelopmentNavigationRequest` 进入 Development，不互相导入页面内部状态。请求始终携带稳定 source identity；Runtime 仅附带 event kind、phase、sequence 与 Token 指标，Definition 仅附带节点身份和聚合后的 Runtime span/event/token，Change 仅附带 comparison、file status、impact kind/confidence/reason 与 hunk indexes。Context 消息、Tool 参数/结果、模型流式正文和完整 Runtime observations 不进入该合同。
+
+Development 收到入口后按 source repository 自动选择允许目录中的仓库并扫描当前 snapshot，再用 `matchSourceToDefinition()` 核验 revision、dirty 与歧义状态。可核验目标被固定为第一条 evidence；revision mismatch 只保留 `inferred`，dirty/unverified 只保留 `strong`；没有匹配时保留 `unmatched` warning，绝不创建不存在的图节点。入口 ID 只负责同一页面会话中的导航去重，不作为持久 identity。
+
 建议层只描述改动边界、风险、guardrail 与验证层次。补丁预览带有不可应用标记，只包含结构化占位说明；它不是 unified diff，不能被工具应用。扫描上限、语法错误、缺少稳定标识符和推断关系都进入 warnings，不会被静默提升为精确事实。完整合同见 [`development-assistant-v1.md`](development-assistant-v1.md)。

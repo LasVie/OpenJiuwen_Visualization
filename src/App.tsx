@@ -27,7 +27,12 @@ import {
 import { DefinitionWorkspace } from "./features/definition-plane";
 import { ChangeWorkspace } from "./features/change-plane";
 import { TraceArchiveWorkspace } from "./features/trace-archive";
-import { DevelopmentAssistantWorkspace } from "./features/development-assistant";
+import {
+  DevelopmentAssistantWorkspace,
+  createRuntimeDevelopmentNavigation,
+  type DevelopmentNavigationRequest,
+  type DevelopmentNavigationSeed,
+} from "./features/development-assistant";
 import {
   CoreRuntimeSessionBar,
   RuntimeSourceToggle,
@@ -103,7 +108,10 @@ export default function App() {
     useState<SourceNavigationRequest | null>(null);
   const [changeNavigation, setChangeNavigation] =
     useState<SourceNavigationRequest | null>(null);
+  const [developmentNavigation, setDevelopmentNavigation] =
+    useState<DevelopmentNavigationRequest | null>(null);
   const sourceNavigationId = useRef(0);
+  const developmentNavigationId = useRef(0);
   const pluginHost = usePluginHost();
   const hostPluginStates = useMemo(
     () => hostWorkbenchStateOverrides(pluginHost.snapshot),
@@ -334,6 +342,20 @@ export default function App() {
   function openChangeForSource(source: GraphSourceReference) {
     setChangeNavigation(nextSourceNavigation(source));
     setWorkbenchMode("change");
+  }
+
+  function openDevelopment(navigation: DevelopmentNavigationSeed) {
+    developmentNavigationId.current += 1;
+    setDevelopmentNavigation({
+      ...navigation,
+      id: developmentNavigationId.current,
+    });
+    setWorkbenchMode("development");
+  }
+
+  function openDevelopmentForRuntimeEvent(event: RuntimeTraceEvent) {
+    const navigation = createRuntimeDevelopmentNavigation(event);
+    if (navigation) openDevelopment(navigation);
   }
 
   function openRuntimeEvent(event: RuntimeTraceEvent) {
@@ -605,7 +627,10 @@ export default function App() {
           <button
             type="button"
             className={workbenchMode === "development" ? "workbench-mode--active" : ""}
-            onClick={() => setWorkbenchMode("development")}
+            onClick={() => {
+              setDevelopmentNavigation(null);
+              setWorkbenchMode("development");
+            }}
             aria-pressed={workbenchMode === "development"}
             disabled={!availability.development}
           >
@@ -907,7 +932,9 @@ export default function App() {
                 open={inspectorOpen}
                 onToggle={toggleInspector}
                 onOpenDefinition={openDefinitionForRuntimeEvent}
+                onOpenDevelopment={openDevelopmentForRuntimeEvent}
                 sourceNavigationEnabled={availability.sourceConvergence}
+                developmentNavigationEnabled={availability.sourceConvergence && availability.development}
               />
             </Suspense>
           ) : (
@@ -920,7 +947,9 @@ export default function App() {
               onToggle={toggleInspector}
               runtimeEvent={activeRuntimeEvents[stepIndex]}
               onOpenDefinition={openDefinitionForRuntimeEvent}
+              onOpenDevelopment={openDevelopmentForRuntimeEvent}
               sourceNavigationEnabled={availability.sourceConvergence}
+              developmentNavigationEnabled={availability.sourceConvergence && availability.development}
             />
           )}
           <TimelineControls
@@ -958,6 +987,9 @@ export default function App() {
           onOpenChange={availability.sourceConvergence && availability.change
             ? openChangeForSource
             : undefined}
+          onOpenDevelopment={availability.sourceConvergence && availability.development
+            ? openDevelopment
+            : undefined}
           toolsEnabled={availability.tools}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
@@ -973,6 +1005,9 @@ export default function App() {
           onOpenDefinition={availability.sourceConvergence
             ? openDefinitionForSource
             : undefined}
+          onOpenDevelopment={availability.sourceConvergence && availability.development
+            ? openDevelopment
+            : undefined}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
           onToggleMagnet={toggleMagnet}
@@ -980,7 +1015,9 @@ export default function App() {
         />
       ) : workbenchMode === "development" ? (
         <DevelopmentAssistantWorkspace
+          key={developmentNavigation?.id ?? "manual"}
           sources={workbench.developmentSources}
+          navigation={availability.sourceConvergence ? developmentNavigation : null}
           onOpenDefinition={availability.sourceConvergence
             ? openDefinitionForSource
             : undefined}

@@ -3,10 +3,19 @@ import type {
   RegisteredGraphEdge,
   RegisteredGraphNode,
 } from "../../kernel";
+import {
+  canonicalSourceIdentity,
+  sameSourceLocation,
+} from "../../kernel";
 import type {
   LocalRepositoryIdentity,
   LocalRepositoryScanResult,
 } from "../../adapters/local-repository";
+import {
+  matchSourceToDefinition,
+  type RuntimeSourceMatchStatus,
+} from "../source-convergence";
+import type { DevelopmentNavigationRequest } from "./navigation";
 
 export type DevelopmentStageKind =
   | "intent"
@@ -79,6 +88,13 @@ export interface DevelopmentStage {
   count?: number;
 }
 
+export interface DevelopmentEntryEvidence {
+  navigation: DevelopmentNavigationRequest;
+  status: RuntimeSourceMatchStatus;
+  matchedNodeId?: string;
+  reason: string;
+}
+
 export interface DevelopmentAnalysisProjection {
   repository: LocalRepositoryIdentity;
   intent: string;
@@ -91,6 +107,7 @@ export interface DevelopmentAnalysisProjection {
   stages: readonly DevelopmentStage[];
   diagnosis: string;
   warnings: readonly string[];
+  entry?: DevelopmentEntryEvidence;
   readOnly: true;
   repositoryWrite: false;
 }
@@ -281,6 +298,80 @@ function evidenceTargets(scan: LocalRepositoryScanResult, terms: readonly string
   });
 }
 
+function entryEvidence(
+  scan: LocalRepositoryScanResult,
+  navigation: DevelopmentNavigationRequest | undefined,
+) {
+  if (!navigation) return null;
+  const originNodeId = navigation.origin.plane === "runtime"
+    ? undefined
+    : navigation.origin.nodeId;
+  const originNode = originNodeId
+    ? scan.graph.nodes.find((node) => node.id === originNodeId)
+    : undefined;
+  const originSource = originNode ? nodeSource(originNode) : undefined;
+  const explicitMatch = originNode && originSource && sameSourceLocation(
+    navigation.source,
+    originSource,
+  )
+    ? (() => {
+        const requestedRevision = canonicalSourceIdentity(navigation.source).revision;
+        const currentRevision = canonicalSourceIdentity(originSource).revision;
+        const status: RuntimeSourceMatchStatus = requestedRevision && currentRevision && requestedRevision !== currentRevision
+          ? "revision-mismatch"
+          : scan.repository.dirty
+            ? "worktree-dirty"
+            : !requestedRevision || !currentRevision
+              ? "revision-unverified"
+              : "exact";
+        const reason = status === "exact"
+          ? "节点 ID、仓库、revision、路径与 symbol 完全一致。"
+          : status === "worktree-dirty"
+            ? "节点 ID 与源码位置一致，但当前扫描来自含未提交修改的工作树。"
+            : status === "revision-unverified"
+              ? "节点 ID 与源码位置一致，但入口或当前定义未声明 revision。"
+              : `节点 ID 与源码位置一致，但入口 ${navigation.source.revision?.slice(0, 12) ?? "?"} 与当前定义 ${originSource.revision?.slice(0, 12) ?? "?"} 不一致。`;
+        return { status, node: originNode, reason };
+      })()
+    : null;
+  const match = explicitMatch ?? matchSourceToDefinition(scan.graph, navigation.source, {
+    repositoryDirty: scan.repository.dirty,
+  });
+  if (!match) return null;
+  const entry: DevelopmentEntryEvidence = {
+    navigation,
+    status: match.status,
+    ...(match.node ? { matchedNodeId: match.node.id } : {}),
+    reason: match.reason,
+  };
+  if (!match.node) return { entry, target: undefined };
+  const source = nodeSource(match.node);
+  if (!source) return { entry, target: undefined };
+  const confidence: DevelopmentEvidenceConfidence = match.status === "exact"
+    ? "exact"
+    : ["worktree-dirty", "revision-unverified"].includes(match.status)
+      ? "strong"
+      : "inferred";
+  const target: DevelopmentEvidenceTarget = {
+    id: `evidence:${match.node.id}`,
+    node: match.node,
+    source,
+    score: 1_000,
+    matchedTerms: [navigation.source.symbol ?? navigation.source.path],
+    confidence,
+    reason: `跨平面 ${navigation.origin.plane.toUpperCase()} 结构化入口；${match.reason}`,
+  };
+  return { entry, target };
+}
+
+function pinEntryTarget(
+  evidence: readonly DevelopmentEvidenceTarget[],
+  target: DevelopmentEvidenceTarget | undefined,
+) {
+  if (!target) return evidence;
+  return [target, ...evidence.filter((item) => item.node.id !== target.node.id)].slice(0, 5);
+}
+
 function relationDirection(edge: RegisteredGraphEdge, evidenceNodeId: string) {
   if (edge.kind === "contains") return "structural" as const;
   return edge.source === evidenceNodeId ? "outgoing" as const : "incoming" as const;
@@ -451,10 +542,13 @@ function patchOutlines(
 }
 
 function stages(projection: Omit<DevelopmentAnalysisProjection, "stages">) {
+  const entryLabel = projection.entry
+    ? ` · FROM ${projection.entry.navigation.origin.plane.toUpperCase()}`
+    : "";
   const records: Array<[DevelopmentStageKind, string, string, number?]> = [
     ["intent", "开发意图", projection.intent],
-    ["scope", "仓库范围", `${projection.repository.name}@${projection.repository.revision.slice(0, 12)}`],
-    ["evidence", "源码证据", `${projection.evidence.length} 个候选定义`, projection.evidence.length],
+    ["scope", "仓库范围", `${projection.repository.name}@${projection.repository.revision.slice(0, 12)}${entryLabel}`],
+    ["evidence", "源码证据", `${projection.evidence.length} 个候选定义${projection.entry ? ` · ${projection.entry.status}` : ""}`, projection.evidence.length],
     ["diagnosis", "诊断", projection.diagnosis],
     ["impact", "影响范围", `${projection.impacts.length} 个关系节点`, projection.impacts.length],
     ["change-plan", "修改建议", `${projection.changes.length} 个有界改动`, projection.changes.length],
@@ -475,18 +569,24 @@ function stages(projection: Omit<DevelopmentAnalysisProjection, "stages">) {
 export function projectDevelopmentAnalysis(
   scan: LocalRepositoryScanResult,
   rawIntent: string,
+  navigation?: DevelopmentNavigationRequest,
 ): DevelopmentAnalysisProjection {
   const intent = rawIntent.trim();
   if (!intent) throw new TypeError("Development intent is required.");
   const terms = developmentIntentTerms(intent);
-  const evidence = evidenceTargets(scan, terms);
+  const intentEvidence = evidenceTargets(scan, terms);
+  const entryProjection = entryEvidence(scan, navigation);
+  const evidence = pinEntryTarget(intentEvidence, entryProjection?.target);
   const impacts = impactTargets(scan, evidence);
   const changes = changeSuggestions(intent, evidence, impacts);
   const tests = testSuggestions(scan, evidence);
   const patchOutlines = patchOutlinesForProjection(intent, changes, tests);
-  const hasDirectMatch = evidence.some((item) => item.matchedTerms.length > 0);
+  const hasDirectMatch = intentEvidence.some((item) => item.matchedTerms.length > 0);
+  const entryDiagnosis = entryProjection
+    ? `跨平面 ${entryProjection.entry.navigation.origin.plane.toUpperCase()} 入口为 ${entryProjection.entry.status}。`
+    : "";
   const diagnosis = evidence.length
-    ? `在 ${scan.repository.name} 当前 revision 中找到 ${evidence.length} 个可复核定义；${evidence.filter((item) => item.confidence === "exact").length} 个为精确标识符命中。`
+    ? `${entryDiagnosis}在 ${scan.repository.name} 当前 revision 中找到 ${evidence.length} 个可复核定义；${evidence.filter((item) => item.confidence === "exact").length} 个为精确标识符命中。`
     : `当前有界扫描没有找到可复核定义；不会生成无来源的修改建议。`;
   const base = {
     repository: scan.repository,
@@ -502,8 +602,12 @@ export function projectDevelopmentAnalysis(
       ...scan.warnings,
       ...(scan.statistics.truncated ? ["仓库扫描达到上限，影响范围可能不完整。"] : []),
       ...(hasDirectMatch ? [] : ["意图中没有稳定代码标识符命中，证据按核心定义回退。"]),
+      ...(entryProjection && entryProjection.entry.status !== "exact"
+        ? [`跨平面源码身份为 ${entryProjection.entry.status}：${entryProjection.entry.reason}`]
+        : []),
       "补丁内容是不可应用的结构草案，不包含模型生成代码。",
     ],
+    ...(entryProjection ? { entry: entryProjection.entry } : {}),
     readOnly: true as const,
     repositoryWrite: false as const,
   };

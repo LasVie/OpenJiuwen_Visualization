@@ -33,6 +33,25 @@ modelAccess       = false
 
 V1 最多展示 5 个 source evidence 和 10 个一阶 relation impact。扫描达到文件/边上限、源文件无法解析或影响被截断时，页面显示明确 warning。
 
+## 跨平面结构化入口
+
+Development 也可从当前 Runtime 步骤、Definition 节点或 Change 影响节点进入。入口不会复制其他页面的组件状态，而是统一生成带递增页面内 ID 的 `DevelopmentNavigationRequest`：
+
+| 来源 | 保留证据 | 明确不携带 |
+|---|---|---|
+| Runtime | source identity、trace ID、sequence、event kind、phase、subject identity、Token 指标 | Context 消息、Tool 参数/结果、model delta/response、event details/payload |
+| Definition | source identity、node ID/label/kind、聚合 span/event/token、最近 sequence/status | 完整 observation/event 列表与 Runtime 原文 |
+| Change | source identity、comparison mode/base/head、file status、impact kind/confidence/reason、hunk indexes、可选 Runtime 聚合 | patch 正文、远端响应、Runtime 原文 |
+
+工作区按 source repository 在已授权目录中自动选择仓库，使用当前 snapshot 重新核验路径、symbol 与 revision，然后自动执行同一确定性分析：
+
+- `exact`：目标固定为第一条 source evidence，保留 exact；
+- `worktree-dirty / revision-unverified`：目标仍固定，但只保留 strong；
+- `revision-mismatch`：只按结构位置展示为 inferred，不把历史源码当成当前精确事实；
+- `ambiguous / unmatched`：保留状态、原因和 warning，不自动选择或制造节点。
+
+入口生成的开发意图仍可编辑；重新分析时沿用同一结构化入口。用户手动切换仓库后退出该入口语境，回到普通意图分析。
+
 ## 九步分析链
 
 | 序号 | 阶段 | 输出 |
@@ -60,6 +79,7 @@ Patch outline 必须以 `READ-ONLY STRUCTURAL OUTLINE — NOT AN APPLICABLE PATC
 - 画布支持拖拽、缩放、平移、fit、MiniMap、实时防重叠，以及可开关/调节强度的磁吸；
 - 九步时间轴始终显示完整阶段，可点击跳转，并支持上一步/下一步与非输入状态下的左右方向键；
 - 证据、影响、建议、测试和草案节点都有 inspector；存在 source reference 时可打开统一只读源码窗口，证据节点也可定位 Definition。
+- 入口来源在左侧显示为 `FROM RUNTIME / DEFINITION / CHANGE`，inspector 同时展示核验状态与最小结构化指标。
 
 ## 模块化与安全
 
@@ -69,13 +89,13 @@ Development V1 不新增服务端写 endpoint，也不映射 Local Plugin Host �
 
 ## 验证与明确限制
 
-当前自动验证覆盖标识符提取、显式目标多样性、证据/影响/测试投影、fallback 置信度、不可应用 patch 标记、插件依赖与 Workbench 可用性。可见行为另用真实浏览器验证 Core/Swarm 仓库切换、九步时间轴、聚焦 fit、节点详情和源码窗口。
+当前自动验证覆盖标识符提取、显式目标多样性、证据/影响/测试投影、fallback 置信度、不可应用 patch 标记、跨平面最小化导航合同、入口证据固定、revision mismatch 降级、unmatched 不造节点、插件依赖与 Workbench 可用性。可见行为另用真实浏览器验证跨平面按钮、自动仓库选择、入口卡片、九步时间轴、聚焦 fit、节点详情和源码窗口。
 
 V1 仍有以下限制：
 
 - 只分析当前有界 Python Definition snapshot，不读取其他语言语义或完整动态调用图；
 - 关系影响是一阶静态证据，不等于完整 blast radius 或运行覆盖率；
 - 诊断和建议为确定性模板，不理解任意自然语言深层语义；
-- 不把当前 Change set 或 Runtime observed path 自动带入开发意图，需后续跨平面入口阶段完成；
+- 跨平面入口只带结构化身份、指标和影响判断，不把完整 Runtime/Context/Tool/模型原文交给 Development；
 - 不保存开发分析 Session，也不比较两次建议；
 - 任何仓库修改、测试执行、分支/commit/PR 创建仍属于未来独立授权与审计决策。

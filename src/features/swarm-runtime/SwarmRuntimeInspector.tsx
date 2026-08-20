@@ -3,6 +3,7 @@ import {
   ChevronUp,
   CircleDot,
   Code2,
+  FileSearch,
   GitBranch,
   MessagesSquare,
   Timer,
@@ -23,7 +24,9 @@ interface SwarmRuntimeInspectorProps {
   open: boolean;
   onToggle: () => void;
   onOpenDefinition: (event: RuntimeTraceEvent) => void;
+  onOpenDevelopment: (event: RuntimeTraceEvent) => void;
   sourceNavigationEnabled: boolean;
+  developmentNavigationEnabled: boolean;
 }
 
 function payloadEntries(payload: Readonly<Record<string, unknown>> | undefined) {
@@ -42,7 +45,9 @@ export function SwarmRuntimeInspector({
   open,
   onToggle,
   onOpenDefinition,
+  onOpenDevelopment,
   sourceNavigationEnabled,
+  developmentNavigationEnabled,
 }: SwarmRuntimeInspectorProps) {
   const event = projection.events[stepIndex];
   const subject = projection.subjects.find((candidate) => candidate.id === selectedNodeId);
@@ -119,14 +124,27 @@ export function SwarmRuntimeInspector({
               </div>
             ))}
           </dl>
-          {sourceNavigationEnabled && event?.definition ? (
-            <button
-              type="button"
-              className="runtime-source-link"
-              onClick={() => onOpenDefinition(event)}
-            >
-              <Code2 size={13} />定位源码定义
-            </button>
+          {event?.definition && (sourceNavigationEnabled || developmentNavigationEnabled) ? (
+            <div className="runtime-cross-plane-actions">
+              {sourceNavigationEnabled ? (
+                <button
+                  type="button"
+                  className="runtime-source-link"
+                  onClick={() => onOpenDefinition(event)}
+                >
+                  <Code2 size={13} />定位源码定义
+                </button>
+              ) : null}
+              {developmentNavigationEnabled ? (
+                <button
+                  type="button"
+                  className="runtime-development-link"
+                  onClick={() => onOpenDevelopment(event)}
+                >
+                  <FileSearch size={13} />进入开发辅助
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </article>
 

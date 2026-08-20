@@ -36,6 +36,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | 运行归档与对比 V1 | 已完成 | SQLite/WAL 增量归档、默认完整本机原文、脱敏读取、Session 管理、保留策略与双运行结构化 diff |
 | Provider 与 Local Plugin Host V1 | 已完成 | 内置 OpenRouter/Tool Host、信任来源、持久生命周期、风险分级权限、opaque secret handle、最终调用 gate 与本机审计 |
 | 只读辅助开发 V1 | 已完成 | 开发意图 → 源码证据 → 诊断/影响 → 修改/测试建议 → 不可应用补丁结构草案，零模型与零仓库写入 |
+| Development 跨平面入口 V1 | 已完成 | Runtime/Definition/Change 焦点自动进入同一开发证据链，保留 source/revision 与最小结构化运行/变更证据 |
 
 ## 当前已支持功能
 
@@ -69,6 +70,9 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 源码、影响、修改、测试与补丁草案均可成为可点击节点，单阶段聚焦展开并自动 fit；
 - 修改建议携带目标、风险和 guardrail，测试建议覆盖聚焦/合同/回归层，补丁明确为不可应用的结构草案；
 - 证据节点复用统一 Source Viewer 和 Definition 定位；全程 `modelAccess=false`、`repositoryWrite=false`。
+- Runtime、Definition、Change inspector 均可进入 Development；入口自动选择对应授权仓库并立即扫描；
+- source identity 匹配目标固定为首条证据，revision mismatch、dirty、unverified、ambiguous 与 unmatched 都保持显式状态；
+- 跨平面合同只传递事件指标、Runtime 聚合或 Change comparison/hunk/impact，不复制 Context、Tool 或模型原文。
 
 ### Runtime 与真实执行
 
@@ -114,7 +118,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - WorkflowProgress 尚无可靠的结构化 tool activity，页面不会从文本猜 Tool 调用；
 - 执行器不开放任意 Shell、Git 写入、文件写入、MCP、Skill 或浏览器自定义工具；
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
-- Development V1 只分析当前有界 Python 静态图；一阶关系不是完整 blast radius，建议不会自动读取当前 Change/Runtime 焦点；
+- Development V1 只分析当前有界 Python 静态图；一阶关系不是完整 blast radius，跨平面运行/变更证据只用于锁定入口与解释边界；
 - Development V1 不运行目标仓测试、不保存分析 Session，也不产生可应用 patch 或任何仓库写入；
 - 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
 - Host V1 不提供页面安装/卸载/升级、第三方签名链、动态插件代码执行、进程沙箱或崩溃监督；内置 integrity 只是本地发布摘要；
@@ -150,9 +154,19 @@ V1 继续只读，不把 Host 目录读取授权表述成执行权限；真正�
 5. Source Viewer 与 Definition 往返，以及 Core/Swarm 明确身份区分；
 6. 不可应用 patch 标记和 `repositoryWrite=false / modelAccess=false` 产品边界。
 
-## 下一阶段：Development 跨平面入口 V1（计划）
+## 已完成：Development 跨平面入口 V1
 
-下一步继续保持只读，把 Runtime、Definition 与 Change 的当前焦点作为结构化开发分析入口：从运行步骤、定义节点或变更影响节点进入 Development 时，保留 repository/path/symbol/revision 与 runtimeObserved/change impact 证据，不要求用户重新输入目标，也不把未命中的节点制造成影响。该阶段不新增写权限，因此暂不需要产品决策。
+Runtime、Definition 与 Change 当前焦点现在都能生成最小化结构化入口。Development 会自动选择 source 对应的授权仓库、扫描当前 revision、固定可核验目标并展示入口状态；历史 revision、脏工作树、歧义与缺失不会静默提升为精确证据。导航不会复制 Context、Tool 或模型原文，也没有新增写权限。
+
+## 下一阶段：Development 能力边界（需要决策）
+
+当前预先确定的只读阶段已完成。继续前需要选择下一条产品路线：
+
+1. 可选 OpenRouter 辅助分析：保留确定性证据链为事实底座，并明确哪些源码片段、开发意图、Runtime/Change 摘要允许按次发送到远程 Provider；
+2. Development 分析 Session：把意图、结构化证据与建议保存到本机，需要确定原文范围、保留/删除/导出和 schema migration；
+3. 受控开发执行：应用补丁、运行测试并形成 commit/PR，需要先确定逐操作审批、允许路径、隔离分支、回滚与审计。
+
+在完成路线和权限选择前，现有 Development 继续保持 `modelAccess=false / repositoryWrite=false`。
 
 ## 后续路线
 
@@ -165,8 +179,10 @@ V1 继续只读，不把 Host 目录读取授权表述成执行权限；真正�
 | 已完成 | Provider 与插件 Host V1 | OpenRouter/Tool 生命周期、权限、opaque secret handle、最终 gate 与审计 | bundled trust、path-scoped dev、Host-owned secret、风险分级授权已落地 |
 | 已完成 | Tool Registry 运行证据收敛 | Tool 四层证据、节点深入画布、Definition/Host/Runtime 往返 | V1 只读；写 Tool 仍不开放 |
 | 已完成 | 只读辅助开发 V1 | 源码证据、诊断、影响、修改/测试建议与不可应用补丁结构草案 | 选择零模型、零仓库写入边界 |
-| P7 | Development 跨平面入口 V1 | Runtime/Definition/Change 焦点进入同一开发证据链 | 继续只读，无新增安全决策 |
-| P8 | 受控开发执行 | 在受控分支应用补丁、运行测试并形成 commit/PR | 必须另行决定逐次审批、允许路径、回滚和审计 |
+| 已完成 | Development 跨平面入口 V1 | Runtime/Definition/Change 焦点进入同一开发证据链 | 结构化最小入口与显式 revision 降级已落地 |
+| 待决策 | 可选 OpenRouter 辅助分析 | 在确定性证据上增强诊断与方案 | 必须决定按次外发的数据范围、确认和脱敏语义 |
+| 待决策 | Development 分析 Session | 本机保存、删除、导出开发证据链 | 必须决定原文范围、保留策略与迁移合同 |
+| 待决策 | 受控开发执行 | 在受控分支应用补丁、运行测试并形成 commit/PR | 必须决定逐次审批、允许路径、回滚和审计 |
 
 ## 阶段管理规则
 

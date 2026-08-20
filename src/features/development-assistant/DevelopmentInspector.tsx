@@ -6,6 +6,7 @@ import {
   FileDiff,
   ListChecks,
   Network,
+  Route,
   Search,
   ShieldCheck,
   Wrench,
@@ -16,12 +17,56 @@ import type {
   DevelopmentAnalysisProjection,
   DevelopmentChangeSuggestion,
   DevelopmentEvidenceTarget,
+  DevelopmentEntryEvidence,
   DevelopmentImpactTarget,
   DevelopmentPatchOutline,
   DevelopmentSelection,
   DevelopmentStage,
   DevelopmentTestSuggestion,
 } from "./model";
+
+function EntryDetails({ entry }: { entry: DevelopmentEntryEvidence }) {
+  const origin = entry.navigation.origin;
+  const facts = origin.plane === "runtime"
+    ? [
+        ["trace step", `#${origin.sequence}`],
+        ["event", origin.eventKind],
+        ["phase", origin.phase],
+        ["tokens", String(origin.tokenCount)],
+      ]
+    : origin.plane === "definition"
+      ? [
+          ["node", origin.nodeKind],
+          ["runtime events", String(origin.runtime?.eventCount ?? 0)],
+          ["runtime spans", String(origin.runtime?.spanCount ?? 0)],
+          ["tokens", String(origin.runtime?.tokenCount ?? 0)],
+        ]
+      : [
+          ["change", `${origin.file.status} / ${origin.impact.kind}`],
+          ["confidence", origin.impact.confidence],
+          ["hunks", origin.impact.hunkIndexes.length
+            ? origin.impact.hunkIndexes.map((index) => index + 1).join(", ")
+            : "—"],
+          ["comparison", `${origin.comparison.base} → ${origin.comparison.head}`],
+        ];
+  return (
+    <section className={`development-entry-evidence development-entry-evidence--${origin.plane}`}>
+      <header>
+        <Route size={13} />
+        <span>跨平面入口</span>
+        <em>{entry.status}</em>
+      </header>
+      <code>{entry.navigation.source.repository}@{entry.navigation.source.revision?.slice(0, 12) ?? "?"}</code>
+      <strong>{entry.navigation.source.path}{entry.navigation.source.symbol ? `:${entry.navigation.source.symbol}` : ""}</strong>
+      <p>{entry.reason}</p>
+      <dl>
+        {facts.map(([label, value]) => (
+          <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+        ))}
+      </dl>
+    </section>
+  );
+}
 
 type ResolvedSelection =
   | { kind: "stage"; value: DevelopmentStage }
@@ -149,6 +194,8 @@ export function DevelopmentInspector({
       </header>
       <div className="development-inspector__scroll">
         <p className="development-inspector__summary">{presentation.summary}</p>
+
+        {projection.entry ? <EntryDetails entry={projection.entry} /> : null}
 
         {resolved.kind === "stage" ? <StageDetails stage={resolved.value} projection={projection} /> : null}
         {resolved.kind === "evidence" ? <EvidenceDetails value={resolved.value} /> : null}

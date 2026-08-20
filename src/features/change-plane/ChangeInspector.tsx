@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Binary,
   Box,
+  FileSearch,
   FileCode2,
   GitCommitHorizontal,
   Link2,
@@ -15,6 +16,10 @@ import type {
   RuntimeTraceEvent,
 } from "../../kernel";
 import { createDefinitionGraphIndex } from "../repository-browser";
+import {
+  createChangeDevelopmentNavigation,
+  type DevelopmentNavigationSeed,
+} from "../development-assistant";
 import { RelationExplorer } from "../relation-explorer";
 import { SourceViewer } from "../source-viewer";
 import type { ChangeImpactProjection } from "./model";
@@ -29,6 +34,7 @@ interface ChangeInspectorProps {
   onMagnetStrengthChange: (strength: number) => void;
   onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
   onOpenDefinition?: (source: GraphSourceReference) => void;
+  onOpenDevelopment?: (navigation: DevelopmentNavigationSeed) => void;
 }
 
 const impactLabel: Record<NodeChangeImpact["kind"], string> = {
@@ -48,6 +54,7 @@ export function ChangeInspector({
   onMagnetStrengthChange,
   onOpenRuntimeEvent,
   onOpenDefinition,
+  onOpenDevelopment,
 }: ChangeInspectorProps) {
   const relationIndex = useMemo(
     () => createDefinitionGraphIndex(projection.graph),
@@ -137,6 +144,22 @@ export function ChangeInspector({
                     onClick={() => onOpenDefinition?.(source)}
                   >
                     <FileCode2 size={12} />在定义图中定位
+                  </button>
+                ) : null}
+                {onOpenDevelopment ? (
+                  <button
+                    type="button"
+                    className="change-open-development"
+                    onClick={() => onOpenDevelopment(createChangeDevelopmentNavigation({
+                      node,
+                      source,
+                      impact,
+                      file,
+                      comparison: projection.changes.comparison,
+                      runtimeSummary,
+                    }))}
+                  >
+                    <FileSearch size={12} />进入开发辅助
                   </button>
                 ) : null}
               </div>

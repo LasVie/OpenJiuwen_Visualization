@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { GraphSnapshot, RegisteredGraphNode } from "../../kernel";
 import type { LocalRepositoryScanResult } from "../../adapters/local-repository";
 import { developmentIntentTerms, projectDevelopmentAnalysis } from "./model";
+import type { DevelopmentNavigationRequest } from "./navigation";
 
 function node(
   id: string,
@@ -147,6 +148,139 @@ describe("read-only development analysis", () => {
     expect(result.evidence.length).toBeGreaterThan(0);
     expect(result.evidence.every((item) => item.confidence === "inferred")).toBe(true);
     expect(result.warnings).toContain("意图中没有稳定代码标识符命中，证据按核心定义回退。");
+  });
+
+  it("pins a verified cross-plane source as the first Development evidence", () => {
+    const navigation: DevelopmentNavigationRequest = {
+      id: 1,
+      source: nodes[0].evidence[0].source!,
+      intent: "从 Runtime 检视 DeepAgent 的运行合同",
+      origin: {
+        plane: "runtime",
+        traceId: "trace-1",
+        sequence: 8,
+        eventKind: "agent.react_iteration",
+        phase: "end",
+        tokenCount: 42,
+      },
+    };
+
+    const result = projectDevelopmentAnalysis(scan, navigation.intent, navigation);
+
+    expect(result.entry).toMatchObject({
+      status: "exact",
+      matchedNodeId: "deep",
+      navigation: { id: 1, origin: { plane: "runtime" } },
+    });
+    expect(result.evidence[0]).toMatchObject({
+      node: { id: "deep" },
+      confidence: "exact",
+    });
+    expect(result.stages.find((stage) => stage.kind === "scope")?.summary)
+      .toContain("FROM RUNTIME");
+  });
+
+  it("verifies a symbol-less Definition node by stable node ID and source location", () => {
+    const repositoryNode: RegisteredGraphNode = {
+      id: "repository:agent-core:.",
+      kind: "repository",
+      plane: "definition",
+      level: 0,
+      owner: "agent-core",
+      label: "agent-core",
+      summary: "Repository root",
+      evidence: [{
+        provenance: "static",
+        confidence: "exact",
+        source: {
+          repository: "agent-core",
+          revision: "a".repeat(40),
+          path: ".",
+        },
+      }],
+      contributedBy: "openjiuwen.local-repository",
+    };
+    const repositoryScan: LocalRepositoryScanResult = {
+      ...scan,
+      graph: {
+        ...scan.graph,
+        nodes: [repositoryNode, ...scan.graph.nodes],
+      },
+    };
+    const navigation: DevelopmentNavigationRequest = {
+      id: 4,
+      source: repositoryNode.evidence[0].source!,
+      intent: "检视 agent-core repository 边界",
+      origin: {
+        plane: "definition",
+        nodeId: repositoryNode.id,
+        nodeLabel: repositoryNode.label,
+        nodeKind: repositoryNode.kind,
+      },
+    };
+
+    const result = projectDevelopmentAnalysis(
+      repositoryScan,
+      navigation.intent,
+      navigation,
+    );
+
+    expect(result.entry).toMatchObject({
+      status: "exact",
+      matchedNodeId: repositoryNode.id,
+    });
+    expect(result.evidence[0].node.id).toBe(repositoryNode.id);
+  });
+
+  it("keeps a revision mismatch visible and does not claim exact entry evidence", () => {
+    const navigation: DevelopmentNavigationRequest = {
+      id: 2,
+      source: {
+        ...nodes[0].evidence[0].source!,
+        revision: "b".repeat(40),
+      },
+      intent: "从 Definition 检视 DeepAgent",
+      origin: {
+        plane: "definition",
+        nodeId: "deep",
+        nodeLabel: "DeepAgent",
+        nodeKind: "agent",
+      },
+    };
+
+    const result = projectDevelopmentAnalysis(scan, navigation.intent, navigation);
+
+    expect(result.entry?.status).toBe("revision-mismatch");
+    expect(result.evidence[0]).toMatchObject({
+      node: { id: "deep" },
+      confidence: "inferred",
+    });
+    expect(result.warnings.join(" ")).toContain("revision-mismatch");
+  });
+
+  it("does not fabricate a node for an unmatched cross-plane source", () => {
+    const navigation: DevelopmentNavigationRequest = {
+      id: 3,
+      source: {
+        repository: "agent-core",
+        revision: "a".repeat(40),
+        path: "openjiuwen/core/missing.py",
+        symbol: "MissingAgent",
+      },
+      intent: "检视 MissingAgent 的边界",
+      origin: {
+        plane: "definition",
+        nodeId: "missing",
+        nodeLabel: "MissingAgent",
+        nodeKind: "agent",
+      },
+    };
+
+    const result = projectDevelopmentAnalysis(scan, navigation.intent, navigation);
+
+    expect(result.entry).toMatchObject({ status: "unmatched" });
+    expect(result.entry?.matchedNodeId).toBeUndefined();
+    expect(result.evidence.some((item) => item.node.id === "missing")).toBe(false);
   });
 
   it("rejects an empty development intent", () => {

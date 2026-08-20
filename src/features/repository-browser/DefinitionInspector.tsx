@@ -3,6 +3,7 @@ import {
   ArrowUp,
   ChevronRight,
   Code2,
+  FileSearch,
   GitCompareArrows,
   GitFork,
   Layers3,
@@ -15,6 +16,10 @@ import type {
   RuntimeTraceEvent,
 } from "../../kernel";
 import { RelationExplorer } from "../relation-explorer";
+import {
+  createDefinitionDevelopmentNavigation,
+  type DevelopmentNavigationSeed,
+} from "../development-assistant";
 import type {
   DefinitionRuntimeSummary,
   RuntimeSourceMatch,
@@ -52,6 +57,7 @@ interface DefinitionInspectorProps {
   sourceNavigationMatch: RuntimeSourceMatch | null;
   onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
   onOpenChange?: (source: GraphSourceReference) => void;
+  onOpenDevelopment?: (navigation: DevelopmentNavigationSeed) => void;
 }
 
 export function DefinitionInspector({
@@ -68,6 +74,7 @@ export function DefinitionInspector({
   sourceNavigationMatch,
   onOpenRuntimeEvent,
   onOpenChange,
+  onOpenDevelopment,
 }: DefinitionInspectorProps) {
   const source = node.evidence.find((evidence) => evidence.source)?.source;
   const children = index.childrenByParent.get(node.id) ?? [];
@@ -157,13 +164,30 @@ export function DefinitionInspector({
             </p>
           )}
           {source ? (
-            <button
-              type="button"
-              className="definition-open-change"
-              onClick={() => onOpenChange?.(source)}
-            >
-              <GitCompareArrows size={13} />在变更图中定位
-            </button>
+            <div className="definition-cross-plane-actions">
+              {onOpenChange ? (
+                <button
+                  type="button"
+                  className="definition-open-change"
+                  onClick={() => onOpenChange(source)}
+                >
+                  <GitCompareArrows size={13} />在变更图中定位
+                </button>
+              ) : null}
+              {onOpenDevelopment ? (
+                <button
+                  type="button"
+                  className="definition-open-development"
+                  onClick={() => onOpenDevelopment(createDefinitionDevelopmentNavigation({
+                    node,
+                    source,
+                    runtimeSummary,
+                  }))}
+                >
+                  <FileSearch size={13} />进入开发辅助
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </section>
 

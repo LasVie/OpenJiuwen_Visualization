@@ -4,6 +4,7 @@ import {
   CircleDot,
   Code2,
   CornerDownRight,
+  FileSearch,
   Timer,
 } from "lucide-react";
 import type { RuntimeTraceEvent } from "../kernel";
@@ -20,7 +21,9 @@ interface InspectorPanelProps {
   onToggle: () => void;
   runtimeEvent?: RuntimeTraceEvent;
   onOpenDefinition: (event: RuntimeTraceEvent) => void;
+  onOpenDevelopment: (event: RuntimeTraceEvent) => void;
   sourceNavigationEnabled: boolean;
+  developmentNavigationEnabled: boolean;
 }
 
 export function InspectorPanel({
@@ -32,7 +35,9 @@ export function InspectorPanel({
   onToggle,
   runtimeEvent,
   onOpenDefinition,
+  onOpenDevelopment,
   sourceNavigationEnabled,
+  developmentNavigationEnabled,
 }: InspectorPanelProps) {
   const selectedNode = graphNodes.find((node) => node.id === selectedNodeId);
   const selectedRail = selectedNode?.type === "rail" ? selectedNode : null;
@@ -108,15 +113,6 @@ export function InspectorPanel({
               ))}
             </dl>
           ) : null}
-          {sourceNavigationEnabled && runtimeEvent?.definition ? (
-            <button
-              type="button"
-              className="runtime-source-link"
-              onClick={() => onOpenDefinition(runtimeEvent)}
-            >
-              <Code2 size={13} />定位源码定义
-            </button>
-          ) : null}
         </article>
 
         <article className="inspector__hooks">
@@ -180,6 +176,28 @@ export function InspectorPanel({
         </article>
         </div>
       )}
+      {runtimeEvent?.definition && (sourceNavigationEnabled || developmentNavigationEnabled) ? (
+        <div className="runtime-cross-plane-actions">
+          {sourceNavigationEnabled ? (
+            <button
+              type="button"
+              className="runtime-source-link"
+              onClick={() => onOpenDefinition(runtimeEvent)}
+            >
+              <Code2 size={13} />定位源码定义
+            </button>
+          ) : null}
+          {developmentNavigationEnabled ? (
+            <button
+              type="button"
+              className="runtime-development-link"
+              onClick={() => onOpenDevelopment(runtimeEvent)}
+            >
+              <FileSearch size={13} />进入开发辅助
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

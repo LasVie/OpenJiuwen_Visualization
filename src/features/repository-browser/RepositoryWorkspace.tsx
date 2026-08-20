@@ -33,6 +33,7 @@ import {
   type RepositoryScanOptions,
 } from "../../adapters/local-repository";
 import { MagnetControls } from "../trace-graph";
+import type { DevelopmentNavigationSeed } from "../development-assistant";
 import {
   matchSourceToDefinition,
   projectRuntimeDefinitions,
@@ -78,6 +79,7 @@ interface RepositoryWorkspaceProps {
   sourceNavigation: SourceNavigationRequest | null;
   onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
   onOpenChange?: (source: GraphSourceReference) => void;
+  onOpenDevelopment?: (navigation: DevelopmentNavigationSeed) => void;
   magnetEnabled: boolean;
   magnetStrength: number;
   onToggleMagnet: () => void;
@@ -89,6 +91,7 @@ export function RepositoryWorkspace({
   sourceNavigation,
   onOpenRuntimeEvent,
   onOpenChange,
+  onOpenDevelopment,
   magnetEnabled,
   magnetStrength,
   onToggleMagnet,
@@ -548,6 +551,7 @@ export function RepositoryWorkspace({
           sourceNavigationMatch={sourceNavigationMatch}
           onOpenRuntimeEvent={onOpenRuntimeEvent}
           onOpenChange={onOpenChange}
+          onOpenDevelopment={onOpenDevelopment}
         />
       ) : (
         <aside className="definition-inspector definition-inspector--empty">

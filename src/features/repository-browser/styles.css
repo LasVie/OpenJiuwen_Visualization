@@ -1266,7 +1266,8 @@
 .definition-runtime-events em { color: var(--muted); font-family: var(--mono); font-size: 7px; font-style: normal; }
 
 .definition-runtime-return,
-.definition-open-change {
+.definition-open-change,
+.definition-open-development {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1287,6 +1288,22 @@
   color: #8a5520;
   background: #f6eadb;
 }
+
+.definition-open-development {
+  color: #49633c;
+  background: #e7efe2;
+}
+
+.definition-cross-plane-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.definition-cross-plane-actions .definition-open-change,
+.definition-cross-plane-actions .definition-open-development { margin-top: 0; }
+.definition-cross-plane-actions > button:only-child { grid-column: 1 / -1; }
 
 .definition-inspector__actions {
   display: grid;

@@ -2296,7 +2296,8 @@ kbd,
   white-space: nowrap;
 }
 
-.runtime-source-link {
+.runtime-source-link,
+.runtime-development-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2313,7 +2314,25 @@ kbd,
   font-weight: 700;
 }
 
+.runtime-development-link {
+  color: #49633c;
+  background: #e7efe2;
+  border-color: rgb(73 99 60 / 0.16);
+}
+
 .runtime-source-link:hover { border-color: rgb(15 123 130 / 0.34); }
+.runtime-development-link:hover { border-color: rgb(73 99 60 / 0.36); }
+
+.runtime-cross-plane-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.runtime-cross-plane-actions .runtime-source-link,
+.runtime-cross-plane-actions .runtime-development-link { margin-top: 0; }
+.inspector > .runtime-cross-plane-actions { margin: 8px 12px 10px; }
 
 .inspector__empty {
   color: #8a999d !important;

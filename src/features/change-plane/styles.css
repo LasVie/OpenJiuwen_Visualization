@@ -521,7 +521,9 @@
 .change-source-evidence code { overflow-wrap: anywhere; color: var(--core-ink); font-size: 7px; }
 .change-source-evidence span { color: var(--muted); font-family: var(--mono); font-size: 7px; }
 .change-source-evidence .source-viewer-trigger { width: fit-content; margin-top: 4px; }
-.change-open-definition { display: inline-flex; align-items: center; width: fit-content; min-height: 27px; gap: 5px; margin-top: 3px; padding: 0 7px; color: var(--signal-dark); background: var(--signal-soft); border: 0; border-radius: 6px; cursor: pointer; font-size: 7px; font-weight: 700; }
+.change-open-definition,
+.change-open-development { display: inline-flex; align-items: center; width: fit-content; min-height: 27px; gap: 5px; margin-top: 3px; padding: 0 7px; color: var(--signal-dark); background: var(--signal-soft); border: 0; border-radius: 6px; cursor: pointer; font-size: 7px; font-weight: 700; }
+.change-open-development { color: #49633c; background: #e7efe2; }
 .change-inspector__impact > .relation-explorer-trigger { width: 100%; margin-top: 9px; }
 
 .change-runtime-evidence { background: rgb(15 123 130 / 0.035); }

@@ -37,6 +37,7 @@ import type {
   RuntimeTraceEvent,
 } from "../../kernel";
 import { canonicalSourceIdentity } from "../../kernel";
+import type { DevelopmentNavigationSeed } from "../development-assistant";
 import {
   matchSourceToDefinition,
   repositoryMatchesSource,
@@ -83,6 +84,7 @@ interface ChangeWorkspaceProps {
   sourceNavigation: SourceNavigationRequest | null;
   onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
   onOpenDefinition?: (source: GraphSourceReference) => void;
+  onOpenDevelopment?: (navigation: DevelopmentNavigationSeed) => void;
   magnetEnabled: boolean;
   magnetStrength: number;
   onToggleMagnet: () => void;
@@ -95,6 +97,7 @@ export function ChangeWorkspace({
   sourceNavigation,
   onOpenRuntimeEvent,
   onOpenDefinition,
+  onOpenDevelopment,
   magnetEnabled,
   magnetStrength,
   onToggleMagnet,
@@ -528,6 +531,7 @@ export function ChangeWorkspace({
           onMagnetStrengthChange={onMagnetStrengthChange}
           onOpenRuntimeEvent={onOpenRuntimeEvent}
           onOpenDefinition={onOpenDefinition}
+          onOpenDevelopment={onOpenDevelopment}
         />
       ) : (
         <aside className="change-inspector change-inspector--empty"><ShieldCheck size={22} /><strong>变更详情</strong><p>生成变更图后，点击文件或节点查看 hunk、源码范围和影响置信度。</p></aside>

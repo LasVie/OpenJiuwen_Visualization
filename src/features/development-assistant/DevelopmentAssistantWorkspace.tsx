@@ -6,6 +6,7 @@ import {
   Layers3,
   LoaderCircle,
   RefreshCw,
+  Route,
   Server,
   ShieldCheck,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import type {
   RegisteredDevelopmentAssistantSource,
 } from "../../kernel";
 import { MagnetControls } from "../trace-graph";
+import { repositoryMatchesSource } from "../source-convergence";
 import { DevelopmentCanvas } from "./DevelopmentCanvas";
 import { DevelopmentInspector } from "./DevelopmentInspector";
 import { DevelopmentTimeline } from "./DevelopmentTimeline";
@@ -38,6 +40,7 @@ import {
   type DevelopmentSelection,
   type DevelopmentStageKind,
 } from "./model";
+import type { DevelopmentNavigationRequest } from "./navigation";
 
 type ConnectionState =
   | { status: "connecting" }
@@ -71,8 +74,33 @@ function ownerLabel(owner: string) {
   return "LOCAL";
 }
 
+function navigationTitle(navigation: DevelopmentNavigationRequest) {
+  const origin = navigation.origin;
+  if (origin.plane === "runtime") {
+    return `Runtime step #${origin.sequence} · ${origin.eventKind}`;
+  }
+  if (origin.plane === "definition") {
+    return `${origin.nodeLabel} · ${origin.nodeKind}`;
+  }
+  return `${origin.nodeLabel} · ${origin.file.status} / ${origin.impact.kind}`;
+}
+
+function navigationMeta(navigation: DevelopmentNavigationRequest) {
+  const origin = navigation.origin;
+  if (origin.plane === "runtime") {
+    return `${origin.phase} · ${origin.tokenCount} observed tokens`;
+  }
+  if (origin.plane === "definition") {
+    return origin.runtime
+      ? `${origin.runtime.eventCount} runtime events · ${origin.runtime.tokenCount} tokens`
+      : "static definition evidence";
+  }
+  return `${origin.comparison.mode} · ${origin.comparison.base} → ${origin.comparison.head} · ${origin.impact.confidence}`;
+}
+
 interface DevelopmentAssistantWorkspaceProps {
   sources: readonly RegisteredDevelopmentAssistantSource[];
+  navigation: DevelopmentNavigationRequest | null;
   onOpenDefinition?: (source: GraphSourceReference) => void;
   magnetEnabled: boolean;
   magnetStrength: number;
@@ -82,6 +110,7 @@ interface DevelopmentAssistantWorkspaceProps {
 
 export function DevelopmentAssistantWorkspace({
   sources,
+  navigation,
   onOpenDefinition,
   magnetEnabled,
   magnetStrength,
@@ -90,6 +119,7 @@ export function DevelopmentAssistantWorkspace({
 }: DevelopmentAssistantWorkspaceProps) {
   const client = useMemo(() => new LocalRepositoryClient(), []);
   const analysisAbortRef = useRef<AbortController | null>(null);
+  const handledNavigationId = useRef(0);
   const [connectionRevision, setConnectionRevision] = useState(0);
   const [connection, setConnection] = useState<ConnectionState>({ status: "connecting" });
   const [repositoryPath, setRepositoryPath] = useState("");
@@ -97,6 +127,7 @@ export function DevelopmentAssistantWorkspace({
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [analysisError, setAnalysisError] = useState("");
   const [projection, setProjection] = useState<DevelopmentAnalysisProjection | null>(null);
+  const [activeNavigation, setActiveNavigation] = useState<DevelopmentNavigationRequest | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [expanded, setExpanded] = useState<ReadonlySet<DevelopmentStageKind>>(new Set());
   const [selection, setSelection] = useState<DevelopmentSelection | null>(null);
@@ -128,22 +159,11 @@ export function DevelopmentAssistantWorkspace({
     ? connection.catalog.repositories.find((repository) => repository.path === repositoryPath)
     : undefined;
 
-  function selectRepository(repository: LocalRepositoryIdentity) {
-    analysisAbortRef.current?.abort();
-    analysisAbortRef.current = null;
-    setRepositoryPath(repository.path);
-    setIntent(sampleIntent(repository));
-    setProjection(null);
-    setStatus("idle");
-    setAnalysisError("");
-    setActiveIndex(0);
-    setExpanded(new Set());
-    setSelection(null);
-  }
-
-  async function analyze(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (connection.status !== "ready" || !repositoryPath || !intent.trim()) return;
+  const runAnalysis = useCallback(async (
+    path: string,
+    nextIntent: string,
+    entry?: DevelopmentNavigationRequest,
+  ) => {
     analysisAbortRef.current?.abort();
     const controller = new AbortController();
     analysisAbortRef.current = controller;
@@ -152,14 +172,14 @@ export function DevelopmentAssistantWorkspace({
     setProjection(null);
     setSelection(null);
     try {
-      const scan = await client.scan(repositoryPath, {
+      const scan = await client.scan(path, {
         includeTests: true,
         includeFunctions: true,
         maxFiles: 5_000,
         maxEdges: 20_000,
       }, controller.signal);
       if (controller.signal.aborted) return;
-      const next = projectDevelopmentAnalysis(scan, intent);
+      const next = projectDevelopmentAnalysis(scan, nextIntent, entry);
       setProjection(next);
       setActiveIndex(0);
       setExpanded(new Set());
@@ -172,6 +192,48 @@ export function DevelopmentAssistantWorkspace({
     } finally {
       if (analysisAbortRef.current === controller) analysisAbortRef.current = null;
     }
+  }, [client]);
+
+  useEffect(() => {
+    if (!navigation || connection.status !== "ready") return;
+    if (handledNavigationId.current === navigation.id) return;
+    handledNavigationId.current = navigation.id;
+    const repository = connection.catalog.repositories.find((candidate) =>
+      repositoryMatchesSource(candidate, navigation.source));
+    setActiveNavigation(navigation);
+    setIntent(navigation.intent);
+    setActiveIndex(0);
+    setExpanded(new Set());
+    setSelection(null);
+    if (!repository) {
+      analysisAbortRef.current?.abort();
+      setProjection(null);
+      setStatus("error");
+      setAnalysisError(`跨平面入口指向 ${navigation.source.repository}，当前目录授权中没有对应仓库。`);
+      return;
+    }
+    setRepositoryPath(repository.path);
+    void runAnalysis(repository.path, navigation.intent, navigation);
+  }, [connection, navigation, runAnalysis]);
+
+  function selectRepository(repository: LocalRepositoryIdentity) {
+    analysisAbortRef.current?.abort();
+    analysisAbortRef.current = null;
+    setRepositoryPath(repository.path);
+    setIntent(sampleIntent(repository));
+    setProjection(null);
+    setActiveNavigation(null);
+    setStatus("idle");
+    setAnalysisError("");
+    setActiveIndex(0);
+    setExpanded(new Set());
+    setSelection(null);
+  }
+
+  function analyze(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (connection.status !== "ready" || !repositoryPath || !intent.trim()) return;
+    void runAnalysis(repositoryPath, intent, activeNavigation ?? undefined);
   }
 
   useEffect(() => () => analysisAbortRef.current?.abort(), []);
@@ -243,6 +305,18 @@ export function DevelopmentAssistantWorkspace({
 
           {connection.status === "ready" ? (
             <>
+              {activeNavigation ? (
+                <section className={`development-entry-card development-entry-card--${activeNavigation.origin.plane}`}>
+                  <header>
+                    <Route size={13} />
+                    <span>FROM {activeNavigation.origin.plane.toUpperCase()}</span>
+                    <em>{projection?.entry?.status ?? (status === "loading" ? "matching" : "pending")}</em>
+                  </header>
+                  <strong>{navigationTitle(activeNavigation)}</strong>
+                  <code>{activeNavigation.source.path}{activeNavigation.source.symbol ? `:${activeNavigation.source.symbol}` : ""}</code>
+                  <small>{navigationMeta(activeNavigation)}</small>
+                </section>
+              ) : null}
               <section className="development-sidebar__section">
                 <div className="development-section-title"><span>REPOSITORY SCOPE</span><em>{connection.catalog.repositories.length}</em></div>
                 <div className="development-repositories">

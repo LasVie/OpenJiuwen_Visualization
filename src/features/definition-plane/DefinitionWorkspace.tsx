@@ -8,6 +8,7 @@ import type { PluginHostSnapshot } from "../../adapters/plugin-host";
 import type { PluginHostConnection } from "../plugin-host";
 import { RepositoryWorkspace } from "../repository-browser";
 import type { SourceNavigationRequest } from "../source-convergence";
+import type { DevelopmentNavigationSeed } from "../development-assistant";
 import { ToolCatalogWorkspace } from "../tool-catalog";
 
 interface DefinitionWorkspaceProps {
@@ -15,6 +16,7 @@ interface DefinitionWorkspaceProps {
   sourceNavigation: SourceNavigationRequest | null;
   onOpenRuntimeEvent: (event: RuntimeTraceEvent) => void;
   onOpenChange?: (source: GraphSourceReference) => void;
+  onOpenDevelopment?: (navigation: DevelopmentNavigationSeed) => void;
   pluginHostSnapshot: PluginHostSnapshot | null;
   pluginHostConnection: PluginHostConnection;
   toolsEnabled: boolean;
@@ -46,6 +48,7 @@ export function DefinitionWorkspace(props: DefinitionWorkspaceProps) {
           sourceNavigation={props.sourceNavigation}
           onOpenRuntimeEvent={props.onOpenRuntimeEvent}
           onOpenChange={props.onOpenChange}
+          onOpenDevelopment={props.onOpenDevelopment}
           magnetEnabled={props.magnetEnabled}
           magnetStrength={props.magnetStrength}
           onToggleMagnet={props.onToggleMagnet}
