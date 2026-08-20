@@ -46,6 +46,7 @@ describe("plugin control model", () => {
       ?.dependants).toEqual([
         "openjiuwen.source-convergence",
         "openjiuwen.development-assistant",
+        "openjiuwen.development-executor",
         "openjiuwen.tool-catalog",
         "openjiuwen.git-change",
         "openjiuwen.github-pull-request",
@@ -60,6 +61,7 @@ describe("plugin control model", () => {
       definition: true,
       change: true,
       development: true,
+      developmentExecution: false,
       tools: true,
       modelRuntime: true,
       openRouter: true,
@@ -85,6 +87,7 @@ describe("plugin control model", () => {
       definition: false,
       change: false,
       development: false,
+      developmentExecution: false,
       tools: false,
       modelRuntime: false,
       openRouter: false,
@@ -120,6 +123,14 @@ describe("plugin control model", () => {
       change: true,
       development: false,
       sourceConvergence: false,
+    });
+
+    const withControlledExecution = registry.resolve({
+      pluginStates: { "openjiuwen.development-executor": true },
+    });
+    expect(workbenchAvailability(withControlledExecution)).toMatchObject({
+      development: true,
+      developmentExecution: true,
     });
 
     const withoutArchive = registry.resolve({

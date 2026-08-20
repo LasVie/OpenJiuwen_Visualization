@@ -17,6 +17,7 @@ import { openJiuwenIntegrationPlugin } from "../plugins/openjiuwen-integration";
 import { sourceConvergencePlugin } from "../plugins/source-convergence";
 import { traceArchivePlugin } from "../plugins/trace-archive";
 import { developmentAssistantPlugin } from "../plugins/development-assistant";
+import { developmentExecutorPlugin } from "../plugins/development-executor";
 
 export function createDefaultPluginRegistry() {
   return new VisualizationPluginRegistry([
@@ -34,6 +35,7 @@ export function createDefaultPluginRegistry() {
     localRepositoryPlugin,
     sourceConvergencePlugin,
     developmentAssistantPlugin,
+    developmentExecutorPlugin,
     toolCatalogPlugin,
     gitChangePlugin,
     githubPullRequestPlugin,

@@ -120,6 +120,7 @@ describe("visualization plugin registry", () => {
         ["openjiuwen.local-repository", "enabled"],
         ["openjiuwen.source-convergence", "enabled"],
         ["openjiuwen.development-assistant", "enabled"],
+        ["openjiuwen.development-executor", "disabled"],
         ["openjiuwen.tool-catalog", "enabled"],
         ["openjiuwen.git-change", "enabled"],
         ["openjiuwen.github-pull-request", "enabled"],
@@ -184,6 +185,8 @@ describe("visualization plugin registry", () => {
       .toEqual(["openjiuwen.tool-catalog"]);
     expect(defaultWorkbench.capabilities["development.analysis.readonly.v1"])
       .toEqual(["openjiuwen.development-assistant"]);
+    expect(defaultWorkbench.capabilities["development.execution.controlled.v1"])
+      .toBeUndefined();
     expect(defaultWorkbench.capabilities["trace.archive.local.v1"])
       .toEqual(["openjiuwen.trace-archive"]);
     expect(defaultWorkbench.graph.nodes.find((node) => node.id === "model"))
@@ -217,6 +220,7 @@ describe("visualization plugin registry", () => {
       "openjiuwen.local-repository": "enabled",
       "openjiuwen.source-convergence": "enabled",
       "openjiuwen.development-assistant": "enabled",
+      "openjiuwen.development-executor": "disabled",
       "openjiuwen.tool-catalog": "enabled",
       "openjiuwen.git-change": "enabled",
       "openjiuwen.github-pull-request": "enabled",
@@ -285,6 +289,27 @@ describe("visualization plugin registry", () => {
     expect(withoutLocalGit.changeSources).toEqual([]);
     expect(withoutLocalGit.toolCatalogSources).toEqual([]);
     expect(withoutLocalGit.developmentSources).toEqual([]);
+
+    const withControlledExecution = createDefaultPluginRegistry().resolve({
+      pluginStates: { "openjiuwen.development-executor": true },
+    });
+    expect(withControlledExecution.capabilities["development.execution.controlled.v1"])
+      .toEqual(["openjiuwen.development-executor"]);
+    expect(
+      withControlledExecution.plugins.find((item) => item.id === "openjiuwen.development-executor")
+        ?.state,
+    ).toBe("enabled");
+
+    const blockedControlledExecution = createDefaultPluginRegistry().resolve({
+      pluginStates: {
+        "openjiuwen.local-repository": false,
+        "openjiuwen.development-executor": true,
+      },
+    });
+    expect(
+      blockedControlledExecution.plugins.find((item) => item.id === "openjiuwen.development-executor")
+        ?.state,
+    ).toBe("blocked");
   });
 
   it("keeps the canonical graph independent from its ReactFlow projection", () => {

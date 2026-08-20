@@ -33,6 +33,10 @@ import type {
 } from "../../kernel";
 import { MagnetControls } from "../trace-graph";
 import { repositoryMatchesSource } from "../source-convergence";
+import {
+  DevelopmentExecutionPanel,
+  useDevelopmentExecution,
+} from "../development-execution";
 import { DevelopmentCanvas } from "./DevelopmentCanvas";
 import { DevelopmentEnhancementPanel } from "./DevelopmentEnhancementPanel";
 import { DevelopmentInspector } from "./DevelopmentInspector";
@@ -109,6 +113,7 @@ interface DevelopmentAssistantWorkspaceProps {
   navigation: DevelopmentNavigationRequest | null;
   onOpenDefinition?: (source: GraphSourceReference) => void;
   openRouterEnabled: boolean;
+  controlledExecutionEnabled: boolean;
   magnetEnabled: boolean;
   magnetStrength: number;
   onToggleMagnet: () => void;
@@ -120,6 +125,7 @@ export function DevelopmentAssistantWorkspace({
   navigation,
   onOpenDefinition,
   openRouterEnabled,
+  controlledExecutionEnabled,
   magnetEnabled,
   magnetStrength,
   onToggleMagnet,
@@ -142,9 +148,14 @@ export function DevelopmentAssistantWorkspace({
   const [selection, setSelection] = useState<DevelopmentSelection | null>(null);
   const [sessionPanelOpen, setSessionPanelOpen] = useState(false);
   const [enhancementPanelOpen, setEnhancementPanelOpen] = useState(false);
+  const [executionPanelOpen, setExecutionPanelOpen] = useState(false);
   const developmentEnhancement = useDevelopmentEnhancement({
     projection,
     enabled: openRouterEnabled,
+  });
+  const developmentExecution = useDevelopmentExecution({
+    projection,
+    enabled: controlledExecutionEnabled,
   });
 
   useEffect(() => {
@@ -193,6 +204,7 @@ export function DevelopmentAssistantWorkspace({
     setProjection(null);
     setSelection(null);
     setEnhancementPanelOpen(false);
+    setExecutionPanelOpen(false);
     developmentSessions.clearActiveSession();
     try {
       const scan = await client.scan(path, {
@@ -230,6 +242,7 @@ export function DevelopmentAssistantWorkspace({
     setExpanded(new Set());
     setSelection(null);
     setEnhancementPanelOpen(false);
+    setExecutionPanelOpen(false);
     if (!repository) {
       analysisAbortRef.current?.abort();
       setProjection(null);
@@ -254,6 +267,7 @@ export function DevelopmentAssistantWorkspace({
     setExpanded(new Set());
     setSelection(null);
     setEnhancementPanelOpen(false);
+    setExecutionPanelOpen(false);
     developmentSessions.clearActiveSession();
   }
 
@@ -273,6 +287,7 @@ export function DevelopmentAssistantWorkspace({
     setSelection({ kind: "stage", id: restored.stages[0].id });
     setSessionPanelOpen(false);
     setEnhancementPanelOpen(false);
+    setExecutionPanelOpen(false);
   }
 
   function analyze(event: FormEvent<HTMLFormElement>) {
@@ -409,7 +424,7 @@ export function DevelopmentAssistantWorkspace({
                 />
                 <div className="development-intent-hint">
                   <ShieldCheck size={12} />
-                  <span>基础分析只读取当前工作树并保存到本机；OpenRouter 仅通过单独的逐次外发预览调用。</span>
+                  <span>基础分析只读取当前工作树并保存到本机；模型外发与隔离写入均由独立模块逐次审批。</span>
                 </div>
                 <button type="submit" disabled={status === "loading" || !repositoryPath || !intent.trim()}>
                   {status === "loading" ? <LoaderCircle size={15} className="spin" /> : <FileSearch size={15} />}
@@ -423,7 +438,7 @@ export function DevelopmentAssistantWorkspace({
                 <dl>
                   <div><dt>ENGINE</dt><dd>{source?.engine ?? "deterministic-static"}</dd></div>
                   <div><dt>MODEL</dt><dd>{!openRouterEnabled ? "module off" : developmentEnhancement.provider?.status === "ready" ? "optional" : "base off"}</dd></div>
-                  <div><dt>REPO WRITE</dt><dd>false</dd></div>
+                  <div><dt>REPO WRITE</dt><dd>{controlledExecutionEnabled ? "per action" : "false"}</dd></div>
                   <div><dt>SESSION</dt><dd>{developmentSessions.connection === "ready" ? "local / wal" : "offline"}</dd></div>
                 </dl>
               </section>
@@ -452,6 +467,23 @@ export function DevelopmentAssistantWorkspace({
                 <b>{projection.evidence.length}</b> evidence
                 <b>{projection.impacts.length}</b> impacts
               </span>
+              {controlledExecutionEnabled ? (
+                <button
+                  type="button"
+                  className={`development-execution-entry development-execution-entry--${developmentExecution.phase}`}
+                  onClick={() => setExecutionPanelOpen(true)}
+                  title={developmentExecution.error ?? "完整 Diff 预览后，逐次审批隔离应用、固定测试、本地 commit 或回滚"}
+                >
+                  {developmentExecution.busy
+                    ? <LoaderCircle size={13} className="spin" aria-hidden="true" />
+                    : <GitBranch size={13} aria-hidden="true" />}
+                  {developmentExecution.busy
+                    ? "受控执行中"
+                    : developmentExecution.execution
+                      ? "执行链路"
+                      : "受控执行"}
+                </button>
+              ) : null}
               {openRouterEnabled ? (
                 <button
                   type="button"
@@ -520,7 +552,7 @@ export function DevelopmentAssistantWorkspace({
         )}
       </main>
 
-      {projection && openRouterEnabled ? (
+      {projection ? (
         <DevelopmentInspector
           projection={projection}
           selection={selection}
@@ -562,6 +594,17 @@ export function DevelopmentAssistantWorkspace({
           projection={projection}
           controller={developmentEnhancement}
           onClose={() => setEnhancementPanelOpen(false)}
+        />
+      ) : null}
+
+      {projection && controlledExecutionEnabled ? (
+        <DevelopmentExecutionPanel
+          open={executionPanelOpen}
+          projection={projection}
+          controller={developmentExecution}
+          onClose={() => setExecutionPanelOpen(false)}
+          magnetEnabled={magnetEnabled}
+          magnetStrength={magnetStrength}
         />
       ) : null}
     </section>

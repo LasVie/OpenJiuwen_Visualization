@@ -1,4 +1,5 @@
 import {
+  DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
   OPENROUTER_HOST_PLUGIN_ID,
   TOOL_CATALOG_HOST_PLUGIN_ID,
   type PluginHostSnapshot,
@@ -7,6 +8,7 @@ import {
 const hostPluginByWorkbenchPlugin: Readonly<Record<string, string>> = {
   "openjiuwen.openrouter-provider": OPENROUTER_HOST_PLUGIN_ID,
   "openjiuwen.tool-catalog": TOOL_CATALOG_HOST_PLUGIN_ID,
+  "openjiuwen.development-executor": DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
 };
 
 export function hostPluginIdForWorkbench(pluginId: string) {
@@ -29,4 +31,3 @@ export function hostWorkbenchStateOverrides(
     ),
   );
 }
-

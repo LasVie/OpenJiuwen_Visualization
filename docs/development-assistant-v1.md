@@ -110,4 +110,4 @@ V1 仍有以下限制：
 - 跨平面入口只带结构化身份、指标和影响判断，不把完整 Runtime/Context/Tool/模型原文交给 Development；
 - 本机保存开发分析 Session，但暂不支持重命名、搜索、标签或两次建议对比；
 - OpenRouter 输入/输出保存在 Runtime Archive，不复制进 Development Session；恢复 Session 不会自动恢复、重放或关联旧模型分支；
-- 任何仓库修改、测试执行、分支/commit/PR 创建仍属于未来独立授权与审计决策。
+- 仓库修改、测试执行与本地 branch/commit 由默认关闭的 Controlled Development Executor 作为独立授权与审计边界提供；它只接收用户已审查的完整 unified diff，不会把本页结构草案或 OpenRouter 建议自动提升为 patch。远程 push/PR 写入仍不支持，完整合同见 [`development-controlled-execution-v1.md`](development-controlled-execution-v1.md)。

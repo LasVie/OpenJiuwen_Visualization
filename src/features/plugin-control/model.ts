@@ -19,6 +19,7 @@ export interface WorkbenchAvailability {
   definition: boolean;
   change: boolean;
   development: boolean;
+  developmentExecution: boolean;
   tools: boolean;
   modelRuntime: boolean;
   openRouter: boolean;
@@ -94,6 +95,9 @@ export function workbenchAvailability(
     definition: Boolean(workbench.capabilities["repository.local.read"]),
     change: workbench.changeSources.length > 0,
     development: workbench.developmentSources.length > 0,
+    developmentExecution: Boolean(
+      workbench.capabilities["development.execution.controlled.v1"],
+    ),
     tools: workbench.toolCatalogSources.length > 0,
     modelRuntime: workbench.modelProviders.length > 0,
     openRouter: Boolean(workbench.capabilities["runtime.model.openrouter.v1"]),

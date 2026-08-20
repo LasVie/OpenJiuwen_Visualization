@@ -1,6 +1,6 @@
 # OpenJiuwen Trace Visualization
 
-面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路、Git 变更与辅助开发工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、本机 SQLite 运行归档与跨运行对比、工作树/commit range/GitHub PR 的节点影响图，以及 Runtime / Definition / Change 当前焦点进入同一只读 Development 证据链。
+面向 `agent-core` 与 `jiuwenswarm` 的代码定义、运行链路、Git 变更与辅助开发工作台。当前版本支持确定性演示、Agent Core/Swarm 实时 Trace、真实独立 DeepAgent、真实双成员 JiuwenSwarm Agent Team、真实两阶段 SwarmFlow、真实前台单层 Subagent + OpenRouter 执行、Model Provider 录制回放、本机 SQLite 运行归档与跨运行对比、工作树/commit range/GitHub PR 的节点影响图、Runtime / Definition / Change 当前焦点进入同一 Development 证据链，以及默认关闭、逐次审批的隔离补丁执行。
 
 已交付能力、阶段记录和后续路线见 [`docs/project-roadmap.md`](docs/project-roadmap.md)。
 
@@ -26,7 +26,7 @@ python -B services/local-server/scripts/run_server.py `
   --allow-root "C:\Users\soong\Documents\OpenJiuwen_Visualization"
 ```
 
-服务默认在首个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 中增量保存完整 Runtime 原文，并使用 WAL、30 天保留期和 2 GiB 逻辑上限。Development 分析另存到同目录的 `development-sessions.sqlite3`，Local Plugin Host 再用 `plugin-host.sqlite3` 保存生命周期、授权与无原文审计。可用 `--archive-*`、`--development-session-*` 与 `--plugin-host-path` 覆盖；数据库路径必须仍在允许根目录内。
+服务默认在首个允许根目录的 `.openjiuwen-visualization/runtime-archive.sqlite3` 中增量保存完整 Runtime 原文，并使用 WAL、30 天保留期和 2 GiB 逻辑上限。Development 分析另存到同目录的 `development-sessions.sqlite3`，受控执行使用 `development-executions.sqlite3`，Local Plugin Host 再用 `plugin-host.sqlite3` 保存生命周期、授权与无原文审计。可用 `--archive-*`、`--development-session-*`、`--development-execution-path` 与 `--plugin-host-path` 覆盖；数据库和隔离 worktree 路径必须仍在允许根目录内。
 
 四个真实执行器（独立 DeepAgent、Agent Team、SwarmFlow、Subagent）都使用独立固定 bridge；浏览器不能提交 Python 入口、工作流源码或工具配置。只读扫描烟测：
 
@@ -83,6 +83,19 @@ python -B services/local-server/scripts/scan_repository.py `
 
 完整分析合同见 [`docs/development-assistant-v1.md`](docs/development-assistant-v1.md)，本机持久化、迁移和删除边界见 [`docs/development-session-persistence-v1.md`](docs/development-session-persistence-v1.md)，逐次外发预览和模型分支合同见 [`docs/development-openrouter-enhancement-v1.md`](docs/development-openrouter-enhancement-v1.md)。
 
+### 受控开发执行（默认关闭）
+
+在“模块”中开启 `Controlled Development Executor` 后，Development 工具栏才会出现“受控执行”。用户粘贴完整 unified diff，先在临时 Git index 中做只读预览，再通过独立画布查看 `完整 Diff → 隔离 Apply → 固定测试 → 本地 Commit` 主链，以及受保护的 source checkout 和精确 rollback 分支。
+
+- 每个 Apply、Test、Commit、Rollback 都展示完整动作参数和 SHA-256，并要求单独勾选确认；确认不会跨动作复用；
+- Apply 只在工具命名的 branch/worktree 中进行，完整文件清单、增删统计和 diff 可点击审查；
+- 测试命令、工作目录和 timeout 由服务端 profile 固定，网页不能提交 Shell 或任意 argv；stdout/stderr 与 tracked side effects 在本机展示；
+- Commit 还需先生成包含 message、branch、staged diff 与 `push=false` 的第二次预览；服务没有 push 路由；
+- 历史列表只读脱敏元数据，点击记录才从本机 SQLite 读取完整 diff、测试输出与审批事件；
+- rollback 只删除本工具拥有且未被外部推进的精确生成状态，不修改 source checkout 或其他分支。
+
+V1 要求绑定仓库处于精确 revision 的 clean HEAD，并拒绝删除、重命名、复制、二进制、mode/submodule、symlink/junction 与 checkout filter patch。完整协议和限制见 [`docs/development-controlled-execution-v1.md`](docs/development-controlled-execution-v1.md)。
+
 ## Core Runtime
 
 运行链路的数据源可以在“演示 / Core Trace / Swarm Trace”之间切换。Core Trace 创建一个本机实时会话，通过 SSE 接收归一化的 Agent、ReAct、Rail、Context、Model、Tool 和 Ability 事件，并同步增量归档；既可由外部 producer 写入，也可从“Agent Core”面板显式启动真实独立 DeepAgent。
@@ -135,7 +148,7 @@ OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback ada
 
 ### 模块控制中心
 
-顶部“模块”包含“工作台模块”和“Local Plugin Host”两个视图。工作台模块管理浏览器 contribution 与依赖图；Host 管理内置 OpenRouter/Tool Catalog 的来源、生命周期、网络/secret 权限、opaque credential handle 与本机审计。每个模块可独立请求开启或关闭；依赖缺失时保留用户开启意图，恢复后自动重新启用。Runtime 来源、Definition/Change 导航、Tool 注册表、Model 录制、Rail 和 Subagent 深入入口都从当前 Workbench 与 Host 快照推导，不会继续暴露已关闭或被撤权模块的数据贡献。
+顶部“模块”包含“工作台模块”和“Local Plugin Host”两个视图。工作台模块管理浏览器 contribution 与依赖图；Host 管理内置 OpenRouter、Tool Catalog 与 Controlled Development Executor 的来源、生命周期、风险分级权限、opaque credential handle 与本机审计。每个模块可独立请求开启或关闭；依赖缺失时保留用户开启意图，恢复后自动重新启用。Runtime 来源、Definition/Change 导航、Tool 注册表、Model 录制、受控执行、Rail 和 Subagent 深入入口都从当前 Workbench 与 Host 快照推导，不会继续暴露已关闭或被撤权模块的数据贡献。
 
 浏览器偏好只保存在当前浏览器，并可一键恢复 manifest 默认值；Host 状态与授权保存在本机 SQLite/WAL。二者都不保存 Trace 原文或凭据值。状态合同、依赖图和安全边界见 [`docs/plugin-control-v1.md`](docs/plugin-control-v1.md) 与 [`docs/plugin-host-v1.md`](docs/plugin-host-v1.md)。
 
@@ -173,6 +186,7 @@ src/
 │  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
 │  ├─ development-assistant/  # 确定性诊断、Session 与逐次确认的 OpenRouter 只读分支
+│  ├─ development-execution/  # 完整 Diff、隔离执行、固定测试、commit 与 rollback 审批画布
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
 │  ├─ plugin-host/             # Host 生命周期、权限、凭据句柄与本机审计界面
 │  ├─ openrouter-runtime/      # Provider-only OpenRouter 调用组件（底层模块）

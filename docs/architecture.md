@@ -110,6 +110,7 @@ Local Plugin Host ── lifecycle + grants + secret handles + audit
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.source-convergence` | Runtime、Definition 与 Change 的稳定源码身份、运行聚合和往返导航 |
 | `openjiuwen.development-assistant` | 基于本地 Definition snapshot 的确定性只读诊断、Session，以及逐次预览确认的可选 OpenRouter 建议分支 |
+| `openjiuwen.development-executor` | 默认关闭的完整 Diff 审批画布、隔离 apply、固定测试、本地 commit 与精确 rollback |
 | `openjiuwen.trace-archive` | 本机 SQLite/WAL Session 管理、按需原文、完整导出、删除和跨运行对比 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务、静态定义图、有界源码证据与 Git Change 客户端，默认开启 |
@@ -304,4 +305,6 @@ Development 收到入口后按 source repository 自动选择允许目录中的�
 
 Host 插件 `openjiuwen.host.development-executor` 默认关闭；启用只开放 preview，apply/test/commit/rollback 仍各自需要不可持久化的 per-operation approval。Apply 只创建工具命名的 worktree/branch，禁用 hooks、GPG、fsmonitor、交互式凭据与外部 checkout filter；测试 argv 只能来自服务端固定 profile；commit 仅包含已核验 staged diff 且没有 push 路由；rollback 在 branch HEAD 未被外部推进时删除精确生成状态。
 
-完整 patch、测试输出、状态机和本机事件保存在独立 SQLite/WAL，不进入 Plugin Host 的无原文审计。当前服务端合同已完成，浏览器画布与审批交互由下一独立模块接入。完整协议见 [`development-controlled-execution-v1.md`](development-controlled-execution-v1.md)。
+浏览器的 `adapters/development-execution/` 校验版本和全部安全 policy，`features/development-execution/` 再把执行投影成 `review → apply → test → commit` 主链、source checkout 保护分支和 rollback 恢复分支。完整 Diff、路径统计、固定测试命令/输出、commit preview 与 exact digest 分步骤展示；任何步骤、profile、message 或服务端状态变化都会使旧确认失效。执行历史默认只读取 metadata，点开单条记录才读取本机完整内容。
+
+完整 patch、测试输出、状态机和本机事件保存在独立 SQLite/WAL，不进入 Plugin Host 的无原文审计。Workbench 插件与 Host 插件默认都关闭并建立显式映射；只有两侧状态解析后仍可用，Development 才显示入口。完整协议见 [`development-controlled-execution-v1.md`](development-controlled-execution-v1.md)。

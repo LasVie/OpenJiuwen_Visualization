@@ -386,6 +386,30 @@
 .development-session-save-state--unsaved { color: #6f6960; background: #f0ede8; }
 .development-session-save-state--error { color: #914c49; background: #f5dfdd; }
 
+.development-execution-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  gap: 5px;
+  padding: 0 10px;
+  color: #8a5c20;
+  background: #f8ecd2;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: background-color 120ms ease-out, color 120ms ease-out, transform 120ms ease-out;
+}
+.development-execution-entry:hover { color: #714611; background: #f1ddb6; }
+.development-execution-entry:active { transform: scale(0.96); }
+.development-execution-entry--applying,
+.development-execution-entry--testing,
+.development-execution-entry--committing,
+.development-execution-entry--rolling-back { color: #76501e; background: #efd8a8; }
+
 .development-enhancement-entry {
   display: inline-flex;
   align-items: center;
@@ -1093,6 +1117,7 @@
 
 .development-session-entry:focus-visible,
 .development-session-save-state:focus-visible,
+.development-execution-entry:focus-visible,
 .development-session-panel button:focus-visible,
 .development-enhancement-entry:focus-visible,
 .development-enhancement-panel button:focus-visible,
@@ -1116,6 +1141,7 @@
   .development-toolbar__identity small { max-width: 150px; }
   .development-expand-all { padding: 0 7px; }
   .development-session-save-state { width: 40px; padding: 0; justify-content: center; font-size: 0; }
+  .development-execution-entry { width: 40px; padding: 0; font-size: 0; }
   .development-enhancement-entry { width: 40px; padding: 0; font-size: 0; }
   .development-timeline__steps button strong { font-size: 8px; }
 }
@@ -1143,6 +1169,7 @@
   .development-timeline__progress i,
   .development-session-entry,
   .development-session-save-state,
+  .development-execution-entry,
   .development-session-panel button,
   .development-enhancement-entry,
   .development-enhancement-panel button { transition: none !important; }

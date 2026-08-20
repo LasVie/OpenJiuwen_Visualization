@@ -4,7 +4,7 @@
 
 本协议把 Development 的“建议”与“执行”明确拆开。确定性九步分析和 OpenRouter 只读增强仍然不会写仓库；只有用户把一份完整 unified diff 送入独立受控执行模块，并对后续每个动作逐次确认，服务端才会创建隔离 Git 状态。
 
-服务端 V1 已交付。浏览器画布与审批面板在下一独立提交接入。
+服务端与浏览器 V1 均已交付。浏览器只在 Workbench 和 Host 的 Controlled Development Executor 同时开启时显示入口；模块关闭后清除当前完整执行详情，服务端继续作为最终授权边界。
 
 V1 的硬边界：
 
@@ -111,9 +111,24 @@ Rollback 会先核验生成 branch HEAD 没有被外部推进。核验通过后�
 | `POST` | `/api/v1/development/executions/{id}/commit` | 逐次确认后创建本地 branch commit |
 | `POST` | `/api/v1/development/executions/{id}/rollback` | 逐次确认后删除本工具拥有的隔离状态 |
 
+## 浏览器审批画布
+
+`adapters/development-execution/` 只接受 `apiVersion=1.0.0` 且满足安全 policy 的响应；若服务声称可以写 source checkout、执行任意命令或自动 push，客户端会拒绝该响应。`features/development-execution/` 管理本次完整 diff、执行状态、历史索引和四类精确确认，不把这些状态混入只读 Development projection。
+
+入口画布把生命周期投影为六个可点击节点：
+
+- `审查完整 Diff → 隔离应用 → 白名单测试 → 本地分支提交` 是主链；
+- `Source checkout` 是受保护的不变量旁支；
+- `精确回滚` 是从隔离状态分出的恢复旁支。
+
+画布支持拖拽、平移、缩放、fit、MiniMap，以及与其他画布相同的实时防重叠和可调磁吸。进入或状态变化时自动 fit，但用户仍可独立调整节点位置。
+
+每个动作面板只显示该动作实际消费的字段：Apply 展示完整 diff、文件 allowlist 和 preview SHA；Test 展示固定 command/workdir/timeout 与 plan SHA；Commit 在单行 message 后再次读取 staged diff SHA、branch 和 `push=false`；Rollback 展示当前状态绑定的 rollback SHA。选择其他节点、profile、message 或服务端状态变化都会使已有勾选失效。
+
+执行列表默认只读取仓库、branch、状态、统计、摘要和时间；点击某条记录后才读取该条完整 diff、测试 stdout/stderr 与本机事件。列表不把元数据记录误画成已加载原文。
+
 ## 当前限制
 
-- 浏览器审批 UI 尚未接入；当前阶段通过版本化 API 和合同测试验收。
 - OpenRouter 只读增强仍禁止生成可应用 patch；V1 执行入口接收用户已经审查的 unified diff。
 - 不支持 dirty source checkout、历史 revision、删除/重命名、多个 commit 或变基。
 - 测试调用当前是同步 HTTP 请求；timeout 会终止直接测试进程，但 V1 尚未提供通用 OS 级进程沙箱。

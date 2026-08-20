@@ -4,6 +4,7 @@ export const PLUGIN_HOST_API_VERSION = "1.0.0" as const;
 export const DEFAULT_PLUGIN_HOST_SERVER = "http://127.0.0.1:8765";
 export const OPENROUTER_HOST_PLUGIN_ID = "openjiuwen.host.openrouter";
 export const TOOL_CATALOG_HOST_PLUGIN_ID = "openjiuwen.host.tool-catalog";
+export const DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID = "openjiuwen.host.development-executor";
 
 export type PluginHostPluginStatus = "active" | "blocked" | "disabled";
 export type PluginHostPermissionKind = "read" | "network" | "secret" | "write";
@@ -354,4 +355,3 @@ export class PluginHostClient {
     return value;
   }
 }
-

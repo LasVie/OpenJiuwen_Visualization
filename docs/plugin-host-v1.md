@@ -10,7 +10,7 @@ V1 注册三个内置插件：
 |---|---|---|
 | `openjiuwen.host.openrouter` | `openjiuwen.openrouter-provider` | OpenRouter 注册表、网络调用与凭据句柄 |
 | `openjiuwen.host.tool-catalog` | `openjiuwen.tool-catalog` | 允许根目录内的只读 Tool AST 索引 |
-| `openjiuwen.host.development-executor` | 浏览器模块下一提交接入 | 默认关闭；受控 patch/test/local commit/rollback |
+| `openjiuwen.host.development-executor` | `openjiuwen.development-executor` | 默认关闭；受控 patch/test/local commit/rollback |
 
 Host 状态为 `active / blocked / disabled`。`disabled` 表示用户关闭生命周期；`blocked` 表示用户仍希望启用，但必需权限已撤销或 secret handle 当前无法解析。状态变化会刷新浏览器 Workbench 和四个真实 Executor 的可用性。每个新的调用在进入 Provider、Executor 或 Tool Catalog 前都会再次通过 Host gate；取消既有调用始终保留，避免撤权后无法终止运行。
 
@@ -63,13 +63,13 @@ Host 默认使用首个允许根目录下的 `.openjiuwen-visualization/plugin-h
 - “工作台模块”管理浏览器 contribution 和依赖图；
 - “Local Plugin Host”查看服务端插件、信任来源、生命周期、权限、凭据句柄、capabilities、开发模式与审计。
 
-OpenRouter 与 Tool Catalog 的浏览器模块映射到 Host；Controlled Development Executor 的浏览器映射将在审批 UI 阶段接入。任一已映射模块请求关闭都会通过 Host 形成服务端最终状态；重新开启依赖后，下游 Executor 按既有 `requestedEnabled` 语义自动恢复。Host 离线时页面保留工作台模块信息，但不能把它当作服务授权成功。
+OpenRouter、Tool Catalog 与 Controlled Development Executor 的浏览器模块都映射到对应 Host 插件。任一已映射模块请求关闭都会通过 Host 形成服务端最终状态；重新开启依赖后，下游 Executor 按既有 `requestedEnabled` 语义自动恢复。受控执行入口还要求 Local Repository 与 Development Assistant 的 Workbench 依赖同时可用。Host 离线时页面保留工作台模块信息，但不能把它当作服务授权成功。
 
 ## V1 非目标
 
 - 不从页面安装、卸载、升级或下载插件；
 - 不为第三方插件执行动态代码，也没有进程沙箱、崩溃监督或热升级；
 - 不提供通用本机 vault/系统凭据录入 UI；OpenRouter 仍由服务进程环境配置；
-- 不实现通用写操作审批框架；当前只支持 Controlled Development 的四项关闭式动作，浏览器审批 UI 在下一阶段接入；
+- 不实现通用写操作审批框架；当前只支持 Controlled Development 的四项关闭式动作，并由专用浏览器面板逐项消费 exact digest；
 - 不声称内置 manifest integrity 等同第三方签名；后续签名链和发布者信任必须另行设计；
 - 不把 Tool 静态声明或 `catalog-read-only` 授权自动视为 Runtime 已注册或已调用；Tool Registry 四层证据已分别消费 `ability.register` 与 `tool.call`。
