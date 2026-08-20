@@ -79,11 +79,11 @@ def _optional_site_url(value: str | None) -> str | None:
     return normalized
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class OpenRouterProviderConfig:
     """Credential-bearing configuration that never crosses the loopback API."""
 
-    api_key: str | None
+    api_key: str | None = field(repr=False)
     models: tuple[str, ...] = (DEFAULT_OPENROUTER_MODEL,)
     default_model: str = DEFAULT_OPENROUTER_MODEL
     site_url: str | None = None
@@ -91,10 +91,7 @@ class OpenRouterProviderConfig:
     request_timeout_seconds: float = 120.0
 
     def __post_init__(self) -> None:
-        normalized_key = self.api_key.strip() if isinstance(self.api_key, str) else None
-        if normalized_key:
-            _safe_header(normalized_key, "OpenRouter API key", maximum=4_096)
-        object.__setattr__(self, "api_key", normalized_key or None)
+        self.set_api_key(self.api_key)
 
         normalized_models = tuple(dict.fromkeys(_model_id(model) for model in self.models))
         if not normalized_models:
@@ -102,23 +99,33 @@ class OpenRouterProviderConfig:
         normalized_default = _model_id(self.default_model)
         if normalized_default not in normalized_models:
             raise ValueError("The default OpenRouter model must be in the registered model allowlist.")
-        object.__setattr__(self, "models", normalized_models)
-        object.__setattr__(self, "default_model", normalized_default)
-        object.__setattr__(self, "site_url", _optional_site_url(self.site_url))
+        self.models = normalized_models
+        self.default_model = normalized_default
+        self.site_url = _optional_site_url(self.site_url)
         if self.app_name is not None and self.app_name.strip():
-            object.__setattr__(
-                self,
-                "app_name",
-                _safe_header(self.app_name, "OpenRouter app name", maximum=120),
+            self.app_name = _safe_header(
+                self.app_name,
+                "OpenRouter app name",
+                maximum=120,
             )
         else:
-            object.__setattr__(self, "app_name", None)
+            self.app_name = None
         if not 5 <= self.request_timeout_seconds <= 600:
             raise ValueError("OpenRouter request timeout must be between 5 and 600 seconds.")
 
     @property
     def configured(self) -> bool:
         return self.api_key is not None
+
+    @staticmethod
+    def normalize_api_key(value: str | None) -> str | None:
+        normalized = value.strip() if isinstance(value, str) else None
+        if normalized:
+            _safe_header(normalized, "OpenRouter API key", maximum=1_280)
+        return normalized or None
+
+    def set_api_key(self, value: str | None) -> None:
+        self.api_key = self.normalize_api_key(value)
 
     @classmethod
     def from_environment(
@@ -351,7 +358,8 @@ class OpenRouterHttpTransport:
         self._opener = opener or build_opener(_RejectRedirects())
 
     def open_stream(self, request: OpenRouterChatRequest) -> OpenRouterStream:
-        if not self._config.api_key:
+        api_key = self._config.api_key
+        if not api_key:
             raise OpenRouterProviderError(
                 "openrouter_unconfigured",
                 "OpenRouter is not configured in the local service.",
@@ -368,7 +376,7 @@ class OpenRouterHttpTransport:
             separators=(",", ":"),
         ).encode("utf-8")
         headers = {
-            "Authorization": f"Bearer {self._config.api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
             "User-Agent": "OpenJiuwen-Visualization/0.1",
@@ -584,6 +592,14 @@ class OpenRouterRuntimeAdapter:
         self._jobs: dict[str, _InvocationJob] = {}
         self._lock = threading.RLock()
 
+    @property
+    def active_invocations(self) -> int:
+        with self._lock:
+            return sum(
+                job.state in {"accepted", "running", "cancelling"}
+                for job in self._jobs.values()
+            )
+
     def descriptor(self) -> dict[str, object]:
         return self.config.public_descriptor()
 
@@ -608,7 +624,7 @@ class OpenRouterRuntimeAdapter:
         if not self.config.configured:
             raise OpenRouterProviderError(
                 "openrouter_unconfigured",
-                "Set OPENJIUWEN_OPENROUTER_API_KEY or OPENROUTER_API_KEY in the local service environment.",
+                "Configure an OpenRouter API key in local settings.",
                 status=HTTPStatus.SERVICE_UNAVAILABLE,
             )
         trace_id = _required_input(body.get("traceId"), "traceId", maximum=240)

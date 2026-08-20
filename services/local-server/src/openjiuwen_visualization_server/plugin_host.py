@@ -737,6 +737,53 @@ class PluginHost:
         except Exception:
             return False
 
+    def record_secret_event(
+        self,
+        plugin_id: str,
+        handle_id: str,
+        *,
+        operation: str,
+        outcome: str,
+        detail_code: str,
+    ) -> None:
+        """Audit credential management without storing values or request payloads."""
+        definition = self._definition(plugin_id)
+        if not any(
+            permission.secret_handle_id == handle_id
+            for permission in definition.permissions
+        ):
+            raise PluginHostError(
+                "secret_handle_not_found",
+                "The secret handle is not declared by this plugin.",
+                status=HTTPStatus.NOT_FOUND,
+            )
+        if operation not in {"stored", "deleted"}:
+            raise PluginHostError(
+                "invalid_secret_operation",
+                "Secret audit operation is invalid.",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        if outcome not in {"allowed", "failed"}:
+            raise PluginHostError(
+                "invalid_secret_outcome",
+                "Secret audit outcome is invalid.",
+                status=HTTPStatus.BAD_REQUEST,
+            )
+        normalized_detail = _required_string(
+            detail_code,
+            "detail_code",
+            maximum=120,
+        )
+        with self._lock, self._connection() as connection:
+            self._audit(
+                connection,
+                plugin_id=plugin_id,
+                action=f"plugin.secret.{operation}",
+                target=handle_id,
+                outcome=outcome,
+                detail_code=normalized_detail,
+            )
+
     def descriptor(self) -> dict[str, object]:
         with self._lock, self._connection() as connection:
             states = self._state_rows(connection)

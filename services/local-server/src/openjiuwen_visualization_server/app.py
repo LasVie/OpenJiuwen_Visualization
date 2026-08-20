@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -45,6 +46,11 @@ from .openrouter_provider import (
     OpenRouterProviderError,
     OpenRouterRuntimeAdapter,
 )
+from .openrouter_credentials import (
+    OPENROUTER_SECRET_HANDLE_ID,
+    OpenRouterCredentialController,
+    OpenRouterCredentialError,
+)
 from .plugin_host import (
     DEVELOPMENT_EXECUTOR_HOST_PLUGIN_ID,
     OPENROUTER_HOST_PLUGIN_ID,
@@ -54,6 +60,7 @@ from .plugin_host import (
     PluginHostError,
 )
 from .repository import RepositoryResolutionError, RepositoryResolver
+from .secret_store import system_secret_store
 from .scan_cache import DefinitionScanCache
 from .source_reader import SourceReadError, SourceReadOptions, SourceReader
 from .subagent_runtime import (
@@ -175,6 +182,7 @@ class LocalRepositoryApi:
         github_pull_request_inspector: GitHubPullRequestInspector | None = None,
         source_reader: SourceReader | None = None,
         openrouter_adapter: OpenRouterRuntimeAdapter | None = None,
+        openrouter_credentials: OpenRouterCredentialController | None = None,
         agent_core_adapter: AgentCoreRuntimeAdapter | None = None,
         jiuwenswarm_adapter: JiuwenSwarmRuntimeAdapter | None = None,
         subagent_adapter: SubagentRuntimeAdapter | None = None,
@@ -256,8 +264,23 @@ class LocalRepositoryApi:
         provider_config = (
             openrouter_adapter.config
             if openrouter_adapter is not None
+            else openrouter_credentials.config
+            if openrouter_credentials is not None
             else OpenRouterProviderConfig.from_environment()
         )
+        self.openrouter_credentials = (
+            openrouter_credentials
+            if openrouter_credentials is not None
+            else OpenRouterCredentialController(
+                provider_config,
+                system_secret_store(enabled=config.system_credentials_enabled),
+            )
+        )
+        if self.openrouter_credentials.config is not provider_config:
+            raise ValueError(
+                "OpenRouter credential controller and runtime adapter must share one config."
+            )
+        self._provider_control_lock = threading.RLock()
         plugin_host_path = config.plugin_host_path or (
             config.allowed_roots[0]
             / ".openjiuwen-visualization"
@@ -398,6 +421,22 @@ class LocalRepositoryApi:
             return ApiResponse(HTTPStatus.OK, self.plugin_host.descriptor())
         if method == "GET" and route == "/api/v1/plugin-host/audit":
             return self._plugin_host_audit(split_path.query)
+        if method == "GET" and route == "/api/v1/settings":
+            return ApiResponse(
+                HTTPStatus.OK,
+                {
+                    "apiVersion": "1.0.0",
+                    "settings": {
+                        "openRouter": self.openrouter_credentials.descriptor()[
+                            "credential"
+                        ],
+                        "service": {
+                            "transport": "loopback-http",
+                            "remoteAccess": False,
+                        },
+                    },
+                },
+            )
         if method == "GET" and route == "/api/v1/model-providers/openrouter":
             return ApiResponse(HTTPStatus.OK, self._provider_descriptor())
         if method == "GET" and route == "/api/v1/agent-core":
@@ -482,6 +521,8 @@ class LocalRepositoryApi:
             return self._create_trace(body or {})
         if method == "POST" and route == "/api/v1/model-providers/openrouter/invocations":
             return self._start_openrouter(body or {}, trace_token)
+        if method == "POST" and route == "/api/v1/settings/openrouter/credential":
+            return self._set_openrouter_credential(body or {})
         if method == "POST" and route == "/api/v1/agent-core/invocations":
             return self._start_agent_core(body or {}, trace_token)
         if method == "POST" and route == "/api/v1/jiuwenswarm/invocations":
@@ -543,6 +584,8 @@ class LocalRepositoryApi:
             return self._development_session_delete(
                 unquote(development_session_match.group(1))
             )
+        if method == "DELETE" and route == "/api/v1/settings/openrouter/credential":
+            return self._delete_openrouter_credential()
         development_apply_match = DEVELOPMENT_EXECUTION_APPLY_ROUTE.fullmatch(route)
         if method == "POST" and development_apply_match:
             return self._development_execution_apply(
@@ -734,18 +777,106 @@ class LocalRepositoryApi:
             return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.OK, result)
 
+    def _active_provider_invocations(self) -> int:
+        return sum(
+            int(getattr(adapter, "active_invocations", 0))
+            for adapter in (
+                self.openrouter_adapter,
+                self.agent_core_adapter,
+                self.jiuwenswarm_adapter,
+                self.subagent_adapter,
+                self.swarmflow_adapter,
+            )
+        )
+
+    def _record_openrouter_secret_event(
+        self,
+        *,
+        operation: str,
+        outcome: str,
+        detail_code: str,
+    ) -> None:
+        if self.plugin_host is None:
+            return
+        try:
+            self.plugin_host.record_secret_event(
+                OPENROUTER_HOST_PLUGIN_ID,
+                OPENROUTER_SECRET_HANDLE_ID,
+                operation=operation,
+                outcome=outcome,
+                detail_code=detail_code,
+            )
+        except PluginHostError:
+            LOGGER.exception("OpenRouter credential audit failed")
+
+    def _set_openrouter_credential(self, body: dict[str, Any]) -> ApiResponse:
+        unknown = set(body) - {"apiKey"}
+        if unknown:
+            return _error(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_openrouter_credential",
+                "The credential request contains unsupported fields.",
+            )
+        with self._provider_control_lock:
+            if self._active_provider_invocations():
+                return _error(
+                    HTTPStatus.CONFLICT,
+                    "provider_busy",
+                    "Stop active model and Agent runs before changing the OpenRouter credential.",
+                )
+            try:
+                result = self.openrouter_credentials.set(body.get("apiKey"))
+            except OpenRouterCredentialError as exc:
+                self._record_openrouter_secret_event(
+                    operation="stored",
+                    outcome="failed",
+                    detail_code=exc.code,
+                )
+                return _error(exc.status, exc.code, str(exc))
+            self._record_openrouter_secret_event(
+                operation="stored",
+                outcome="allowed",
+                detail_code="system_credential_updated",
+            )
+            return ApiResponse(HTTPStatus.OK, result)
+
+    def _delete_openrouter_credential(self) -> ApiResponse:
+        with self._provider_control_lock:
+            if self._active_provider_invocations():
+                return _error(
+                    HTTPStatus.CONFLICT,
+                    "provider_busy",
+                    "Stop active model and Agent runs before deleting the OpenRouter credential.",
+                )
+            try:
+                result = self.openrouter_credentials.delete()
+            except OpenRouterCredentialError as exc:
+                self._record_openrouter_secret_event(
+                    operation="deleted",
+                    outcome="failed",
+                    detail_code=exc.code,
+                )
+                return _error(exc.status, exc.code, str(exc))
+            self._record_openrouter_secret_event(
+                operation="deleted",
+                outcome="allowed",
+                detail_code="system_credential_removed",
+            )
+            return ApiResponse(HTTPStatus.OK, result)
+
     def _start_openrouter(
         self,
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
-        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
-        if denied is not None:
-            return denied
-        try:
-            result = self.openrouter_adapter.start(body, trace_token)
-        except OpenRouterProviderError as exc:
-            return _error(exc.status, exc.code, str(exc))
+        with self._provider_control_lock:
+            denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+            if denied is not None:
+                return denied
+            try:
+                result = self.openrouter_adapter.start(body, trace_token)
+            except OpenRouterProviderError as exc:
+                return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
 
     def _cancel_openrouter(
@@ -764,13 +895,14 @@ class LocalRepositoryApi:
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
-        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
-        if denied is not None:
-            return denied
-        try:
-            result = self.agent_core_adapter.start(body, trace_token)
-        except AgentCoreRuntimeError as exc:
-            return _error(exc.status, exc.code, str(exc))
+        with self._provider_control_lock:
+            denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+            if denied is not None:
+                return denied
+            try:
+                result = self.agent_core_adapter.start(body, trace_token)
+            except AgentCoreRuntimeError as exc:
+                return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
 
     def _cancel_agent_core(
@@ -789,13 +921,14 @@ class LocalRepositoryApi:
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
-        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
-        if denied is not None:
-            return denied
-        try:
-            result = self.jiuwenswarm_adapter.start(body, trace_token)
-        except JiuwenSwarmRuntimeError as exc:
-            return _error(exc.status, exc.code, str(exc))
+        with self._provider_control_lock:
+            denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+            if denied is not None:
+                return denied
+            try:
+                result = self.jiuwenswarm_adapter.start(body, trace_token)
+            except JiuwenSwarmRuntimeError as exc:
+                return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
 
     def _cancel_jiuwenswarm(
@@ -814,13 +947,14 @@ class LocalRepositoryApi:
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
-        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
-        if denied is not None:
-            return denied
-        try:
-            result = self.subagent_adapter.start(body, trace_token)
-        except SubagentRuntimeError as exc:
-            return _error(exc.status, exc.code, str(exc))
+        with self._provider_control_lock:
+            denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+            if denied is not None:
+                return denied
+            try:
+                result = self.subagent_adapter.start(body, trace_token)
+            except SubagentRuntimeError as exc:
+                return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
 
     def _cancel_subagent(
@@ -839,13 +973,14 @@ class LocalRepositoryApi:
         body: dict[str, Any],
         trace_token: str | None,
     ) -> ApiResponse:
-        denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
-        if denied is not None:
-            return denied
-        try:
-            result = self.swarmflow_adapter.start(body, trace_token)
-        except SwarmFlowRuntimeError as exc:
-            return _error(exc.status, exc.code, str(exc))
+        with self._provider_control_lock:
+            denied = self._host_gate(OPENROUTER_HOST_PLUGIN_ID)
+            if denied is not None:
+                return denied
+            try:
+                result = self.swarmflow_adapter.start(body, trace_token)
+            except SwarmFlowRuntimeError as exc:
+                return _error(exc.status, exc.code, str(exc))
         return ApiResponse(HTTPStatus.ACCEPTED, result)
 
     def _cancel_swarmflow(

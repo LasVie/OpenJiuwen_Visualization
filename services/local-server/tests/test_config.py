@@ -32,6 +32,7 @@ class LocalServiceConfigTests(unittest.TestCase):
             / "development-sessions.sqlite3",
         )
         self.assertEqual(config.development_session_retention_days, 30)
+        self.assertFalse(config.system_credentials_enabled)
         self.assertEqual(
             config.development_session_max_bytes, 2 * 1024 * 1024 * 1024
         )

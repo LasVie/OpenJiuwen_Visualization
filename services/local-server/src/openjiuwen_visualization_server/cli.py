@@ -59,6 +59,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Plugin Host SQLite path inside an allowed root.",
     )
     serve.add_argument(
+        "--disable-system-credential-store",
+        action="store_true",
+        help="Disable write-only operating-system credential storage.",
+    )
+    serve.add_argument(
         "--development-execution-path",
         help="Controlled Development execution SQLite path inside an allowed root.",
     )
@@ -134,6 +139,10 @@ def _config(arguments: argparse.Namespace) -> LocalServiceConfig:
             arguments, "development_worktree_root", None
         ),
         plugin_host_path=getattr(arguments, "plugin_host_path", None),
+        system_credentials_enabled=(
+            getattr(arguments, "command", None) == "serve"
+            and not getattr(arguments, "disable_system_credential_store", False)
+        ),
         allow_unsigned_plugins=getattr(arguments, "allow_unsigned_plugins", False),
         plugin_developer_roots=getattr(arguments, "plugin_dev_root", ()),
     )

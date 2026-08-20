@@ -384,7 +384,7 @@ class OpenRouterProviderTests(unittest.TestCase):
             self.store,
             transport=StaticTransport(StaticStream([])),
         )
-        with self.assertRaisesRegex(OpenRouterProviderError, "OPENJIUWEN_OPENROUTER_API_KEY"):
+        with self.assertRaisesRegex(OpenRouterProviderError, "local settings"):
             unconfigured.start(
                 {"traceId": self.trace["id"], "input": "hello"},
                 self.trace_token,

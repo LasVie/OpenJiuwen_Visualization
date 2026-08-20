@@ -25,6 +25,7 @@ class LocalServiceConfig:
     development_execution_path: Path | None = None
     development_worktree_root: Path | None = None
     plugin_host_path: Path | None = None
+    system_credentials_enabled: bool = False
     allow_unsigned_plugins: bool = False
     plugin_developer_roots: tuple[Path, ...] = ()
 
@@ -44,6 +45,7 @@ class LocalServiceConfig:
         development_execution_path: str | Path | None = None,
         development_worktree_root: str | Path | None = None,
         plugin_host_path: str | Path | None = None,
+        system_credentials_enabled: bool = False,
         allow_unsigned_plugins: bool = False,
         plugin_developer_roots: Iterable[str | Path] = (),
     ) -> "LocalServiceConfig":
@@ -191,6 +193,7 @@ class LocalServiceConfig:
             development_execution_path=resolved_development_execution,
             development_worktree_root=resolved_development_worktrees,
             plugin_host_path=resolved_plugin_host,
+            system_credentials_enabled=system_credentials_enabled,
             allow_unsigned_plugins=allow_unsigned_plugins,
             plugin_developer_roots=tuple(resolved_developer_roots),
         )

@@ -205,6 +205,12 @@ class SubprocessSwarmFlowBridgeLauncher:
         environment["PYTHONUNBUFFERED"] = "1"
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
         environment["OPENJIUWEN_VISUALIZATION_BRIDGE"] = "1"
+        if config.provider.api_key:
+            environment["OPENJIUWEN_OPENROUTER_API_KEY"] = config.provider.api_key
+            environment.pop("OPENROUTER_API_KEY", None)
+        else:
+            environment.pop("OPENJIUWEN_OPENROUTER_API_KEY", None)
+            environment.pop("OPENROUTER_API_KEY", None)
         environment["TEMP"] = str(temp_root)
         environment["TMP"] = str(temp_root)
         return environment
@@ -404,6 +410,14 @@ class SwarmFlowRuntimeAdapter:
         self._jobs: dict[str, _SwarmFlowJob] = {}
         self._lock = threading.RLock()
 
+    @property
+    def active_invocations(self) -> int:
+        with self._lock:
+            return sum(
+                job.state in {"accepted", "running", "cancelling"}
+                for job in self._jobs.values()
+            )
+
     def _probe(self, *, force: bool = False) -> SwarmFlowBridgeProbe:
         now = self._clock()
         with self._lock:
@@ -435,7 +449,7 @@ class SwarmFlowRuntimeAdapter:
             status = "unconfigured"
             diagnostic = {
                 "code": "openrouter_unconfigured",
-                "message": "Set OPENJIUWEN_OPENROUTER_API_KEY or OPENROUTER_API_KEY.",
+                "message": "Configure an OpenRouter API key in local settings.",
             }
         models = [
             {"id": model, "label": model, "default": model == self.config.provider.default_model}
@@ -510,7 +524,7 @@ class SwarmFlowRuntimeAdapter:
         if not self.config.provider.configured:
             raise SwarmFlowRuntimeError(
                 "openrouter_unconfigured",
-                "Set OPENJIUWEN_OPENROUTER_API_KEY or OPENROUTER_API_KEY in the local service environment.",
+                "Configure an OpenRouter API key in local settings.",
                 status=HTTPStatus.SERVICE_UNAVAILABLE,
             )
         trace_id = _required_text(body.get("traceId"), "traceId", maximum=240)
