@@ -64,7 +64,7 @@ python -B services/local-server/scripts/scan_repository.py `
 
 ### 只读开发辅助
 
-顶部“开发辅助”把一段开发意图投影成九步证据链：开发意图、仓库范围、源码证据、诊断、影响范围、修改建议、测试建议、补丁结构草案和只读边界。分析器只读取允许根目录内当前 revision 的 Definition snapshot，不执行目标仓代码、不调用模型，也不请求仓库写权限。
+顶部“开发辅助”把一段开发意图投影成九步证据链：开发意图、仓库范围、源码证据、诊断、影响范围、修改建议、测试建议、补丁结构草案和只读边界。基础分析器只读取允许根目录内当前 revision 的 Definition snapshot，不执行目标仓代码、不调用模型，也不请求仓库写权限；OpenRouter 是不覆盖基础证据的独立可选分支。
 
 - Core 与 Swarm 使用独立的仓库身份和色彩语义；
 - 显式类、函数、Rail、Tool、Workflow 等目标优先覆盖，泛化词不会挤掉主要证据；
@@ -77,8 +77,11 @@ python -B services/local-server/scripts/scan_repository.py `
 - 补丁只输出不可应用的结构草案，不伪装成可执行 diff，也不会修改绑定仓库。
 - 每次成功分析自动保存为本机 SQLite/WAL Session；列表只读元数据，点击恢复或导出才读取原始意图与完整结果；
 - Session 管理支持恢复、完整 JSON 导出和带二次确认的删除，默认保留 30 天、逻辑上限 2 GiB。
+- OpenRouter 增强默认不选择源码；每次调用都要选择 1–3 个有界证据、生成并检查完整外发 JSON，再单次确认；
+- 外发只包含开发意图、结构化 Runtime/Change 摘要和所选源码，不包含完整 Context、Tool、Rail/Hook 或既有模型原文；
+- 模型流、usage 和终态进入独立 Runtime Trace，画布以紫色建议分支展示，不能覆盖确定性节点或写入仓库。
 
-完整分析合同见 [`docs/development-assistant-v1.md`](docs/development-assistant-v1.md)，本机持久化、迁移和删除边界见 [`docs/development-session-persistence-v1.md`](docs/development-session-persistence-v1.md)。
+完整分析合同见 [`docs/development-assistant-v1.md`](docs/development-assistant-v1.md)，本机持久化、迁移和删除边界见 [`docs/development-session-persistence-v1.md`](docs/development-session-persistence-v1.md)，逐次外发预览和模型分支合同见 [`docs/development-openrouter-enhancement-v1.md`](docs/development-openrouter-enhancement-v1.md)。
 
 ## Core Runtime
 
@@ -114,7 +117,7 @@ Core Trace 的“模型录制”会载入一段厂商无关的确定性记录，
 
 ### OpenRouter 实时调用
 
-OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback adapter。真实 DeepAgent、JiuwenSwarm Agent Team、SwarmFlow Worker 与 TaskTool Subagent 分别通过自己的 Executor 使用框架 OpenRouter client，避免把普通模型调用误画成 Agent、Team、Workflow 或 child。API key 仅在本地服务环境变量中，默认模型白名单只有 `openrouter/free`。Provider 配置与底层安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
+OpenRouter 仍是首个 Provider，并保留独立的 provider-only loopback adapter。真实 DeepAgent、JiuwenSwarm Agent Team、SwarmFlow Worker 与 TaskTool Subagent 分别通过自己的 Executor 使用框架 OpenRouter client，避免把普通模型调用误画成 Agent、Team、Workflow 或 child。Development 也可在完整外发预览和逐次确认后复用该 Provider 生成独立只读建议分支。API key 仅在本地服务环境变量中，默认模型白名单只有 `openrouter/free`。Provider 配置与底层安全边界见 [`docs/openrouter-provider-v1.md`](docs/openrouter-provider-v1.md)。
 
 ### 运行档案与跨运行对比
 
@@ -169,7 +172,7 @@ src/
 │  ├─ subagent-execution/      # 真实 TaskTool child 状态探测、启动、取消与 Trace 关联
 │  ├─ core-runtime/            # Agent Core 事件投影
 │  ├─ definition-plane/        # 静态定义图与 Tool 注册表子工作台
-│  ├─ development-assistant/  # 只读诊断、建议、补丁结构草案与本机分析 Session
+│  ├─ development-assistant/  # 确定性诊断、Session 与逐次确认的 OpenRouter 只读分支
 │  ├─ plugin-control/          # 插件依赖、启停、持久化与工作台可用性
 │  ├─ plugin-host/             # Host 生命周期、权限、凭据句柄与本机审计界面
 │  ├─ openrouter-runtime/      # Provider-only OpenRouter 调用组件（底层模块）

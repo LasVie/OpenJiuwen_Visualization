@@ -23,6 +23,10 @@ import {
   type DevelopmentFlowNode,
   type DevelopmentNodeData,
 } from "./DevelopmentNode";
+import {
+  developmentEnhancementSummary,
+  type DevelopmentEnhancementResult,
+} from "./enhancement";
 import type {
   DevelopmentAnalysisProjection,
   DevelopmentSelection,
@@ -88,12 +92,13 @@ function selectionId(selection: DevelopmentSelection | null) {
   return selection ? `${selection.kind}:${selection.id}` : "";
 }
 
-function buildFlow(
+export function buildDevelopmentFlow(
   projection: DevelopmentAnalysisProjection,
   activeIndex: number,
   expanded: ReadonlySet<DevelopmentStageKind>,
   selection: DevelopmentSelection | null,
   onToggle: (kind: DevelopmentStageKind) => void,
+  enhancement: DevelopmentEnhancementResult | null,
   previous: readonly DevelopmentFlowNode[] = [],
 ) {
   const previousPositions = new Map(previous.map((node) => [node.id, node.position]));
@@ -157,6 +162,31 @@ function buildFlow(
       edges.push(mainEdge(projection.stages[index - 1].id, id, index, activeIndex));
     }
   });
+
+  if (enhancement && !focusedKind) {
+    const diagnosis = stageByKind.get("diagnosis");
+    if (diagnosis) {
+      const id = `development-child:model-enhancement:${enhancement.id}`;
+      const active = ["starting", "running", "cancelling"].includes(enhancement.phase);
+      records.push({
+        id,
+        type: "development",
+        position: previousPositions.get(id) ?? { x: 916, y: MAIN_ROW_GAP },
+        selected: selected === `model-enhancement:${enhancement.id}`,
+        data: {
+          variant: "model-enhancement",
+          label: "OpenRouter 只读增强",
+          summary: developmentEnhancementSummary(enhancement),
+          status: active ? "active" : "visited",
+          owner: projection.repository.owner,
+          entity: enhancement,
+          meta: [enhancement.modelId, `${enhancement.sourceCount} SOURCES`, enhancement.phase.toUpperCase()],
+        },
+        ariaLabel: `OpenRouter 只读增强，${developmentEnhancementSummary(enhancement)}`,
+      });
+      edges.push(branchEdge(diagnosis.id, id, "#7654b5", true));
+    }
+  }
 
   const addChildren = <T extends { id: string }>(
     kind: DevelopmentStageKind,
@@ -243,6 +273,7 @@ function nodeSelection(node: DevelopmentFlowNode): DevelopmentSelection | null {
   if (node.data.variant === "change") return { kind: "change", id: entity.id };
   if (node.data.variant === "test") return { kind: "test", id: entity.id };
   if (node.data.variant === "patch") return { kind: "patch", id: entity.id };
+  if (node.data.variant === "model-enhancement") return { kind: "model-enhancement", id: entity.id };
   return null;
 }
 
@@ -253,6 +284,7 @@ interface DevelopmentCanvasProps {
   selection: DevelopmentSelection | null;
   onSelect: (selection: DevelopmentSelection | null) => void;
   onToggle: (kind: DevelopmentStageKind) => void;
+  enhancement: DevelopmentEnhancementResult | null;
   magnetEnabled: boolean;
   magnetStrength: number;
 }
@@ -264,6 +296,7 @@ export function DevelopmentCanvas({
   selection,
   onSelect,
   onToggle,
+  enhancement,
   magnetEnabled,
   magnetStrength,
 }: DevelopmentCanvasProps) {
@@ -278,7 +311,7 @@ export function DevelopmentCanvas({
   const positionLayoutKey = `${layoutKey}:${layoutMode}`;
   const fitKey = `${layoutKey}:${[...expanded].sort().join(",")}`;
   const previousLayoutKey = useRef(positionLayoutKey);
-  const initial = buildFlow(projection, activeIndex, expanded, selection, onToggle);
+  const initial = buildDevelopmentFlow(projection, activeIndex, expanded, selection, onToggle, enhancement);
   const [nodes, setNodes, onNodesChange] = useNodesState<DevelopmentFlowNode>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const profile = useMemo(() => magneticProfile(magnetStrength), [magnetStrength]);
@@ -287,18 +320,19 @@ export function DevelopmentCanvas({
 
   useEffect(() => {
     const preserve = previousLayoutKey.current === positionLayoutKey;
-    const next = buildFlow(
+    const next = buildDevelopmentFlow(
       projection,
       activeIndex,
       expanded,
       selection,
       onToggle,
+      enhancement,
       preserve ? nodes : [],
     );
     setNodes(next.nodes);
     setEdges(next.edges);
     previousLayoutKey.current = positionLayoutKey;
-  }, [activeIndex, expanded, onToggle, positionLayoutKey, projection, selection, setEdges, setNodes]);
+  }, [activeIndex, enhancement, expanded, onToggle, positionLayoutKey, projection, selection, setEdges, setNodes]);
 
   useEffect(() => {
     const element = elementRef.current;
@@ -319,7 +353,7 @@ export function DevelopmentCanvas({
                 node.data.stage?.kind === expandedKinds[0] ||
                 node.data.groupKind === expandedKinds[0])
             : expandedKinds.length === 0
-              ? allNodes.filter((node) => Boolean(node.data.stage))
+              ? allNodes.filter((node) => Boolean(node.data.stage) || node.data.variant === "model-enhancement")
               : allNodes;
           void instance.fitView({ ...fitViewOptions, nodes: focusNodes });
         });
@@ -397,6 +431,7 @@ export function DevelopmentCanvas({
             if (data.variant === "change") return stageColor["change-plan"];
             if (data.variant === "test") return stageColor["test-plan"];
             if (data.variant === "patch") return stageColor["patch-outline"];
+            if (data.variant === "model-enhancement") return "#7654b5";
             return stageColor.evidence;
           }}
           maskColor="rgba(238, 243, 242, 0.72)"
@@ -408,6 +443,7 @@ export function DevelopmentCanvas({
           <span><i className="development-legend--plan" />建议</span>
           <span><i className="development-legend--test" />测试</span>
           <span><i className="development-legend--patch" />草案</span>
+          <span><i className="development-legend--model" />模型分支</span>
         </Panel>
       </ReactFlow>
     </div>

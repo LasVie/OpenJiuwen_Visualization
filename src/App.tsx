@@ -123,6 +123,9 @@ export default function App() {
     () => workbenchAvailability(workbench),
     [workbench],
   );
+  const developmentOpenRouterEnabled = workbench.modelProviders.some(
+    (provider) => provider.id === "openrouter",
+  );
   const setManagedPluginEnabled = useCallback(async (
     pluginId: string,
     enabled: boolean,
@@ -723,7 +726,9 @@ export default function App() {
             <FileSearch size={17} />
             <span>
               <strong>Read-only Development Plane</strong>
-              <small>源码证据 · 影响范围 · 修改与测试建议 · 补丁结构草案</small>
+              <small>{developmentOpenRouterEnabled
+                ? "确定性源码证据 · 可选 OpenRouter 建议分支 · 补丁结构草案"
+                : "确定性源码证据 · OpenRouter 模块关闭 · 补丁结构草案"}</small>
             </span>
           </div>
         ) : (
@@ -744,7 +749,9 @@ export default function App() {
         ) : workbenchMode === "development" ? (
           <div className="runtime-key development-header-assurance" aria-label="开发辅助只读边界">
             <ShieldCheck size={15} aria-hidden="true" />
-            <span><strong>READ ONLY</strong><small>无模型 · 无仓库写入</small></span>
+            <span><strong>READ ONLY</strong><small>{developmentOpenRouterEnabled
+              ? "基础链路无模型 · 外发逐次确认 · 无仓库写入"
+              : "基础链路无模型 · 无仓库写入"}</small></span>
           </div>
         ) : (
           <div className="runtime-key" aria-label="节点来源颜色图例">
@@ -1021,6 +1028,7 @@ export default function App() {
           onOpenDefinition={availability.sourceConvergence
             ? openDefinitionForSource
             : undefined}
+          openRouterEnabled={developmentOpenRouterEnabled}
           magnetEnabled={magnetEnabled}
           magnetStrength={magnetStrength}
           onToggleMagnet={toggleMagnet}

@@ -118,7 +118,8 @@ export type DevelopmentSelection =
   | { kind: "impact"; id: string }
   | { kind: "change"; id: string }
   | { kind: "test"; id: string }
-  | { kind: "patch"; id: string };
+  | { kind: "patch"; id: string }
+  | { kind: "model-enhancement"; id: string };
 
 const STOP_TERMS = new Set([
   "this", "that", "with", "from", "into", "then", "the", "and",

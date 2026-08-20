@@ -38,6 +38,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 | 只读辅助开发 V1 | 已完成 | 开发意图 → 源码证据 → 诊断/影响 → 修改/测试建议 → 不可应用补丁结构草案，零模型与零仓库写入 |
 | Development 跨平面入口 V1 | 已完成 | Runtime/Definition/Change 焦点自动进入同一开发证据链，保留 source/revision 与最小结构化运行/变更证据 |
 | Development 分析 Session V1 | 已完成 | 独立 SQLite/WAL、自动保存、元数据列表、显式恢复/导出、完整删除、30 天 / 2 GiB 与 schema migration |
+| Development OpenRouter 只读增强 V1 | 已完成 | 逐次源码选择、完整外发 JSON/SHA-256、单次确认、独立 Runtime Trace 与紫色模型建议分支 |
 
 ## 当前已支持功能
 
@@ -70,13 +71,17 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - 源码候选优先覆盖不同的显式标识符目标，输出 exact/strong/inferred 置信度和扫描 warning；
 - 源码、影响、修改、测试与补丁草案均可成为可点击节点，单阶段聚焦展开并自动 fit；
 - 修改建议携带目标、风险和 guardrail，测试建议覆盖聚焦/合同/回归层，补丁明确为不可应用的结构草案；
-- 证据节点复用统一 Source Viewer 和 Definition 定位；全程 `modelAccess=false`、`repositoryWrite=false`。
+- 证据节点复用统一 Source Viewer 和 Definition 定位；确定性基础 source 始终 `modelAccess=false`、`repositoryWrite=false`。
 - Runtime、Definition、Change inspector 均可进入 Development；入口自动选择对应授权仓库并立即扫描；
 - source identity 匹配目标固定为首条证据，revision mismatch、dirty、unverified、ambiguous 与 unmatched 都保持显式状态；
 - 跨平面合同只传递事件指标、Runtime 聚合或 Change comparison/hunk/impact，不复制 Context、Tool 或模型原文。
 - 成功分析自动保存为独立本机 Session；列表不读取原始意图，恢复/导出才读取完整九步结果；
 - Session 管理展示仓库/revision/dirty snapshot 和各层计数，支持恢复、完整 JSON 导出及带二次确认的删除；
 - Development Session 独立使用 SQLite/WAL 与 schema migration，默认保留 30 天、逻辑上限 2 GiB，不与 Runtime Archive 或 Plugin Host 数据混表。
+- OpenRouter 增强默认不选择源码，每次调用必须重新选择 1–3 个 evidence，并在发送前查看完整 JSON、destination、字符数和 SHA-256；
+- 外发只含开发意图、最小结构化 Runtime/Definition/Change 摘要和所选源码；完整 Context、Tool、Rail/Hook、既有模型原文与 Session payload 被排除；
+- 实际调用从同一个 preview 对象生成参数，确认后进入独立 Runtime Trace；模型流、usage、结构化建议与原文形成紫色旁支，不能覆盖确定性节点；
+- Provider 关闭、撤权或未配置时只禁用可选增强，确定性 Development 与 Session 继续可用。
 
 ### Runtime 与真实执行
 
@@ -124,6 +129,7 @@ OpenJiuwen Trace Visualization 的目标不是单纯“把流程画出来”，�
 - GitHub PR 当前用于只读理解，不会自动 fetch、checkout、修改或提交代码；
 - Development V1 只分析当前有界 Python 静态图；一阶关系不是完整 blast radius，跨平面运行/变更证据只用于锁定入口与解释边界；
 - Development V1 不运行目标仓测试，也不产生可应用 patch 或任何仓库写入；分析 Session 暂不支持重命名、搜索、标签或两次建议对比；
+- Development 模型输入/输出由 Runtime Archive 持有，尚未与 Development Session 建立持久关联；恢复 Session 不会自动恢复或重放模型分支；
 - 归档对比 V1 尚不做语义文本 diff、逐 token Context diff、Rail 检查项逐字段 diff 或历史 Session 续跑；
 - Host V1 不提供页面安装/卸载/升级、第三方签名链、动态插件代码执行、进程沙箱或崩溃监督；内置 integrity 只是本地发布摘要；
 - OpenRouter 凭据仍由服务进程环境配置，尚无通用本机 vault/系统凭据录入 UI；
@@ -166,9 +172,9 @@ Runtime、Definition 与 Change 当前焦点现在都能生成最小化结构化
 
 Development 的确定性九步 projection 现在会自动保存为独立本机 Session。默认列表只返回仓库、revision、dirty、结构计数、时间和字节等 metadata；点击恢复或导出才读取原始开发意图和完整分析。服务端再次验证 allow-root、九步顺序、相对 source path、数量/字节上限、`repositoryWrite=false` 和不可应用 patch，不能借持久化入口修改目标仓。
 
-## 下一阶段：OpenRouter 可选只读增强（已确认）
+## 已完成：OpenRouter 可选只读增强 V1
 
-下一阶段保留确定性证据链为事实底座，并增加每次显式开启的 OpenRouter 只读增强：
+本阶段保留确定性证据链为事实底座，并增加每次显式开启的 OpenRouter 只读增强：
 
 1. 调用前展示精确外发预览，由用户针对本次调用确认；
 2. 只发送开发意图、用户选定的有界源码片段，以及结构化 Runtime/Change 摘要；
@@ -176,7 +182,9 @@ Development 的确定性九步 projection 现在会自动保存为独立本机 S
 4. Provider 返回只能成为带来源与不确定性标记的增强节点，不能覆盖确定性证据；
 5. 继续保持 `repositoryWrite=false`，不应用 patch、不运行测试、不创建 Git 变更。
 
-受控补丁、测试和 Git 写入流程按用户决定暂不启动；OpenRouter 阶段完成后再单独确定审批、分支隔离、回滚和审计模型。
+实现还包括每个源码最多 64 行 / 8,000 字符、总源码最多 24,000 字符、旧预览随选择/model/预算变化失效、JSON schema 验证以及不合格响应只保留原文。OpenRouter 数据进入现有 Runtime Archive，不复制进 Development Session。
+
+受控补丁、测试和 Git 写入流程按用户决定暂不启动；下一步需要单独确定审批、允许路径、分支隔离、回滚和审计模型。
 
 ## 后续路线
 
@@ -191,7 +199,7 @@ Development 的确定性九步 projection 现在会自动保存为独立本机 S
 | 已完成 | 只读辅助开发 V1 | 源码证据、诊断、影响、修改/测试建议与不可应用补丁结构草案 | 选择零模型、零仓库写入边界 |
 | 已完成 | Development 跨平面入口 V1 | Runtime/Definition/Change 焦点进入同一开发证据链 | 结构化最小入口与显式 revision 降级已落地 |
 | 已完成 | Development 分析 Session | 本机自动保存、恢复、删除和完整导出开发证据链 | 独立 SQLite/WAL、完整本机 payload、30 天 / 2 GiB 与 schema migration 已落地 |
-| 进行中 | 可选 OpenRouter 辅助分析 | 在确定性证据上增强诊断与方案 | 已确定逐次开启、调用前外发预览、最小数据范围与零仓库写入 |
+| 已完成 | 可选 OpenRouter 辅助分析 | 在确定性证据上增强诊断与方案 | 逐次开启、完整外发预览、最小数据范围、独立 Trace 与零仓库写入已落地 |
 | 待决策 | 受控开发执行 | 在受控分支应用补丁、运行测试并形成 commit/PR | 必须决定逐次审批、允许路径、回滚和审计 |
 
 ## 阶段管理规则

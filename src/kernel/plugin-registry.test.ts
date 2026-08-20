@@ -248,6 +248,17 @@ describe("visualization plugin registry", () => {
         ?.state,
     ).toBe("blocked");
 
+    const withoutOpenRouter = createDefaultPluginRegistry().resolve({
+      pluginStates: { "openjiuwen.openrouter-provider": false },
+    });
+    expect(
+      withoutOpenRouter.plugins.find((item) => item.id === "openjiuwen.development-assistant")
+        ?.state,
+    ).toBe("enabled");
+    expect(withoutOpenRouter.developmentSources).toHaveLength(1);
+    expect(withoutOpenRouter.modelProviders.map((provider) => provider.id))
+      .toEqual(["openjiuwen.recording-replay"]);
+
     const withoutLocalGit = createDefaultPluginRegistry().resolve({
       pluginStates: { "openjiuwen.local-repository": false },
     });

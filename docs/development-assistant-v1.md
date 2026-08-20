@@ -2,7 +2,7 @@
 
 ## 目标与边界
 
-Development Assistant V1 把“我想理解或调整什么”变成一条可复核的开发证据链，帮助定位代码、评估关系影响、规划修改和测试。它不是代码生成器或自治开发代理：V1 不调用模型、不运行目标仓命令、不修改文件、不创建分支，也不生成可应用 patch。
+Development Assistant V1 把“我想理解或调整什么”变成一条可复核的开发证据链，帮助定位代码、评估关系影响、规划修改和测试。确定性基础链不是代码生成器或自治开发代理：它不调用模型、不运行目标仓命令、不修改文件、不创建分支，也不生成可应用 patch。OpenRouter 后续作为独立、逐次确认的可选建议分支接入，不改变下述基础 source contract。
 
 稳定 source contract：
 
@@ -17,7 +17,9 @@ modelAccess       = false
 
 - `development.analysis.readonly.v1`；
 - `graph.development.evidence.v1`；
-- `development.patch-outline.preview.v1`。
+- `development.patch-outline.preview.v1`；
+- `development.session.local.v1`；
+- `development.enhancement.openrouter.preview.v1`。
 
 ## 输入与证据获取
 
@@ -82,18 +84,23 @@ Patch outline 必须以 `READ-ONLY STRUCTURAL OUTLINE — NOT AN APPLICABLE PATC
 - 入口来源在左侧显示为 `FROM RUNTIME / DEFINITION / CHANGE`，inspector 同时展示核验状态与最小结构化指标。
 - 成功分析自动形成一个本机 SQLite/WAL Session；工具栏显示保存状态，左侧入口打开独立管理抽屉；
 - Session 列表不读取原始意图或完整结果；恢复会显式读取完整分析并回到第 1 步，导出与删除也是独立用户动作。
+- OpenRouter 入口只在已有 projection 上出现；模型结果以紫色虚线旁支连接“诊断”，不进入九步时间轴、不覆盖基础节点；
+- 每次模型调用默认不选择源码，必须选择 1–3 个 evidence、查看完整 JSON 与 SHA-256，再勾选本次确认；改变选择、model 或输出预算会使旧预览失效；
+- 模型流和 usage 进入独立 Runtime Trace，点击旁支节点可查看 Provider/model/Trace/payload hash、结构化建议和模型原文。
 
 ## 模块化与安全
 
 `kernel/contracts/development.ts` 保存无 React 的 source contract；`plugins/development-assistant/` 只声明 manifest 和 contribution；`features/development-assistant/` 拥有纯投影模型、画布、时间轴、inspector 和工作区；`App` 只依据 Workbench availability 暴露入口。
 
-Development 不映射 Local Plugin Host 的 repository write/network/secret 权限。新增的 Session endpoint 只能写独立本机分析数据库，保存前再次验证 allow-root、九步只读合同、source path 与不可应用 patch；它不能修改绑定仓库。原始源文件只在用户点击已有 source evidence 后通过统一有界 Source Viewer 读取，不复制到日志、Git 或远程服务。
+基础 Development 不映射 Local Plugin Host 的 repository write/network/secret 权限。新增的 Session endpoint 只能写独立本机分析数据库，保存前再次验证 allow-root、九步只读合同、source path 与不可应用 patch；它不能修改绑定仓库。普通源码查看只在用户点击已有 source evidence 后通过统一有界 Source Viewer 读取，不复制到日志、Git 或远程服务。
 
-完整 Session payload、SQLite migration、保留、导出和删除合同见 [`development-session-persistence-v1.md`](development-session-persistence-v1.md)。
+可选 OpenRouter 分支复用 Provider 已有的 Host lifecycle/network/secret gate，但它仍不请求 repository write。预览只组合开发意图、结构化 Runtime/Definition/Change 元数据及本次显式选择的有界源码；完整 Context、Tool、Rail/Hook、既有模型原文和 Session payload 都被排除。实际调用只从已经显示的 preview 对象生成，并写入独立 Runtime Trace。Provider 关闭、阻止或未配置时，此入口不可发送，确定性分析与 Session 不受影响。
+
+完整 Session payload、SQLite migration、保留、导出和删除合同见 [`development-session-persistence-v1.md`](development-session-persistence-v1.md)；OpenRouter 数据最小化、精确预览、Runtime Trace 与模型分支合同见 [`development-openrouter-enhancement-v1.md`](development-openrouter-enhancement-v1.md)。
 
 ## 验证与明确限制
 
-当前自动验证覆盖标识符提取、显式目标多样性、证据/影响/测试投影、fallback 置信度、不可应用 patch 标记、跨平面最小化导航合同、入口证据固定、revision mismatch 降级、unmatched 不造节点、插件依赖与 Workbench 可用性。可见行为另用真实浏览器验证跨平面按钮、自动仓库选择、入口卡片、九步时间轴、聚焦 fit、节点详情和源码窗口。
+当前自动验证覆盖标识符提取、显式目标多样性、证据/影响/测试投影、fallback 置信度、不可应用 patch 标记、跨平面最小化导航合同、入口证据固定、revision mismatch 降级、unmatched 不造节点、插件依赖与 Workbench 可用性；OpenRouter 覆盖源码数量/行数、精确 body、SHA-256、最小结构化摘要、同一 preview 调用参数、输出 schema 与模型分支节点/边。可见行为另用真实浏览器验证跨平面按钮、自动仓库选择、入口卡片、九步时间轴、聚焦 fit、节点详情、源码窗口，以及 Provider 未配置/就绪、源码逐项选择、完整外发预览、确认前发送禁用和响应式抽屉。
 
 V1 仍有以下限制：
 
@@ -102,4 +109,5 @@ V1 仍有以下限制：
 - 诊断和建议为确定性模板，不理解任意自然语言深层语义；
 - 跨平面入口只带结构化身份、指标和影响判断，不把完整 Runtime/Context/Tool/模型原文交给 Development；
 - 本机保存开发分析 Session，但暂不支持重命名、搜索、标签或两次建议对比；
+- OpenRouter 输入/输出保存在 Runtime Archive，不复制进 Development Session；恢复 Session 不会自动恢复、重放或关联旧模型分支；
 - 任何仓库修改、测试执行、分支/commit/PR 创建仍属于未来独立授权与审计决策。

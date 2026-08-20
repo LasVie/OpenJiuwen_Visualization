@@ -10,6 +10,7 @@ import {
   Route,
   Server,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import {
   useCallback,
@@ -33,6 +34,7 @@ import type {
 import { MagnetControls } from "../trace-graph";
 import { repositoryMatchesSource } from "../source-convergence";
 import { DevelopmentCanvas } from "./DevelopmentCanvas";
+import { DevelopmentEnhancementPanel } from "./DevelopmentEnhancementPanel";
 import { DevelopmentInspector } from "./DevelopmentInspector";
 import { DevelopmentSessionPanel } from "./DevelopmentSessionPanel";
 import { DevelopmentTimeline } from "./DevelopmentTimeline";
@@ -43,6 +45,7 @@ import {
   type DevelopmentStageKind,
 } from "./model";
 import type { DevelopmentNavigationRequest } from "./navigation";
+import { useDevelopmentEnhancement } from "./use-development-enhancement";
 import { useDevelopmentSessions } from "./use-development-sessions";
 
 type ConnectionState =
@@ -105,6 +108,7 @@ interface DevelopmentAssistantWorkspaceProps {
   sources: readonly RegisteredDevelopmentAssistantSource[];
   navigation: DevelopmentNavigationRequest | null;
   onOpenDefinition?: (source: GraphSourceReference) => void;
+  openRouterEnabled: boolean;
   magnetEnabled: boolean;
   magnetStrength: number;
   onToggleMagnet: () => void;
@@ -115,6 +119,7 @@ export function DevelopmentAssistantWorkspace({
   sources,
   navigation,
   onOpenDefinition,
+  openRouterEnabled,
   magnetEnabled,
   magnetStrength,
   onToggleMagnet,
@@ -136,6 +141,17 @@ export function DevelopmentAssistantWorkspace({
   const [expanded, setExpanded] = useState<ReadonlySet<DevelopmentStageKind>>(new Set());
   const [selection, setSelection] = useState<DevelopmentSelection | null>(null);
   const [sessionPanelOpen, setSessionPanelOpen] = useState(false);
+  const [enhancementPanelOpen, setEnhancementPanelOpen] = useState(false);
+  const developmentEnhancement = useDevelopmentEnhancement({
+    projection,
+    enabled: openRouterEnabled,
+  });
+
+  useEffect(() => {
+    const result = developmentEnhancement.result;
+    if (!result?.traceId) return;
+    setSelection({ kind: "model-enhancement", id: result.id });
+  }, [developmentEnhancement.result?.traceId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -176,6 +192,7 @@ export function DevelopmentAssistantWorkspace({
     setAnalysisError("");
     setProjection(null);
     setSelection(null);
+    setEnhancementPanelOpen(false);
     developmentSessions.clearActiveSession();
     try {
       const scan = await client.scan(path, {
@@ -212,6 +229,7 @@ export function DevelopmentAssistantWorkspace({
     setActiveIndex(0);
     setExpanded(new Set());
     setSelection(null);
+    setEnhancementPanelOpen(false);
     if (!repository) {
       analysisAbortRef.current?.abort();
       setProjection(null);
@@ -235,6 +253,7 @@ export function DevelopmentAssistantWorkspace({
     setActiveIndex(0);
     setExpanded(new Set());
     setSelection(null);
+    setEnhancementPanelOpen(false);
     developmentSessions.clearActiveSession();
   }
 
@@ -253,6 +272,7 @@ export function DevelopmentAssistantWorkspace({
     setExpanded(new Set());
     setSelection({ kind: "stage", id: restored.stages[0].id });
     setSessionPanelOpen(false);
+    setEnhancementPanelOpen(false);
   }
 
   function analyze(event: FormEvent<HTMLFormElement>) {
@@ -389,7 +409,7 @@ export function DevelopmentAssistantWorkspace({
                 />
                 <div className="development-intent-hint">
                   <ShieldCheck size={12} />
-                  <span>只读取当前工作树；分析成功后自动保存到本机 SQLite，不进入 Git、日志或远程服务。</span>
+                  <span>基础分析只读取当前工作树并保存到本机；OpenRouter 仅通过单独的逐次外发预览调用。</span>
                 </div>
                 <button type="submit" disabled={status === "loading" || !repositoryPath || !intent.trim()}>
                   {status === "loading" ? <LoaderCircle size={15} className="spin" /> : <FileSearch size={15} />}
@@ -402,7 +422,7 @@ export function DevelopmentAssistantWorkspace({
                 <header><Layers3 size={14} /><span>分析合同</span></header>
                 <dl>
                   <div><dt>ENGINE</dt><dd>{source?.engine ?? "deterministic-static"}</dd></div>
-                  <div><dt>MODEL</dt><dd>disabled</dd></div>
+                  <div><dt>MODEL</dt><dd>{!openRouterEnabled ? "module off" : developmentEnhancement.provider?.status === "ready" ? "optional" : "base off"}</dd></div>
                   <div><dt>REPO WRITE</dt><dd>false</dd></div>
                   <div><dt>SESSION</dt><dd>{developmentSessions.connection === "ready" ? "local / wal" : "offline"}</dd></div>
                 </dl>
@@ -432,6 +452,23 @@ export function DevelopmentAssistantWorkspace({
                 <b>{projection.evidence.length}</b> evidence
                 <b>{projection.impacts.length}</b> impacts
               </span>
+              {openRouterEnabled ? (
+                <button
+                  type="button"
+                  className={`development-enhancement-entry development-enhancement-entry--${developmentEnhancement.phase}`}
+                  onClick={() => setEnhancementPanelOpen(true)}
+                  title={developmentEnhancement.providerError ?? "逐次选择源码、预览完整外发 JSON，再确认调用 OpenRouter"}
+                >
+                  {developmentEnhancement.active
+                    ? <LoaderCircle size={13} className="spin" aria-hidden="true" />
+                    : <Sparkles size={13} aria-hidden="true" />}
+                  {developmentEnhancement.active
+                    ? "模型运行中"
+                    : developmentEnhancement.result
+                      ? "模型分支"
+                      : "OpenRouter 增强"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={`development-session-save-state development-session-save-state--${developmentSessions.error ? "error" : developmentSessions.saving ? "saving" : developmentSessions.activeSessionId ? "saved" : "unsaved"}`}
@@ -465,6 +502,7 @@ export function DevelopmentAssistantWorkspace({
               selection={selection}
               onSelect={setSelection}
               onToggle={toggleStage}
+              enhancement={developmentEnhancement.result}
               magnetEnabled={magnetEnabled}
               magnetStrength={magnetStrength}
             />
@@ -482,10 +520,11 @@ export function DevelopmentAssistantWorkspace({
         )}
       </main>
 
-      {projection ? (
+      {projection && openRouterEnabled ? (
         <DevelopmentInspector
           projection={projection}
           selection={selection}
+          enhancement={developmentEnhancement.result}
           onOpenDefinition={onOpenDefinition}
         />
       ) : (
@@ -516,6 +555,15 @@ export function DevelopmentAssistantWorkspace({
         onDelete={developmentSessions.deleteSession}
         onClearError={developmentSessions.clearError}
       />
+
+      {projection ? (
+        <DevelopmentEnhancementPanel
+          open={enhancementPanelOpen}
+          projection={projection}
+          controller={developmentEnhancement}
+          onClose={() => setEnhancementPanelOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }

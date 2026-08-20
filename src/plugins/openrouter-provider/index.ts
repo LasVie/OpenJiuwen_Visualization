@@ -7,13 +7,16 @@ export const openRouterProviderPlugin: VisualizationPlugin = {
   manifest: {
     id: "openjiuwen.openrouter-provider",
     name: "OpenRouter Provider",
-    version: "0.1.0",
+    version: "0.2.0",
     apiVersion: PLUGIN_API_VERSION,
     description: "通过本地服务安全调用 OpenRouter，并把流、用量与取消写入 Runtime Trace。",
     group: "agent-core",
     defaultEnabled: true,
     dependencies: ["openjiuwen.model-provider"],
-    capabilities: ["runtime.model.openrouter.v1"],
+    capabilities: [
+      "runtime.model.openrouter.v1",
+      "development.enhancement.readonly.v1",
+    ],
   },
   contribute: () => ({
     modelProviders: [

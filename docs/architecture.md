@@ -98,7 +98,7 @@ Local Plugin Host ── lifecycle + grants + secret handles + audit
 | `openjiuwen.agent-core` | DeepAgent、ReAct、Context、Model、Tool、Rail |
 | `openjiuwen.jiuwenswarm` | Swarm 请求/响应定义与 Team/Workflow/Subagent Runtime |
 | `openjiuwen.model-provider` | Provider 流、用量、取消与确定性录制回放 |
-| `openjiuwen.openrouter-provider` | 服务端 OpenRouter 调用、模型白名单、流式 Trace 与取消 |
+| `openjiuwen.openrouter-provider` | 服务端 OpenRouter 调用、模型白名单、流式 Trace、取消与 Development 可选只读增强能力 |
 | `openjiuwen.agent-core-executor` | 隔离执行真实 DeepAgent/ReAct，并将 Rail、Context、Tool 与 OpenRouter 事件写入 Trace |
 | `openjiuwen.jiuwenswarm-executor` | 隔离执行真实两成员 Agent Team，并将主体、任务、消息、Rail 与独立 Context 写入 Swarm Trace |
 | `openjiuwen.subagent-executor` | 隔离执行真实父 DeepAgent → TaskTool → child DeepAgent，并写入父子 session、Rail、Tool 与独立 Context |
@@ -108,7 +108,7 @@ Local Plugin Host ── lifecycle + grants + secret handles + audit
 | `openjiuwen.tool-catalog` | Tool 发现、目录授权、`ability.register` 与 `tool.call` 四层证据 |
 | `openjiuwen.integration` | Core 与 Swarm 的跨仓因果边 |
 | `openjiuwen.source-convergence` | Runtime、Definition 与 Change 的稳定源码身份、运行聚合和往返导航 |
-| `openjiuwen.development-assistant` | 基于本地 Definition snapshot 的确定性只读诊断、影响、修改/测试建议和补丁结构草案 |
+| `openjiuwen.development-assistant` | 基于本地 Definition snapshot 的确定性只读诊断、Session，以及逐次预览确认的可选 OpenRouter 建议分支 |
 | `openjiuwen.trace-archive` | 本机 SQLite/WAL Session 管理、按需原文、完整导出、删除和跨运行对比 |
 | `openjiuwen.deterministic-replay` | 无网络依赖的可重复轨迹 |
 | `openjiuwen.local-repository` | 只读本地仓服务、静态定义图、有界源码证据与 Git Change 客户端，默认开启 |
@@ -120,6 +120,8 @@ Local Plugin Host ── lifecycle + grants + secret handles + audit
 `openjiuwen.development-assistant` 同时依赖 Local Repository 与 Source Convergence，贡献 `DevelopmentAssistantSourceDefinition`，而不把分析器硬编码进 `App`。关闭任一依赖时开发辅助入口进入 blocked/disabled；恢复依赖后按原 `requestedEnabled` 自动恢复。V1 source 固定声明 `engine=deterministic-static`、`readOnly=true`、`repositoryWrite=false`、`modelAccess=false`。
 
 Development 的历史状态由独立 `DevelopmentSessionStore` 持有，不复用 Runtime Archive 表。`features/development-assistant/` 通过 `adapters/development-session/` 自动保存成功 projection；列表仅取 metadata，恢复/导出才显式读取完整 payload。服务端再次验证 allow-root、九步阶段、数量上限、相对 source path、`repositoryWrite=false` 和不可应用 patch，再写入 SQLite/WAL。默认 30 天 / 2 GiB，删除后 secure-delete 并 checkpoint。完整合同见 [`development-session-persistence-v1.md`](development-session-persistence-v1.md)。
+
+OpenRouter 增强是可选组合能力，不是 `DevelopmentAssistantSourceDefinition` 的硬依赖。基础 source 继续声明 `modelAccess=false`；当 OpenRouter contribution 可用时，feature 才显示逐次外发审查入口。源码选择与外发 payload 在 `features/development-assistant/enhancement.ts` 中完成有界投影，随后复用 Source Reader、Runtime Trace 与 OpenRouter adapter。Provider 被关闭、撤权或未配置不会阻塞确定性 Development 或 Session。
 
 `openjiuwen.trace-archive` 是独立 workspace 根插件，不依赖 Core、Swarm 或 Provider contribution。`features/trace-archive/` 只通过 `adapters/trace-archive/` 读取本地归档 API；Session 详情和对比默认使用脱敏预览，完整事件与 Context 必须走单独的显式 raw 请求。
 
@@ -291,4 +293,6 @@ Runtime、Definition 与 Change 通过 `DevelopmentNavigationRequest` 进入 Dev
 
 Development 收到入口后按 source repository 自动选择允许目录中的仓库并扫描当前 snapshot，再用 `matchSourceToDefinition()` 核验 revision、dirty 与歧义状态。可核验目标被固定为第一条 evidence；revision mismatch 只保留 `inferred`，dirty/unverified 只保留 `strong`；没有匹配时保留 `unmatched` warning，绝不创建不存在的图节点。入口 ID 只负责同一页面会话中的导航去重，不作为持久 identity。
 
-建议层只描述改动边界、风险、guardrail 与验证层次。补丁预览带有不可应用标记，只包含结构化占位说明；它不是 unified diff，不能被工具应用。扫描上限、语法错误、缺少稳定标识符和推断关系都进入 warnings，不会被静默提升为精确事实。成功 projection 会形成可恢复的本机 Session，但恢复历史证据不会自动声明其仍与当前工作树一致。完整合同见 [`development-assistant-v1.md`](development-assistant-v1.md) 与 [`development-session-persistence-v1.md`](development-session-persistence-v1.md)。
+建议层只描述改动边界、风险、guardrail 与验证层次。补丁预览带有不可应用标记，只包含结构化占位说明；它不是 unified diff，不能被工具应用。扫描上限、语法错误、缺少稳定标识符和推断关系都进入 warnings，不会被静默提升为精确事实。成功 projection 会形成可恢复的本机 Session，但恢复历史证据不会自动声明其仍与当前工作树一致。
+
+可选 OpenRouter 分支从同一 projection 派生，但不会修改它。用户每次显式选择最多三个源码 evidence；Source Reader 每个最多返回 64 行，feature 将开发意图、最小结构化 Runtime/Change 摘要与所选源码构造成完整 OpenRouter body，显示 destination、字符数和 SHA-256。只有再次确认才创建独立 `agent-core` Runtime Trace 并调用 Provider。完整 Context、Tool、Rail/Hook 与既有模型原文不进入该 payload。模型 delta/usage/terminal event 只生成紫色旁支节点；结构不合格的模型输出只按原文展示。Development Session 不复制该输入或结果，完整模型调用由 Runtime Archive 管理。完整合同见 [`development-assistant-v1.md`](development-assistant-v1.md)、[`development-session-persistence-v1.md`](development-session-persistence-v1.md) 与 [`development-openrouter-enhancement-v1.md`](development-openrouter-enhancement-v1.md)。

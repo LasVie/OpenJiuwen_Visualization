@@ -1,6 +1,6 @@
 # OpenRouter Provider V1
 
-OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的浏览器模块 `openjiuwen.openrouter-provider` 和服务端插件 `openjiuwen.host.openrouter`：本地服务独占 API key、维护模型 allowlist，并提供固定域名的 provider-only 调用合同。这个底层 adapter 不是完整 Agent 执行器；真实 DeepAgent、真实两成员 Agent Team、真实固定 SwarmFlow 与真实 TaskTool Subagent 分别由依赖它的 `openjiuwen.agent-core-executor`、`openjiuwen.jiuwenswarm-executor`、`openjiuwen.swarmflow-executor` 和 `openjiuwen.subagent-executor` 提供，见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)、[`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)、[`swarmflow-execution-v1.md`](swarmflow-execution-v1.md)、[`subagent-execution-v1.md`](subagent-execution-v1.md) 与 [`plugin-host-v1.md`](plugin-host-v1.md)。
+OpenRouter 是首个真实 Model Provider。V1 提供一个可开关的浏览器模块 `openjiuwen.openrouter-provider` 和服务端插件 `openjiuwen.host.openrouter`：本地服务独占 API key、维护模型 allowlist，并提供固定域名的 provider-only 调用合同。这个底层 adapter 不是完整 Agent 执行器；真实 DeepAgent、真实两成员 Agent Team、真实固定 SwarmFlow 与真实 TaskTool Subagent 分别由依赖它的 `openjiuwen.agent-core-executor`、`openjiuwen.jiuwenswarm-executor`、`openjiuwen.swarmflow-executor` 和 `openjiuwen.subagent-executor` 提供。Development Assistant 也可在逐次外发预览与确认后复用 provider-only adapter 生成独立只读建议分支，但不获得 Agent 生命周期或仓库写权限。相关合同见 [`agent-core-execution-v1.md`](agent-core-execution-v1.md)、[`jiuwenswarm-execution-v1.md`](jiuwenswarm-execution-v1.md)、[`swarmflow-execution-v1.md`](swarmflow-execution-v1.md)、[`subagent-execution-v1.md`](subagent-execution-v1.md)、[`development-openrouter-enhancement-v1.md`](development-openrouter-enhancement-v1.md) 与 [`plugin-host-v1.md`](plugin-host-v1.md)。
 
 ## 数据流与权限边界
 
@@ -99,6 +99,8 @@ Context 卡片的逐消息 Token 在请求发出前只能是字符级估算，`s
 协议依据 OpenRouter 官方当前文档：[`POST /api/v1/chat/completions`](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion)、[Streaming](https://openrouter.ai/docs/api_reference/streaming)、[Usage Accounting](https://openrouter.ai/docs/cookbook/administration/usage-accounting) 与 [Errors](https://openrouter.ai/docs/api_reference/errors-and-debugging)。
 
 ## V1 非目标
+
+Development 的调用不会扩大底层 Provider 合同。页面先在本机从已有确定性 projection、结构化 Runtime/Change 摘要和用户显式选择的最多三个源码片段构造 exact request body；显示完整 JSON、destination、字符数和 SHA-256 后，只有单次确认才创建 Trace 并调用本 endpoint。该 feature 不把完整 Context、Tool、Rail/Hook 或既有模型正文放入请求，也不允许浏览器改变 Provider URL/header。模型结果仍只是 Runtime Trace 上的建议分支。
 
 - provider-only adapter 本身不做多轮会话持久化、自动 Tool loop、Subagent 或 Swarm 调度；这些生命周期只能由独立 Executor 明确拥有；
 - 不从浏览器新增任意模型、Provider、URL、header 或采样参数；

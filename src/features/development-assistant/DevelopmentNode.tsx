@@ -10,9 +10,11 @@ import {
   Network,
   Search,
   ShieldCheck,
+  Sparkles,
   Target,
   Wrench,
 } from "lucide-react";
+import type { DevelopmentEnhancementResult } from "./enhancement";
 import type {
   DevelopmentChangeSuggestion,
   DevelopmentEvidenceTarget,
@@ -27,10 +29,11 @@ export type DevelopmentNodeEntity =
   | DevelopmentImpactTarget
   | DevelopmentChangeSuggestion
   | DevelopmentTestSuggestion
-  | DevelopmentPatchOutline;
+  | DevelopmentPatchOutline
+  | DevelopmentEnhancementResult;
 
 export type DevelopmentNodeData = {
-  variant: "stage" | "evidence" | "impact" | "change" | "test" | "patch";
+  variant: "stage" | "evidence" | "impact" | "change" | "test" | "patch" | "model-enhancement";
   label: string;
   summary: string;
   status: "future" | "active" | "visited";
@@ -60,6 +63,7 @@ function StageIcon({ stage }: { stage?: DevelopmentStage }) {
 }
 
 function ChildIcon({ variant }: { variant: DevelopmentNodeData["variant"] }) {
+  if (variant === "model-enhancement") return <Sparkles size={14} aria-hidden="true" />;
   if (variant === "evidence") return <FileCode2 size={14} aria-hidden="true" />;
   if (variant === "impact") return <Network size={14} aria-hidden="true" />;
   if (variant === "change") return <Wrench size={14} aria-hidden="true" />;
@@ -75,6 +79,7 @@ function variantLabel(data: DevelopmentNodeData) {
   if (data.variant === "impact") return "RELATION IMPACT";
   if (data.variant === "change") return "CHANGE SUGGESTION";
   if (data.variant === "test") return "TEST SUGGESTION";
+  if (data.variant === "model-enhancement") return "MODEL ENHANCEMENT";
   return "PATCH OUTLINE";
 }
 

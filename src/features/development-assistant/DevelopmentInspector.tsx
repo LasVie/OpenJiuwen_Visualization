@@ -9,10 +9,12 @@ import {
   Route,
   Search,
   ShieldCheck,
+  Sparkles,
   Wrench,
 } from "lucide-react";
 import type { GraphSourceReference } from "../../kernel";
 import { SourceViewer } from "../source-viewer";
+import type { DevelopmentEnhancementResult } from "./enhancement";
 import type {
   DevelopmentAnalysisProjection,
   DevelopmentChangeSuggestion,
@@ -74,12 +76,18 @@ type ResolvedSelection =
   | { kind: "impact"; value: DevelopmentImpactTarget }
   | { kind: "change"; value: DevelopmentChangeSuggestion }
   | { kind: "test"; value: DevelopmentTestSuggestion }
-  | { kind: "patch"; value: DevelopmentPatchOutline };
+  | { kind: "patch"; value: DevelopmentPatchOutline }
+  | { kind: "model-enhancement"; value: DevelopmentEnhancementResult };
 
 function resolveSelection(
   projection: DevelopmentAnalysisProjection,
   selection: DevelopmentSelection | null,
+  enhancement: DevelopmentEnhancementResult | null,
 ): ResolvedSelection {
+  if (
+    selection?.kind === "model-enhancement" &&
+    enhancement?.id === selection.id
+  ) return { kind: "model-enhancement", value: enhancement };
   if (selection?.kind === "evidence") {
     const value = projection.evidence.find((item) => item.id === selection.id);
     if (value) return { kind: "evidence", value };
@@ -112,6 +120,12 @@ function selectionPresentation(selection: ResolvedSelection) {
   if (selection.kind === "impact") return { icon: Network, eyebrow: "RELATION IMPACT", title: selection.value.node.label, summary: selection.value.reason };
   if (selection.kind === "change") return { icon: Wrench, eyebrow: "CHANGE SUGGESTION", title: selection.value.title, summary: selection.value.detail };
   if (selection.kind === "test") return { icon: ListChecks, eyebrow: "TEST SUGGESTION", title: selection.value.title, summary: selection.value.detail };
+  if (selection.kind === "model-enhancement") return {
+    icon: Sparkles,
+    eyebrow: "OPTIONAL MODEL BRANCH",
+    title: "OpenRouter 只读增强",
+    summary: selection.value.structured?.diagnosis ?? selection.value.error ?? "模型输出只作为独立建议分支，不会覆盖确定性证据。",
+  };
   return { icon: FileDiff, eyebrow: "PATCH OUTLINE", title: selection.value.title, summary: "不可应用的结构草案；不包含生成代码，也不会写入工作树。" };
 }
 
@@ -126,6 +140,52 @@ function selectionSource(selection: ResolvedSelection): GraphSourceReference | u
     ...(selection.value.symbol ? { symbol: selection.value.symbol } : {}),
   };
   return undefined;
+}
+
+function ModelEnhancementDetails({ value }: { value: DevelopmentEnhancementResult }) {
+  return (
+    <>
+      <dl className="development-inspector__facts">
+        <div><dt>状态</dt><dd>{value.phase}</dd></div>
+        <div><dt>模型</dt><dd>{value.modelId}</dd></div>
+        <div><dt>源码</dt><dd>{value.sourceCount} selected</dd></div>
+        <div><dt>Tokens</dt><dd>{value.usage?.totalTokens ?? "—"}</dd></div>
+      </dl>
+      <section className="development-model-provenance">
+        <header><Sparkles size={13} /><span>MODEL-SUGGESTED</span></header>
+        <code>{value.traceId ?? "Runtime Trace creating"}</code>
+        <small>payload sha256 · {value.payloadSha256}</small>
+      </section>
+      {value.structured ? (
+        <>
+          <section className="development-inspector__list">
+            <h3>模型修改建议</h3>
+            {value.structured.changeSuggestions.map((item, index) => (
+              <p key={`${item.title}:${index}`}><Wrench size={12} />{item.title} · {item.risk}</p>
+            ))}
+          </section>
+          <section className="development-inspector__list">
+            <h3>模型测试建议</h3>
+            {value.structured.testSuggestions.map((item, index) => (
+              <p key={`${item.title}:${index}`}><ListChecks size={12} />{item.title} · {item.kind}</p>
+            ))}
+          </section>
+          {value.structured.caveats.length ? (
+            <section className="development-inspector__list development-inspector__list--caveats">
+              <h3>证据限制</h3>
+              {value.structured.caveats.map((item, index) => (
+                <p key={`${item}:${index}`}><AlertTriangle size={12} />{item}</p>
+              ))}
+            </section>
+          ) : null}
+        </>
+      ) : null}
+      <section className="development-model-output">
+        <h3>{["starting", "running", "cancelling"].includes(value.phase) ? "流式输出" : "模型原文"}</h3>
+        <pre>{value.output || "等待 OpenRouter 输出…"}</pre>
+      </section>
+    </>
+  );
 }
 
 function EvidenceDetails({ value }: { value: DevelopmentEvidenceTarget }) {
@@ -168,15 +228,17 @@ function StageDetails({
 interface DevelopmentInspectorProps {
   projection: DevelopmentAnalysisProjection;
   selection: DevelopmentSelection | null;
+  enhancement: DevelopmentEnhancementResult | null;
   onOpenDefinition?: (source: GraphSourceReference) => void;
 }
 
 export function DevelopmentInspector({
   projection,
   selection,
+  enhancement,
   onOpenDefinition,
 }: DevelopmentInspectorProps) {
-  const resolved = resolveSelection(projection, selection);
+  const resolved = resolveSelection(projection, selection, enhancement);
   const presentation = selectionPresentation(resolved);
   const Icon = presentation.icon;
   const source = selectionSource(resolved);
@@ -227,6 +289,7 @@ export function DevelopmentInspector({
             <pre>{resolved.value.preview}</pre>
           </section>
         ) : null}
+        {resolved.kind === "model-enhancement" ? <ModelEnhancementDetails value={resolved.value} /> : null}
 
         {sourceWithRepository ? (
           <section className="development-inspector__source">
@@ -249,9 +312,13 @@ export function DevelopmentInspector({
           </section>
         ) : null}
 
-        <section className="development-inspector__boundary">
+        <section className={resolved.kind === "model-enhancement" ? "development-inspector__boundary development-inspector__boundary--model" : "development-inspector__boundary"}>
           <ShieldCheck size={15} />
-          <span><strong>只读分析</strong><small>未请求 repository write、Shell 或模型权限</small></span>
+          {resolved.kind === "model-enhancement" ? (
+            <span><strong>显式外发 · 只读结果</strong><small>仅发送已预览内容；未请求 repository write、Shell 或 Git 权限</small></span>
+          ) : (
+            <span><strong>确定性只读分析</strong><small>基础链路未请求 repository write、Shell 或模型权限</small></span>
+          )}
         </section>
       </div>
     </aside>
